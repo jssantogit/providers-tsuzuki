@@ -1,3 +1,9 @@
+/*
+ * Portions adapted from the MangaFire extension in keiyoushi/extensions-source
+ * (Apache-2.0), substantially modified for the Tsuzuki Provider Platform.
+ * See assets/THIRD_PARTY_NOTICES.txt.
+ */
+
 import { signedApiUrl } from "./vrf.js";
 
 export const BASE_URL = "https://mangafire.to";

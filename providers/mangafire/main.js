@@ -1,3 +1,9 @@
+/*
+ * Portions adapted from the MangaFire extension in keiyoushi/extensions-source
+ * (Apache-2.0), substantially modified for the Tsuzuki Provider Platform.
+ * See assets/THIRD_PARTY_NOTICES.txt.
+ */
+
 import { BASE_URL, chaptersForTitle, pagesForChapter, searchTitles } from "./modules/api.js";
 
 const LANGUAGE = "en";
