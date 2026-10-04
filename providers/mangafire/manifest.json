@@ -3,15 +3,24 @@
   "id": "app.tsuzuki.mangafire",
   "name": "MangaFire",
   "version": {
-    "name": "0.1.0",
-    "code": 1
+    "name": "0.1.1",
+    "code": 2
   },
   "minHostApi": 1,
   "entrypoint": "main.js",
   "capabilities": [
-    { "id": "reading.lookup", "version": 1 },
-    { "id": "reading.chapters", "version": 1 },
-    { "id": "reading.pages", "version": 1 }
+    {
+      "id": "reading.lookup",
+      "version": 1
+    },
+    {
+      "id": "reading.chapters",
+      "version": 1
+    },
+    {
+      "id": "reading.pages",
+      "version": 1
+    }
   ],
   "permissions": {
     "network": {
@@ -32,6 +41,8 @@
     },
     "secrets": []
   },
-  "contentLanguages": ["en"],
+  "contentLanguages": [
+    "en"
+  ],
   "settings": []
 }

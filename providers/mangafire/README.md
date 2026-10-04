@@ -17,3 +17,7 @@ HTTP is attempted first. A bounded Browser Host Service request is used only as 
 ## Scope
 
 V1 exposes only the English content facet. Additional MangaFire languages can be enabled after the first physical Reader path is accepted.
+
+## Attribution
+
+Parts of the current API/VRF behavior were implemented with reference to the Apache-2.0-licensed MangaFire extension in `keiyoushi/extensions-source`. The Tsuzuki implementation is substantially reworked for SCRIPT Provider contracts and host-mediated services. See `assets/THIRD_PARTY_NOTICES.txt`.
