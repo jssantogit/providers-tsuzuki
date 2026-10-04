@@ -1,0 +1,9 @@
+{
+  "name": "providers-tsuzuki",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tooling/test_mangafire.mjs",
+    "check": "python3 tooling/check_repository.py"
+  }
+}

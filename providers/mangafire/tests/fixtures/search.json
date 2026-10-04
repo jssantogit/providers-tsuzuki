@@ -1,0 +1,13 @@
+{
+  "items": [
+    {
+      "hid": "one-piece-test",
+      "slug": "one-piece",
+      "title": "One Piece"
+    }
+  ],
+  "meta": {
+    "hasNext": false,
+    "lastPage": 1
+  }
+}
