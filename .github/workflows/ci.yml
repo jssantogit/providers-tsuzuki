@@ -1,0 +1,24 @@
+name: Provider CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: MangaFire contract fixtures
+        run: node tooling/test_mangafire.mjs
+      - name: Repository and package conformance
+        run: python3 tooling/check_repository.py

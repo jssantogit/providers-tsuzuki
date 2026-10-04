@@ -1,0 +1,59 @@
+name: Publish repository
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Conformance
+        run: |
+          node tooling/test_mangafire.mjs
+          python3 tooling/check_repository.py
+      - name: Build Provider artifacts
+        run: |
+          rm -rf dist/providers
+          mkdir -p dist/providers
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import subprocess
+          root = pathlib.Path('providers')
+          for manifest_path in sorted(root.glob('*/manifest.json')):
+              manifest = json.loads(manifest_path.read_text())
+              output = pathlib.Path('dist/providers') / f"{manifest['id']}-{manifest['version']['code']}.tsz"
+              subprocess.run(['python3', 'tooling/build_provider.py', str(manifest_path.parent), str(output)], check=True)
+          PY
+      - name: Build signed repository index
+        env:
+          TSUZUKI_PROVIDER_SIGNING_KEY_PEM: ${{ secrets.TSUZUKI_PROVIDER_SIGNING_KEY_PEM }}
+        run: |
+          node tooling/build_index.mjs
+          node tooling/sign_index.mjs
+          node tooling/verify_index.mjs
+      - name: Commit publication output
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add dist
+          if git diff --cached --quiet; then
+            echo 'No publication changes.'
+            exit 0
+          fi
+          sequence=$(node -e "console.log(JSON.parse(require('fs').readFileSync('repository/config.json')).sequence)")
+          git commit -m "[publish] Provider repository sequence ${sequence}"
+          git push

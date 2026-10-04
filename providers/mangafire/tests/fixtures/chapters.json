@@ -1,0 +1,15 @@
+{
+  "items": [
+    {
+      "id": 101,
+      "number": 1,
+      "name": "Romance Dawn",
+      "createdAt": 1700000000,
+      "type": "official"
+    }
+  ],
+  "meta": {
+    "hasNext": false,
+    "lastPage": 1
+  }
+}
