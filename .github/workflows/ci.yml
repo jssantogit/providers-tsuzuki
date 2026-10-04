@@ -22,3 +22,6 @@ jobs:
         run: node tooling/test_mangafire.mjs
       - name: Repository and package conformance
         run: python3 tooling/check_repository.py
+      - name: Verify signed publication
+        if: ${{ hashFiles('dist/index.json', 'repository/public-key.pem') != '' }}
+        run: node tooling/verify_index.mjs
