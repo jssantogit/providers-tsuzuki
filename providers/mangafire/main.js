@@ -20,6 +20,34 @@ function titleUrl(item) {
   return `${BASE_URL}/title/${hid}${slug ? `-${slug}` : ""}`;
 }
 
+function preferChapterVariant(candidate, current) {
+  const candidateOfficial = cleanText(candidate?.type).toLowerCase() === "official";
+  const currentOfficial = cleanText(current?.type).toLowerCase() === "official";
+  if (candidateOfficial !== currentOfficial) return candidateOfficial;
+
+  const candidateCreatedAt = Number(candidate?.createdAt);
+  const currentCreatedAt = Number(current?.createdAt);
+  if (Number.isFinite(candidateCreatedAt) && Number.isFinite(currentCreatedAt) && candidateCreatedAt !== currentCreatedAt) {
+    return candidateCreatedAt > currentCreatedAt;
+  }
+
+  return Number(candidate?.id) < Number(current?.id);
+}
+
+function mergeChapterVariants(items) {
+  const selected = new Map();
+  for (const item of items) {
+    const number = Number(item?.number);
+    if (!Number.isFinite(number)) continue;
+    const key = String(number);
+    const current = selected.get(key);
+    if (current == null || preferChapterVariant(item, current)) {
+      selected.set(key, item);
+    }
+  }
+  return Array.from(selected.values());
+}
+
 async function lookup(input) {
   const titles = Array.isArray(input?.titles) ? input.titles : [];
   const seen = new Set();
@@ -66,7 +94,7 @@ async function chapters(input) {
 
   const response = await chaptersForTitle(externalWorkId, language, page);
   const result = [];
-  for (const item of response?.items ?? []) {
+  for (const item of mergeChapterVariants(response?.items ?? [])) {
     const id = item?.id == null ? "" : String(item.id);
     const number = Number(item?.number);
     if (!id || !Number.isFinite(number)) continue;
