@@ -98,6 +98,16 @@ async function httpText(url, accept) {
   return String(response.body ?? "");
 }
 
+function requireRssFeed(xml) {
+  const body = cleanText(xml).replace(/^<\?xml[^>]*>\s*/i, "");
+  const hasRssRoot = /^<rss\b/i.test(body);
+  const hasClosedChannel = /<channel\b[\s\S]*<\/channel>\s*<\/rss>\s*$/i.test(body);
+  if (!hasRssRoot || !hasClosedChannel) {
+    throw new Error("Nyaa search response was not an RSS feed");
+  }
+  return body;
+}
+
 function parseSearchFeed(xml) {
   const blocks = xml.match(/<item\b[\s\S]*?<\/item>/gi) ?? [];
   const items = [];
@@ -183,7 +193,7 @@ async function enrichCandidate(candidate) {
 async function discover(query, category) {
   const url = `${BASE_URL}/?page=rss&c=${category}&f=0&q=${encodeURIComponent(query)}`;
   const xml = await httpText(url, "application/rss+xml,application/xml,text/xml");
-  return parseSearchFeed(xml);
+  return parseSearchFeed(requireRssFeed(xml));
 }
 
 async function search(input) {
