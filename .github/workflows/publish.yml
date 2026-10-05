@@ -61,4 +61,13 @@ jobs:
           fi
           sequence=$(node -e "console.log(JSON.parse(require('fs').readFileSync('repository/config.json')).sequence)")
           git commit -m "[publish] Provider repository sequence ${sequence}"
-          git push
+          for attempt in 1 2 3 4 5; do
+            if git push; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "git push failed after ${attempt} attempts" >&2
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
