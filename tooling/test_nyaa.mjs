@@ -8,6 +8,23 @@ const fixture = (name) => fs.readFileSync(path.join(root, "tests/fixtures", name
 const searchFixture = fixture("search.xml");
 const emptySearchFixture = `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0" xmlns:nyaa="https://nyaa.si/xmlns/nyaa"><channel><title>Nyaa</title></channel></rss>\n`;
 const unexpectedSearchFixture = "<!doctype html><html><head><title>Unexpected response</title></head><body>Not RSS</body></html>";
+const magnetSearchFixture = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:nyaa="https://nyaa.si/xmlns/nyaa">
+  <channel>
+    <title>Nyaa</title>
+    <item>
+      <title>Magnet Link Test Chapter 1</title>
+      <link>magnet:?xt=urn:btih:1111111111111111111111111111111111111111</link>
+      <guid isPermaLink="true">https://nyaa.si/view/2468101</guid>
+      <nyaa:seeders>4</nyaa:seeders>
+      <nyaa:leechers>1</nyaa:leechers>
+      <nyaa:downloads>9</nyaa:downloads>
+      <nyaa:infoHash>1111111111111111111111111111111111111111</nyaa:infoHash>
+      <nyaa:category>Literature - English-translated</nyaa:category>
+      <nyaa:size>12 MiB</nyaa:size>
+    </item>
+  </channel>
+</rss>`;
 const singleFixture = fixture("single-archive.html");
 const multiFixture = fixture("multi-file.html");
 const requests = [];
@@ -32,6 +49,9 @@ globalThis.tsuzuki = {
         if (query === "Unexpected Body 1" || query === "Unexpected Body") {
           return JSON.stringify({ statusCode: 200, body: unexpectedSearchFixture });
         }
+        if (query === "Magnet Link Test 1" || query === "Magnet Link Test") {
+          return JSON.stringify({ statusCode: 200, body: magnetSearchFixture });
+        }
         throw new Error(`Unexpected Nyaa search query: ${query}`);
       }
       if (parsed.pathname === "/view/1234567") {
@@ -39,6 +59,9 @@ globalThis.tsuzuki = {
       }
       if (parsed.pathname === "/view/7654321") {
         return JSON.stringify({ statusCode: 200, body: multiFixture });
+      }
+      if (parsed.pathname === "/view/2468101") {
+        return JSON.stringify({ statusCode: 200, body: singleFixture });
       }
       throw new Error(`Unexpected Nyaa fixture request: ${url}`);
     },
@@ -93,6 +116,32 @@ assert.deepEqual(
   "chapter-aware discovery must fall back to title-only search when the narrow RSS query is empty",
 );
 assert.equal(requests.length, 4);
+
+const magnetRequestStart = requests.length;
+const magnetResult = await provider.torrent.search({
+  titles: ["Magnet Link Test"],
+  preferredLanguages: ["en"],
+  chapterNumber: "1",
+  volume: 1,
+  cursor: null,
+});
+assert.equal(
+  magnetResult.items.length,
+  1,
+  "Nyaa RSS items with stable infoHash/guid must not be discarded solely because link is a magnet URI",
+);
+const magnetCandidate = magnetResult.items[0];
+assert.equal(magnetCandidate.infoHash, "1111111111111111111111111111111111111111");
+assert.equal(magnetCandidate.torrentUrl, undefined);
+assert.match(magnetCandidate.magnetUri, /^magnet:\?xt=urn:btih:1111111111111111111111111111111111111111/);
+assert.deepEqual(
+  requests
+    .slice(magnetRequestStart)
+    .filter(({ url }) => new URL(url).searchParams.get("page") === "rss")
+    .map(({ url }) => new URL(url).searchParams.get("q")),
+  ["Magnet Link Test 1"],
+  "a valid narrow RSS item must not be discarded and retried as a false empty search",
+);
 
 const unexpectedRequestStart = requests.length;
 await assert.rejects(
