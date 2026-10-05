@@ -1,0 +1,31 @@
+{
+  "manifestVersion": 1,
+  "id": "app.tsuzuki.nyaa",
+  "name": "Nyaa",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "minHostApi": 1,
+  "entrypoint": "main.js",
+  "capabilities": [
+    {
+      "id": "torrent.search",
+      "version": 1
+    }
+  ],
+  "permissions": {
+    "network": {
+      "origins": [
+        "https://nyaa.si"
+      ],
+      "localNetwork": false
+    },
+    "storage": {
+      "enabled": false
+    },
+    "secrets": []
+  },
+  "contentLanguages": [],
+  "settings": []
+}
