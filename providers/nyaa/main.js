@@ -180,6 +180,12 @@ async function enrichCandidate(candidate) {
   }
 }
 
+async function discover(query, category) {
+  const url = `${BASE_URL}/?page=rss&c=${category}&f=0&q=${encodeURIComponent(query)}`;
+  const xml = await httpText(url, "application/rss+xml,application/xml,text/xml");
+  return parseSearchFeed(xml);
+}
+
 async function search(input) {
   if (input?.cursor != null) {
     return { items: [], nextCursor: null };
@@ -190,11 +196,13 @@ async function search(input) {
   if (!title) throw new Error("Nyaa torrent search requires a title");
 
   const chapterNumber = cleanText(input?.chapterNumber);
-  const query = [title, chapterNumber].filter(Boolean).join(" ");
   const category = categoryFor(input?.preferredLanguages);
-  const url = `${BASE_URL}/?page=rss&c=${category}&f=0&q=${encodeURIComponent(query)}`;
-  const xml = await httpText(url, "application/rss+xml,application/xml,text/xml");
-  const discovered = parseSearchFeed(xml);
+  const narrowQuery = [title, chapterNumber].filter(Boolean).join(" ");
+  let discovered = await discover(narrowQuery, category);
+  if (discovered.length === 0 && chapterNumber) {
+    discovered = await discover(title, category);
+  }
+
   const items = [];
   for (const candidate of discovered) {
     items.push(await enrichCandidate(candidate));
