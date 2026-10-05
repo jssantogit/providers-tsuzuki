@@ -3,8 +3,8 @@
   "id": "app.tsuzuki.nyaa",
   "name": "Nyaa",
   "version": {
-    "name": "0.1.0",
-    "code": 1
+    "name": "0.1.1",
+    "code": 2
   },
   "minHostApi": 1,
   "entrypoint": "main.js",
