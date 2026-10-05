@@ -3,8 +3,8 @@
   "id": "app.tsuzuki.mangafire",
   "name": "MangaFire",
   "version": {
-    "name": "0.1.1",
-    "code": 2
+    "name": "0.1.2",
+    "code": 3
   },
   "minHostApi": 1,
   "entrypoint": "main.js",
@@ -26,7 +26,15 @@
     "network": {
       "origins": [
         "https://mangafire.to",
-        "https://*.mangafire.to"
+        "https://*.mangafire.to",
+        "https://mfcdn.cc",
+        "https://*.mfcdn.cc",
+        "https://mfcdn.nl",
+        "https://*.mfcdn.nl",
+        "https://mfcdn1.xyz",
+        "https://*.mfcdn1.xyz",
+        "https://mfcdn3.xyz",
+        "https://*.mfcdn3.xyz"
       ],
       "localNetwork": false
     },

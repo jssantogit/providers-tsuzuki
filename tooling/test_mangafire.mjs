@@ -6,10 +6,22 @@ import { signCanonicalPath } from "../providers/mangafire/modules/vrf.js";
 
 const root = path.resolve("providers/mangafire");
 const fixture = (name) => JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures", name), "utf8"));
+const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 const searchFixture = fixture("search.json");
 const chaptersFixture = fixture("chapters.json");
 const pagesFixture = fixture("pages.json");
 const requests = [];
+
+function originAllowed(url, allowedOrigins) {
+  const parsed = new URL(url);
+  return allowedOrigins.some((origin) => {
+    const allowed = new URL(origin.replace("*.", "wildcard."));
+    if (parsed.protocol !== allowed.protocol) return false;
+    if (!origin.includes("*.")) return parsed.hostname === allowed.hostname;
+    const suffix = allowed.hostname.slice("wildcard".length);
+    return parsed.hostname.endsWith(suffix) && parsed.hostname.length > suffix.length;
+  });
+}
 
 assert.equal(
   signCanonicalPath("/titles?keyword=One Piece&limit=5&page=1"),
@@ -89,6 +101,14 @@ const pages = await provider.reading.pages({
 assert.equal(pages.type, "page_list");
 assert.equal(pages.pages.length, 2);
 assert.deepEqual(pages.pages[0].headers, { Referer: "https://mangafire.to" });
+const allowedPageOrigins = manifest.permissions.network.origins;
+for (const page of pages.pages) {
+  assert.equal(
+    originAllowed(page.url, allowedPageOrigins),
+    true,
+    `page host must be covered by Provider network authority: ${new URL(page.url).hostname}`,
+  );
+}
 assert.equal(requests.length, 3);
 
 let browserUsed = false;
