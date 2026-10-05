@@ -20,7 +20,7 @@ globalThis.tsuzuki = {
       if (parsed.pathname === "/" && parsed.searchParams.get("page") === "rss") {
         assert.equal(parsed.searchParams.get("c"), "3_1");
         assert.equal(parsed.searchParams.get("f"), "0");
-        assert.equal(parsed.searchParams.get("q"), "Public Domain Test");
+        assert.equal(parsed.searchParams.get("q"), "Public Domain Test 1");
         return JSON.stringify({ statusCode: 200, body: searchFixture });
       }
       if (parsed.pathname === "/view/1234567") {
@@ -41,6 +41,8 @@ assert.equal(typeof provider?.torrent?.search, "function", "missing torrent.sear
 const result = await provider.torrent.search({
   titles: ["Public Domain Test", "Public Domain Test Alt"],
   preferredLanguages: ["en"],
+  chapterNumber: "1",
+  volume: 1,
   cursor: null,
 });
 
