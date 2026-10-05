@@ -1,0 +1,25 @@
+{
+  "manifestVersion": 1,
+  "id": "app.tsuzuki.directp2p",
+  "name": "Direct P2P",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "minHostApi": 1,
+  "entrypoint": "main.js",
+  "capabilities": [
+    {
+      "id": "acquisition.p2p",
+      "version": 1
+    }
+  ],
+  "permissions": {
+    "storage": {
+      "enabled": false
+    },
+    "secrets": []
+  },
+  "contentLanguages": [],
+  "settings": []
+}
