@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 const root = path.resolve("providers/nyaa");
 const fixture = (name) => fs.readFileSync(path.join(root, "tests/fixtures", name), "utf8");
 const searchFixture = fixture("search.xml");
+const emptySearchFixture = `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0" xmlns:nyaa="https://nyaa.si/xmlns/nyaa"><channel><title>Nyaa</title></channel></rss>\n`;
 const singleFixture = fixture("single-archive.html");
 const multiFixture = fixture("multi-file.html");
 const requests = [];
@@ -20,8 +21,14 @@ globalThis.tsuzuki = {
       if (parsed.pathname === "/" && parsed.searchParams.get("page") === "rss") {
         assert.equal(parsed.searchParams.get("c"), "3_1");
         assert.equal(parsed.searchParams.get("f"), "0");
-        assert.equal(parsed.searchParams.get("q"), "Public Domain Test 1");
-        return JSON.stringify({ statusCode: 200, body: searchFixture });
+        const query = parsed.searchParams.get("q");
+        if (query === "Public Domain Test 1") {
+          return JSON.stringify({ statusCode: 200, body: emptySearchFixture });
+        }
+        if (query === "Public Domain Test") {
+          return JSON.stringify({ statusCode: 200, body: searchFixture });
+        }
+        throw new Error(`Unexpected Nyaa search query: ${query}`);
       }
       if (parsed.pathname === "/view/1234567") {
         return JSON.stringify({ statusCode: 200, body: singleFixture });
@@ -74,5 +81,12 @@ assert.equal(
   "multi-file Nyaa torrents must fail closed until exact torrent metadata indices are available",
 );
 
-assert.equal(requests.length, 3);
+assert.deepEqual(
+  requests
+    .filter(({ url }) => new URL(url).searchParams.get("page") === "rss")
+    .map(({ url }) => new URL(url).searchParams.get("q")),
+  ["Public Domain Test 1", "Public Domain Test"],
+  "chapter-aware discovery must fall back to title-only search when the narrow RSS query is empty",
+);
+assert.equal(requests.length, 4);
 console.log("Nyaa Provider torrent.search fixtures: OK");
