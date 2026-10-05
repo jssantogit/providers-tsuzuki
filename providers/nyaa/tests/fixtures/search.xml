@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:nyaa="https://nyaa.si/xmlns/nyaa">
+  <channel>
+    <title>Nyaa</title>
+    <item>
+      <title>Public Domain Test Chapter 1</title>
+      <link>https://nyaa.si/download/1234567.torrent</link>
+      <guid isPermaLink="true">https://nyaa.si/view/1234567</guid>
+      <nyaa:infoHash>0123456789abcdef0123456789abcdef01234567</nyaa:infoHash>
+      <nyaa:category>Literature - English-translated</nyaa:category>
+      <nyaa:size>12.0 MiB</nyaa:size>
+      <nyaa:seeders>7</nyaa:seeders>
+      <nyaa:leechers>2</nyaa:leechers>
+    </item>
+    <item>
+      <title>Public Domain Test Batch</title>
+      <link>https://nyaa.si/download/7654321.torrent</link>
+      <guid isPermaLink="true">https://nyaa.si/view/7654321</guid>
+      <nyaa:infoHash>fedcba9876543210fedcba9876543210fedcba98</nyaa:infoHash>
+      <nyaa:category>Literature - English-translated</nyaa:category>
+      <nyaa:size>24.0 MiB</nyaa:size>
+      <nyaa:seeders>5</nyaa:seeders>
+      <nyaa:leechers>1</nyaa:leechers>
+    </item>
+  </channel>
+</rss>
