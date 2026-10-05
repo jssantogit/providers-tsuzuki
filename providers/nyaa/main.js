@@ -1,6 +1,7 @@
 const BASE_URL = "https://nyaa.si";
 const MAX_RESULTS = 20;
 const MAX_TITLES = 16;
+const DISCOVERY_SOFT_BUDGET_MS = 2500;
 const TRACKERS = [
   "udp://open.stealth.si:80/announce",
   "udp://tracker.opentrackr.org:1337/announce",
@@ -225,10 +226,16 @@ async function discover(query, category) {
   return parseSearchFeed(requireRssFeed(xml));
 }
 
-async function discoverTitle(title, chapterNumber, category) {
+function hasDiscoveryBudget(deadlineMillis) {
+  return Date.now() < deadlineMillis;
+}
+
+async function discoverTitle(title, chapterNumber, category, deadlineMillis) {
+  if (!hasDiscoveryBudget(deadlineMillis)) return [];
+
   const narrowQuery = [title, chapterNumber].filter(Boolean).join(" ");
   let discovered = await discover(narrowQuery, category);
-  if (discovered.length === 0 && chapterNumber) {
+  if (discovered.length === 0 && chapterNumber && hasDiscoveryBudget(deadlineMillis)) {
     discovered = await discover(title, category);
   }
   return discovered;
@@ -244,9 +251,11 @@ async function search(input) {
 
   const chapterNumber = cleanText(input?.chapterNumber);
   const category = categoryFor(input?.preferredLanguages);
+  const discoveryDeadlineMillis = Date.now() + DISCOVERY_SOFT_BUDGET_MS;
   let discovered = [];
   for (const title of titles) {
-    discovered = await discoverTitle(title, chapterNumber, category);
+    if (!hasDiscoveryBudget(discoveryDeadlineMillis)) break;
+    discovered = await discoverTitle(title, chapterNumber, category, discoveryDeadlineMillis);
     if (discovered.length > 0) break;
   }
 
