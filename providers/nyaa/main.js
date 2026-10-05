@@ -76,6 +76,18 @@ function validNyaaUrl(value, expectedPrefix) {
   }
 }
 
+function matchingMagnet(value, infoHash) {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "magnet:") return false;
+    return parsed.searchParams
+      .getAll("xt")
+      .some((xt) => cleanText(xt).toLowerCase() === `urn:btih:${infoHash.toLowerCase()}`);
+  } catch (_error) {
+    return false;
+  }
+}
+
 function magnetFor(infoHash, displayName) {
   const params = [
     `xt=urn:btih:${infoHash}`,
@@ -116,11 +128,12 @@ function parseSearchFeed(xml) {
   for (const block of blocks) {
     const infoHash = xmlTag(block, "nyaa:infoHash").toLowerCase();
     const displayName = xmlTag(block, "title");
-    const torrentUrl = xmlTag(block, "link");
+    const link = xmlTag(block, "link");
     const detailUrl = xmlTag(block, "guid");
     if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(infoHash)) continue;
     if (!displayName || seen.has(infoHash)) continue;
-    if (!validNyaaUrl(torrentUrl, "/download/")) continue;
+    const torrentUrl = validNyaaUrl(link, "/download/") ? link : undefined;
+    if (torrentUrl == null && !matchingMagnet(link, infoHash)) continue;
     if (!validNyaaUrl(detailUrl, "/view/")) continue;
 
     seen.add(infoHash);
