@@ -7,6 +7,7 @@ const root = path.resolve("providers/nyaa");
 const fixture = (name) => fs.readFileSync(path.join(root, "tests/fixtures", name), "utf8");
 const searchFixture = fixture("search.xml");
 const emptySearchFixture = `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0" xmlns:nyaa="https://nyaa.si/xmlns/nyaa"><channel><title>Nyaa</title></channel></rss>\n`;
+const unexpectedSearchFixture = "<!doctype html><html><head><title>Unexpected response</title></head><body>Not RSS</body></html>";
 const singleFixture = fixture("single-archive.html");
 const multiFixture = fixture("multi-file.html");
 const requests = [];
@@ -27,6 +28,9 @@ globalThis.tsuzuki = {
         }
         if (query === "Public Domain Test") {
           return JSON.stringify({ statusCode: 200, body: searchFixture });
+        }
+        if (query === "Unexpected Body 1" || query === "Unexpected Body") {
+          return JSON.stringify({ statusCode: 200, body: unexpectedSearchFixture });
         }
         throw new Error(`Unexpected Nyaa search query: ${query}`);
       }
@@ -89,4 +93,26 @@ assert.deepEqual(
   "chapter-aware discovery must fall back to title-only search when the narrow RSS query is empty",
 );
 assert.equal(requests.length, 4);
+
+const unexpectedRequestStart = requests.length;
+await assert.rejects(
+  () => provider.torrent.search({
+    titles: ["Unexpected Body"],
+    preferredLanguages: ["en"],
+    chapterNumber: "1",
+    volume: 1,
+    cursor: null,
+  }),
+  /RSS feed/,
+  "HTTP 200 non-RSS documents must not masquerade as an empty Nyaa search",
+);
+assert.deepEqual(
+  requests
+    .slice(unexpectedRequestStart)
+    .filter(({ url }) => new URL(url).searchParams.get("page") === "rss")
+    .map(({ url }) => new URL(url).searchParams.get("q")),
+  ["Unexpected Body 1"],
+  "an invalid narrow response must fail closed instead of triggering title-only fallback",
+);
+
 console.log("Nyaa Provider torrent.search fixtures: OK");
