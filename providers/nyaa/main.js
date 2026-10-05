@@ -186,9 +186,11 @@ async function search(input) {
   }
 
   const titles = Array.isArray(input?.titles) ? input.titles : [];
-  const query = titles.map(cleanText).find(Boolean);
-  if (!query) throw new Error("Nyaa torrent search requires a title");
+  const title = titles.map(cleanText).find(Boolean);
+  if (!title) throw new Error("Nyaa torrent search requires a title");
 
+  const chapterNumber = cleanText(input?.chapterNumber);
+  const query = [title, chapterNumber].filter(Boolean).join(" ");
   const category = categoryFor(input?.preferredLanguages);
   const url = `${BASE_URL}/?page=rss&c=${category}&f=0&q=${encodeURIComponent(query)}`;
   const xml = await httpText(url, "application/rss+xml,application/xml,text/xml");
