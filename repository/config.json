@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "repositoryId": "app.tsuzuki.providers",
   "displayName": "Tsuzuki Providers",
-  "keyId": "tsuzuki-provider-root-2026-01",
+  "keyId": "tsuzuki-provider-root-2026-02",
   "sequence": 3,
   "artifactBaseUrl": "https://raw.githubusercontent.com/jssantogit/providers-tsuzuki/main/dist/providers",
   "indexUrl": "https://raw.githubusercontent.com/jssantogit/providers-tsuzuki/main/dist/index.json"
