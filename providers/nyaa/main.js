@@ -1,5 +1,6 @@
 const BASE_URL = "https://nyaa.si";
 const MAX_RESULTS = 20;
+const MAX_TITLES = 16;
 const TRACKERS = [
   "udp://open.stealth.si:80/announce",
   "udp://tracker.opentrackr.org:1337/announce",
@@ -8,6 +9,21 @@ const TRACKERS = [
 
 function cleanText(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function cleanTitles(values) {
+  const seen = new Set();
+  const titles = [];
+  for (const value of Array.isArray(values) ? values : []) {
+    const title = cleanText(value);
+    if (!title) continue;
+    const key = title.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    titles.push(title);
+    if (titles.length >= MAX_TITLES) break;
+  }
+  return titles;
 }
 
 function decodeEntities(value) {
@@ -209,21 +225,29 @@ async function discover(query, category) {
   return parseSearchFeed(requireRssFeed(xml));
 }
 
+async function discoverTitle(title, chapterNumber, category) {
+  const narrowQuery = [title, chapterNumber].filter(Boolean).join(" ");
+  let discovered = await discover(narrowQuery, category);
+  if (discovered.length === 0 && chapterNumber) {
+    discovered = await discover(title, category);
+  }
+  return discovered;
+}
+
 async function search(input) {
   if (input?.cursor != null) {
     return { items: [], nextCursor: null };
   }
 
-  const titles = Array.isArray(input?.titles) ? input.titles : [];
-  const title = titles.map(cleanText).find(Boolean);
-  if (!title) throw new Error("Nyaa torrent search requires a title");
+  const titles = cleanTitles(input?.titles);
+  if (titles.length === 0) throw new Error("Nyaa torrent search requires a title");
 
   const chapterNumber = cleanText(input?.chapterNumber);
   const category = categoryFor(input?.preferredLanguages);
-  const narrowQuery = [title, chapterNumber].filter(Boolean).join(" ");
-  let discovered = await discover(narrowQuery, category);
-  if (discovered.length === 0 && chapterNumber) {
-    discovered = await discover(title, category);
+  let discovered = [];
+  for (const title of titles) {
+    discovered = await discoverTitle(title, chapterNumber, category);
+    if (discovered.length > 0) break;
   }
 
   const items = [];
