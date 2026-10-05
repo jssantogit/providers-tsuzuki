@@ -20,6 +20,8 @@ jobs:
           python-version: '3.13'
       - name: MangaFire contract fixtures
         run: node tooling/test_mangafire.mjs
+      - name: Nyaa torrent contract fixtures
+        run: node tooling/test_nyaa.mjs
       - name: Repository and package conformance
         run: python3 tooling/check_repository.py
       - name: Verify signed publication
