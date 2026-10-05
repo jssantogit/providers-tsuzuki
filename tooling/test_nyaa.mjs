@@ -46,6 +46,12 @@ globalThis.tsuzuki = {
         if (query === "Public Domain Test") {
           return JSON.stringify({ statusCode: 200, body: searchFixture });
         }
+        if (query === "Missing Primary 1" || query === "Missing Primary") {
+          return JSON.stringify({ statusCode: 200, body: emptySearchFixture });
+        }
+        if (query === "Public Domain Test Alt 1") {
+          return JSON.stringify({ statusCode: 200, body: searchFixture });
+        }
         if (query === "Unexpected Body 1" || query === "Unexpected Body") {
           return JSON.stringify({ statusCode: 200, body: unexpectedSearchFixture });
         }
@@ -116,6 +122,24 @@ assert.deepEqual(
   "chapter-aware discovery must fall back to title-only search when the narrow RSS query is empty",
 );
 assert.equal(requests.length, 4);
+
+const aliasRequestStart = requests.length;
+const aliasResult = await provider.torrent.search({
+  titles: ["Missing Primary", "Public Domain Test Alt", "public domain test alt", "Ignored Third"],
+  preferredLanguages: ["en"],
+  chapterNumber: "1",
+  volume: 1,
+  cursor: null,
+});
+assert.equal(aliasResult.items.length, 2, "a later exact canonical title alias must be eligible for discovery");
+assert.deepEqual(
+  requests
+    .slice(aliasRequestStart)
+    .filter(({ url }) => new URL(url).searchParams.get("page") === "rss")
+    .map(({ url }) => new URL(url).searchParams.get("q")),
+  ["Missing Primary 1", "Missing Primary", "Public Domain Test Alt 1"],
+  "Nyaa must try exact aliases in order, dedupe case-insensitively, and stop on the first non-empty discovery",
+);
 
 const magnetRequestStart = requests.length;
 const magnetResult = await provider.torrent.search({
