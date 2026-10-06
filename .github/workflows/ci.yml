@@ -26,6 +26,8 @@ jobs:
         run: node tooling/test_nyaa_runtime_budget.mjs
       - name: Nyaa slow primary fallback fixture
         run: node tooling/test_nyaa_slow_primary_fallback.mjs
+      - name: Nyaa discovery diagnostics fixture
+        run: node tooling/test_nyaa_discovery_diagnostics.mjs
       - name: Direct P2P acquisition contract fixtures
         run: node tooling/test_direct_p2p.mjs
       - name: Repository and package conformance
