@@ -22,6 +22,8 @@ jobs:
         run: node tooling/test_mangafire.mjs
       - name: Nyaa torrent contract fixtures
         run: node tooling/test_nyaa.mjs
+      - name: Nyaa item acceptance matrix
+        run: node tooling/test_nyaa_item_acceptance.mjs
       - name: Nyaa runtime discovery budget fixture
         run: node tooling/test_nyaa_runtime_budget.mjs
       - name: Nyaa slow primary fallback fixture

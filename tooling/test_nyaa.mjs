@@ -28,6 +28,7 @@ const magnetSearchFixture = `<?xml version="1.0" encoding="UTF-8"?>
 const singleFixture = fixture("single-archive.html");
 const multiFixture = fixture("multi-file.html");
 const requests = [];
+const diagnostics = [];
 
 globalThis.tsuzuki = {
   http: {
@@ -70,6 +71,11 @@ globalThis.tsuzuki = {
         return JSON.stringify({ statusCode: 200, body: singleFixture });
       }
       throw new Error(`Unexpected Nyaa fixture request: ${url}`);
+    },
+  },
+  log: {
+    async info(message) {
+      diagnostics.push(JSON.parse(message));
     },
   },
 };
@@ -122,6 +128,25 @@ assert.deepEqual(
   "chapter-aware discovery must fall back to title-only search when the narrow RSS query is empty",
 );
 assert.equal(requests.length, 4);
+assert.deepEqual(
+  diagnostics.slice(0, 2).map(({ phase, rawItemCount, acceptedCandidateCount }) => ({
+    phase,
+    rawItemCount,
+    acceptedCandidateCount,
+  })),
+  [
+    { phase: "primary_narrow", rawItemCount: 0, acceptedCandidateCount: 0 },
+    { phase: "primary_fallback", rawItemCount: 2, acceptedCandidateCount: 2 },
+  ],
+  "discovery diagnostics must distinguish raw RSS emptiness from Provider candidate rejection without logging titles",
+);
+for (const diagnostic of diagnostics.slice(0, 2)) {
+  assert.equal(diagnostic.event, "nyaa_discovery");
+  assert.equal(typeof diagnostic.elapsedMs, "number");
+  assert.ok(diagnostic.elapsedMs >= 0);
+  assert.equal("title" in diagnostic, false);
+  assert.equal("url" in diagnostic, false);
+}
 
 const aliasRequestStart = requests.length;
 const aliasResult = await provider.torrent.search({
