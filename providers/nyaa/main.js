@@ -127,6 +127,15 @@ async function httpText(url, accept) {
   return String(response.body ?? "");
 }
 
+async function logDiscovery(message) {
+  if (typeof globalThis.tsuzuki?.log?.info !== "function") return;
+  try {
+    await globalThis.tsuzuki.log.info(message);
+  } catch (_error) {
+    // Diagnostics are best-effort and must never change Provider behavior.
+  }
+}
+
 function requireRssFeed(xml) {
   const body = cleanText(xml).replace(/^<\?xml[^>]*>\s*/i, "");
   const hasRssRoot = /^<rss\b/i.test(body);
@@ -168,7 +177,7 @@ function parseSearchFeed(xml) {
     if (items.length >= MAX_RESULTS) break;
   }
 
-  return items;
+  return { items, rawItemCount: blocks.length };
 }
 
 function parseSingleArchive(html, languages) {
@@ -220,27 +229,49 @@ async function enrichCandidate(candidate) {
   }
 }
 
-async function discover(query, category) {
+async function discover(query, category, diagnostics, phase) {
+  const attempt = diagnostics.nextAttempt;
+  diagnostics.nextAttempt += 1;
+  await logDiscovery(`TSZ_DISCOVERY_V1 state=start attempt=${attempt} phase=${phase}`);
+
+  const startedMillis = Date.now();
   const url = `${BASE_URL}/?page=rss&c=${category}&f=0&q=${encodeURIComponent(query)}`;
   const xml = await httpText(url, "application/rss+xml,application/xml,text/xml");
-  return parseSearchFeed(requireRssFeed(xml));
+  const parsed = parseSearchFeed(requireRssFeed(xml));
+  const durationMillis = Math.max(0, Date.now() - startedMillis);
+
+  await logDiscovery(
+    `TSZ_DISCOVERY_V1 state=end attempt=${attempt} phase=${phase} raw=${parsed.rawItemCount} accepted=${parsed.items.length} duration_ms=${durationMillis}`,
+  );
+  return parsed.items;
 }
 
 function hasDiscoveryBudget(deadlineMillis) {
   return Date.now() < deadlineMillis;
 }
 
-async function discoverTitle(title, chapterNumber, category, deadlineMillis, preserveFallback) {
+async function discoverTitle(
+  title,
+  chapterNumber,
+  category,
+  deadlineMillis,
+  preserveFallback,
+  titleIndex,
+  diagnostics,
+) {
   if (!hasDiscoveryBudget(deadlineMillis)) return [];
 
+  const primary = titleIndex === 0;
+  const narrowPhase = primary ? "primary_narrow" : "alias_narrow";
+  const fallbackPhase = primary ? "primary_fallback" : "alias_fallback";
   const narrowQuery = [title, chapterNumber].filter(Boolean).join(" ");
-  let discovered = await discover(narrowQuery, category);
+  let discovered = await discover(narrowQuery, category, diagnostics, narrowPhase);
   if (
     discovered.length === 0 &&
     chapterNumber &&
     (preserveFallback || hasDiscoveryBudget(deadlineMillis))
   ) {
-    discovered = await discover(title, category);
+    discovered = await discover(title, category, diagnostics, fallbackPhase);
   }
   return discovered;
 }
@@ -256,6 +287,7 @@ async function search(input) {
   const chapterNumber = cleanText(input?.chapterNumber);
   const category = categoryFor(input?.preferredLanguages);
   const discoveryDeadlineMillis = Date.now() + DISCOVERY_SOFT_BUDGET_MS;
+  const diagnostics = { nextAttempt: 1 };
   let discovered = [];
   for (let index = 0; index < titles.length; index += 1) {
     if (index > 0 && !hasDiscoveryBudget(discoveryDeadlineMillis)) break;
@@ -265,6 +297,8 @@ async function search(input) {
       category,
       discoveryDeadlineMillis,
       index === 0,
+      index,
+      diagnostics,
     );
     if (discovered.length > 0) break;
   }
