@@ -68,8 +68,8 @@ try {
 
   assert.equal(result.items.length, 1);
   assert.deepEqual(logs, [
-    "TSZ_DISCOVERY_V1 state=start attempt=1 broadened=0",
-    "TSZ_DISCOVERY_V1 state=end attempt=1 broadened=0 raw=2 accepted=1 duration_ms=120",
+    "TSZ_DISCOVERY_V1 state=start attempt=1 phase=primary_narrow",
+    "TSZ_DISCOVERY_V1 state=end attempt=1 phase=primary_narrow raw=2 accepted=1 duration_ms=120",
   ]);
   assert.equal(logs.some((line) => line.includes("Diagnostic Test")), false, "diagnostics must not leak titles");
   assert.equal(logs.some((line) => line.includes("nyaa.si")), false, "diagnostics must not leak URLs");
