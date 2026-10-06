@@ -137,6 +137,26 @@ function requireRssFeed(xml) {
   return body;
 }
 
+function rawItemCount(xml) {
+  return (xml.match(/<item\b/gi) ?? []).length;
+}
+
+async function logDiscovery(phase, rawCount, acceptedCount, startedAtMillis) {
+  const info = globalThis.tsuzuki?.log?.info;
+  if (typeof info !== "function") return;
+  try {
+    await info(JSON.stringify({
+      event: "nyaa_discovery",
+      phase,
+      rawItemCount: rawCount,
+      acceptedCandidateCount: acceptedCount,
+      elapsedMs: Math.max(0, Date.now() - startedAtMillis),
+    }));
+  } catch (_error) {
+    // Diagnostics must never change Provider discovery behavior.
+  }
+}
+
 function parseSearchFeed(xml) {
   const blocks = xml.match(/<item\b[\s\S]*?<\/item>/gi) ?? [];
   const items = [];
@@ -220,27 +240,30 @@ async function enrichCandidate(candidate) {
   }
 }
 
-async function discover(query, category) {
+async function discover(query, category, phase) {
+  const startedAtMillis = Date.now();
   const url = `${BASE_URL}/?page=rss&c=${category}&f=0&q=${encodeURIComponent(query)}`;
-  const xml = await httpText(url, "application/rss+xml,application/xml,text/xml");
-  return parseSearchFeed(requireRssFeed(xml));
+  const xml = requireRssFeed(await httpText(url, "application/rss+xml,application/xml,text/xml"));
+  const items = parseSearchFeed(xml);
+  await logDiscovery(phase, rawItemCount(xml), items.length, startedAtMillis);
+  return items;
 }
 
 function hasDiscoveryBudget(deadlineMillis) {
   return Date.now() < deadlineMillis;
 }
 
-async function discoverTitle(title, chapterNumber, category, deadlineMillis, preserveFallback) {
+async function discoverTitle(title, chapterNumber, category, deadlineMillis, preserveFallback, phasePrefix) {
   if (!hasDiscoveryBudget(deadlineMillis)) return [];
 
   const narrowQuery = [title, chapterNumber].filter(Boolean).join(" ");
-  let discovered = await discover(narrowQuery, category);
+  let discovered = await discover(narrowQuery, category, `${phasePrefix}_narrow`);
   if (
     discovered.length === 0 &&
     chapterNumber &&
     (preserveFallback || hasDiscoveryBudget(deadlineMillis))
   ) {
-    discovered = await discover(title, category);
+    discovered = await discover(title, category, `${phasePrefix}_fallback`);
   }
   return discovered;
 }
@@ -265,6 +288,7 @@ async function search(input) {
       category,
       discoveryDeadlineMillis,
       index === 0,
+      index === 0 ? "primary" : "alias",
     );
     if (discovered.length > 0) break;
   }
