@@ -230,12 +230,16 @@ function hasDiscoveryBudget(deadlineMillis) {
   return Date.now() < deadlineMillis;
 }
 
-async function discoverTitle(title, chapterNumber, category, deadlineMillis) {
+async function discoverTitle(title, chapterNumber, category, deadlineMillis, preserveFallback) {
   if (!hasDiscoveryBudget(deadlineMillis)) return [];
 
   const narrowQuery = [title, chapterNumber].filter(Boolean).join(" ");
   let discovered = await discover(narrowQuery, category);
-  if (discovered.length === 0 && chapterNumber && hasDiscoveryBudget(deadlineMillis)) {
+  if (
+    discovered.length === 0 &&
+    chapterNumber &&
+    (preserveFallback || hasDiscoveryBudget(deadlineMillis))
+  ) {
     discovered = await discover(title, category);
   }
   return discovered;
@@ -253,9 +257,15 @@ async function search(input) {
   const category = categoryFor(input?.preferredLanguages);
   const discoveryDeadlineMillis = Date.now() + DISCOVERY_SOFT_BUDGET_MS;
   let discovered = [];
-  for (const title of titles) {
-    if (!hasDiscoveryBudget(discoveryDeadlineMillis)) break;
-    discovered = await discoverTitle(title, chapterNumber, category, discoveryDeadlineMillis);
+  for (let index = 0; index < titles.length; index += 1) {
+    if (index > 0 && !hasDiscoveryBudget(discoveryDeadlineMillis)) break;
+    discovered = await discoverTitle(
+      titles[index],
+      chapterNumber,
+      category,
+      discoveryDeadlineMillis,
+      index === 0,
+    );
     if (discovered.length > 0) break;
   }
 
