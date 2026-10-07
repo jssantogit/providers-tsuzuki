@@ -3,6 +3,8 @@ const MAX_RESULTS = 20;
 const MAX_TITLES = 16;
 const DETAIL_PAGE_SIZE = 3;
 const DETAIL_CURSOR_PREFIX = "after:";
+const SNAPSHOT_CURSOR_PREFIX = "snapshot:";
+const MAX_CURSOR_CHARS = 4096;
 const DISCOVERY_SOFT_BUDGET_MS = 2500;
 const TRACKERS = [
   "udp://open.stealth.si:80/announce",
@@ -86,11 +88,15 @@ function languagesForCategory(category) {
   return [];
 }
 
-function validNyaaUrl(value, expectedPrefix) {
+function nyaaPath(value, expectedPrefix) {
   const match = cleanText(value).match(/^https:\/\/nyaa\.si(\/[^?#]*)?(?:[?#].*)?$/i);
-  if (!match) return false;
+  if (!match) return null;
   const pathname = match[1] || "/";
-  return pathname.startsWith(expectedPrefix);
+  return pathname.startsWith(expectedPrefix) ? pathname : null;
+}
+
+function validNyaaUrl(value, expectedPrefix) {
+  return nyaaPath(value, expectedPrefix) != null;
 }
 
 function decodeQueryComponent(value) {
@@ -135,6 +141,133 @@ function parseDetailCursor(value) {
 
 function detailCursorFor(infoHash) {
   return `${DETAIL_CURSOR_PREFIX}${infoHash}`;
+}
+
+function snapshotLanguageCode(languages) {
+  const values = Array.from(languages ?? []);
+  if (values.length === 0) return "";
+  if (values.length === 1 && values[0] === "en") return "e";
+  if (values.length === 1 && values[0] === "ja") return "j";
+  return null;
+}
+
+function snapshotCandidateFor(candidate) {
+  const detailPath = nyaaPath(candidate.detailUrl, "/view/");
+  if (detailPath == null || !/^\/view\/\d+$/.test(detailPath)) return null;
+
+  let torrentPath = null;
+  if (candidate.torrentUrl != null) {
+    torrentPath = nyaaPath(candidate.torrentUrl, "/download/");
+    if (torrentPath == null || !/^\/download\/\d+\.torrent$/.test(torrentPath)) return null;
+  }
+
+  const languageCode = snapshotLanguageCode(candidate.languages);
+  if (languageCode == null) return null;
+
+  return [
+    candidate.infoHash,
+    torrentPath,
+    detailPath,
+    candidate.displayName,
+    candidate.sizeBytes ?? null,
+    candidate.seeders ?? null,
+    candidate.peers ?? null,
+    languageCode,
+  ];
+}
+
+function snapshotCursorFor(compactCandidates, hasMore) {
+  const cursor = `${SNAPSHOT_CURSOR_PREFIX}${JSON.stringify([hasMore ? 1 : 0, compactCandidates])}`;
+  return cursor.length <= MAX_CURSOR_CHARS ? cursor : null;
+}
+
+function continuationCursorFor(remainingCandidates, fallbackInfoHash) {
+  if (remainingCandidates.length === 0) return null;
+
+  const compactCandidates = [];
+  for (let index = 0; index < remainingCandidates.length; index += 1) {
+    const compact = snapshotCandidateFor(remainingCandidates[index]);
+    if (compact == null) break;
+
+    const nextCompact = [...compactCandidates, compact];
+    const hasMore = index < remainingCandidates.length - 1;
+    if (snapshotCursorFor(nextCompact, hasMore) == null) break;
+    compactCandidates.push(compact);
+  }
+
+  if (compactCandidates.length === 0) {
+    return detailCursorFor(fallbackInfoHash);
+  }
+
+  const hasMore = compactCandidates.length < remainingCandidates.length;
+  return snapshotCursorFor(compactCandidates, hasMore) ?? detailCursorFor(fallbackInfoHash);
+}
+
+function parseSnapshotCandidate(value) {
+  if (!Array.isArray(value) || value.length !== 8) return null;
+
+  const infoHash = cleanText(value[0]).toLowerCase();
+  if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(infoHash)) return null;
+
+  const torrentPath = value[1];
+  if (torrentPath != null && (typeof torrentPath !== "string" || !/^\/download\/\d+\.torrent$/.test(torrentPath))) {
+    return null;
+  }
+
+  const detailPath = value[2];
+  if (typeof detailPath !== "string" || !/^\/view\/\d+$/.test(detailPath)) return null;
+
+  const displayName = cleanText(value[3]);
+  if (!displayName) return null;
+
+  const sizeBytes = value[4];
+  if (sizeBytes != null && (!Number.isSafeInteger(sizeBytes) || sizeBytes < 0)) return null;
+  const seeders = value[5];
+  if (seeders != null && (!Number.isSafeInteger(seeders) || seeders < 0)) return null;
+  const peers = value[6];
+  if (peers != null && (!Number.isSafeInteger(peers) || peers < 0)) return null;
+
+  const languageCode = value[7];
+  const languages = languageCode === "" ? [] : languageCode === "e" ? ["en"] : languageCode === "j" ? ["ja"] : null;
+  if (languages == null) return null;
+
+  return {
+    infoHash,
+    magnetUri: magnetFor(infoHash, displayName),
+    torrentUrl: torrentPath == null ? undefined : `${BASE_URL}${torrentPath}`,
+    detailUrl: `${BASE_URL}${detailPath}`,
+    displayName,
+    sizeBytes,
+    seeders,
+    peers,
+    languages,
+  };
+}
+
+function parseSnapshotCursor(value) {
+  const text = cleanText(value);
+  if (!text.startsWith(SNAPSHOT_CURSOR_PREFIX)) return null;
+
+  try {
+    const payload = JSON.parse(text.slice(SNAPSHOT_CURSOR_PREFIX.length));
+    if (!Array.isArray(payload) || payload.length !== 2) return null;
+    const hasMoreFlag = payload[0];
+    if (hasMoreFlag !== 0 && hasMoreFlag !== 1) return null;
+    const rawCandidates = payload[1];
+    if (!Array.isArray(rawCandidates) || rawCandidates.length === 0 || rawCandidates.length > MAX_RESULTS) return null;
+
+    const candidates = rawCandidates.map(parseSnapshotCandidate);
+    if (candidates.some((candidate) => candidate == null)) return null;
+    const seen = new Set(candidates.map((candidate) => candidate.infoHash));
+    if (seen.size !== candidates.length) return null;
+
+    return {
+      candidates,
+      hasMore: hasMoreFlag === 1,
+    };
+  } catch (_error) {
+    return null;
+  }
 }
 
 async function httpText(url, accept) {
@@ -293,48 +426,76 @@ async function discoverTitle(title, chapterNumber, category, deadlineMillis, pre
 
 async function search(input) {
   const rawCursor = input?.cursor;
-  const cursorInfoHash = rawCursor == null ? null : parseDetailCursor(rawCursor);
-  if (rawCursor != null && cursorInfoHash == null) {
+  const cursorText = rawCursor == null ? null : cleanText(rawCursor);
+  const usesSnapshot = cursorText?.startsWith(SNAPSHOT_CURSOR_PREFIX) === true;
+  const snapshot = usesSnapshot ? parseSnapshotCursor(cursorText) : null;
+  if (usesSnapshot && snapshot == null) {
+    return { items: [], nextCursor: null };
+  }
+
+  const cursorInfoHash = rawCursor == null || usesSnapshot ? null : parseDetailCursor(rawCursor);
+  if (rawCursor != null && !usesSnapshot && cursorInfoHash == null) {
     return { items: [], nextCursor: null };
   }
 
   const titles = cleanTitles(input?.titles);
   if (titles.length === 0) throw new Error("Nyaa torrent search requires a title");
 
-  const chapterNumber = cleanText(input?.chapterNumber);
-  const category = categoryFor(input?.preferredLanguages);
-  const discoveryDeadlineMillis = Date.now() + DISCOVERY_SOFT_BUDGET_MS;
-  let discovered = [];
-  for (let index = 0; index < titles.length; index += 1) {
-    if (index > 0 && !hasDiscoveryBudget(discoveryDeadlineMillis)) break;
-    discovered = await discoverTitle(
-      titles[index],
-      chapterNumber,
-      category,
-      discoveryDeadlineMillis,
-      index === 0,
-      index === 0 ? "primary" : "alias",
-    );
-    if (discovered.length > 0) break;
-  }
-
+  let discovered;
   let startIndex = 0;
-  if (cursorInfoHash != null) {
-    const anchorIndex = discovered.findIndex((candidate) => candidate.infoHash === cursorInfoHash);
-    if (anchorIndex < 0) {
-      return { items: [], nextCursor: null };
+  if (snapshot != null) {
+    discovered = snapshot.candidates;
+  } else {
+    const chapterNumber = cleanText(input?.chapterNumber);
+    const category = categoryFor(input?.preferredLanguages);
+    const discoveryDeadlineMillis = Date.now() + DISCOVERY_SOFT_BUDGET_MS;
+    discovered = [];
+    for (let index = 0; index < titles.length; index += 1) {
+      if (index > 0 && !hasDiscoveryBudget(discoveryDeadlineMillis)) break;
+      discovered = await discoverTitle(
+        titles[index],
+        chapterNumber,
+        category,
+        discoveryDeadlineMillis,
+        index === 0,
+        index === 0 ? "primary" : "alias",
+      );
+      if (discovered.length > 0) break;
     }
-    startIndex = anchorIndex + 1;
+
+    if (cursorInfoHash != null) {
+      const anchorIndex = discovered.findIndex((candidate) => candidate.infoHash === cursorInfoHash);
+      if (anchorIndex < 0) {
+        return { items: [], nextCursor: null };
+      }
+      startIndex = anchorIndex + 1;
+    }
   }
 
   const pageCandidates = discovered.slice(startIndex, startIndex + DETAIL_PAGE_SIZE);
   const items = await Promise.all(pageCandidates.map((candidate) => enrichCandidate(candidate)));
   const endIndex = startIndex + pageCandidates.length;
-  const nextCursor = (
-    pageCandidates.length > 0 && endIndex < discovered.length
-      ? detailCursorFor(pageCandidates[pageCandidates.length - 1].infoHash)
-      : null
-  );
+
+  let nextCursor = null;
+  if (pageCandidates.length > 0) {
+    const lastInfoHash = pageCandidates[pageCandidates.length - 1].infoHash;
+    const remaining = discovered.slice(endIndex);
+    if (snapshot != null) {
+      if (remaining.length > 0) {
+        const compactRemaining = remaining.map(snapshotCandidateFor);
+        if (compactRemaining.every((candidate) => candidate != null)) {
+          nextCursor = snapshotCursorFor(compactRemaining, snapshot.hasMore);
+        }
+        if (nextCursor == null) {
+          nextCursor = detailCursorFor(lastInfoHash);
+        }
+      } else if (snapshot.hasMore) {
+        nextCursor = detailCursorFor(lastInfoHash);
+      }
+    } else if (remaining.length > 0) {
+      nextCursor = continuationCursorFor(remaining, lastInfoHash);
+    }
+  }
 
   return { items, nextCursor };
 }
