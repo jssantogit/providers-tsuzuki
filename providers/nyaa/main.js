@@ -516,7 +516,7 @@ async function search(input) {
   }
 
   const result = { items, nextCursor };
-  if (rawCursor == null && remaining.length > 0) {
+  if (input?.supportsParallelCursors === true && rawCursor == null && remaining.length > 0) {
     const parallelCursors = independentContinuationCursors(remaining);
     if (parallelCursors.length > 0) result.parallelCursors = parallelCursors;
   }
