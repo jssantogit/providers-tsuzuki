@@ -5,6 +5,7 @@ const DETAIL_PAGE_SIZE = 3;
 const DETAIL_CURSOR_PREFIX = "after:";
 const SNAPSHOT_CURSOR_PREFIX = "snapshot:";
 const MAX_CURSOR_CHARS = 4096;
+const MAX_PARALLEL_CURSORS = 7;
 const DISCOVERY_SOFT_BUDGET_MS = 2500;
 const TRACKERS = [
   "udp://open.stealth.si:80/announce",
@@ -201,6 +202,23 @@ function continuationCursorFor(remainingCandidates, fallbackInfoHash) {
 
   const hasMore = compactCandidates.length < remainingCandidates.length;
   return snapshotCursorFor(compactCandidates, hasMore) ?? detailCursorFor(fallbackInfoHash);
+}
+
+function independentContinuationCursors(remainingCandidates) {
+  if (remainingCandidates.length === 0) return [];
+
+  const cursors = [];
+  for (let index = 0; index < remainingCandidates.length; index += DETAIL_PAGE_SIZE) {
+    const chunk = remainingCandidates.slice(index, index + DETAIL_PAGE_SIZE);
+    const compactChunk = chunk.map(snapshotCandidateFor);
+    if (compactChunk.some((candidate) => candidate == null)) return [];
+
+    const cursor = snapshotCursorFor(compactChunk, false);
+    if (cursor == null) return [];
+    cursors.push(cursor);
+    if (cursors.length > MAX_PARALLEL_CURSORS) return [];
+  }
+  return cursors;
 }
 
 function parseSnapshotCandidate(value) {
@@ -477,9 +495,9 @@ async function search(input) {
   const endIndex = startIndex + pageCandidates.length;
 
   let nextCursor = null;
+  const remaining = discovered.slice(endIndex);
   if (pageCandidates.length > 0) {
     const lastInfoHash = pageCandidates[pageCandidates.length - 1].infoHash;
-    const remaining = discovered.slice(endIndex);
     if (snapshot != null) {
       if (remaining.length > 0) {
         const compactRemaining = remaining.map(snapshotCandidateFor);
@@ -497,7 +515,12 @@ async function search(input) {
     }
   }
 
-  return { items, nextCursor };
+  const result = { items, nextCursor };
+  if (rawCursor == null && remaining.length > 0) {
+    const parallelCursors = independentContinuationCursors(remaining);
+    if (parallelCursors.length > 0) result.parallelCursors = parallelCursors;
+  }
+  return result;
 }
 
 export default {
