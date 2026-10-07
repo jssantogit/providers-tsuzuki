@@ -89,14 +89,16 @@ function resetScenario(candidateCount, displayNameFor) {
   detailRequests = 0;
 }
 
-function searchRequest(cursor = null) {
-  return {
+function searchRequest(cursor = null, supportsParallelCursors = false) {
+  const request = {
     titles: ["Bounded Enrichment"],
     preferredLanguages: ["en"],
     chapterNumber: "12",
     volume: 1,
     cursor,
   };
+  if (supportsParallelCursors) request.supportsParallelCursors = true;
+  return request;
 }
 
 async function runScenario({
@@ -170,15 +172,29 @@ async function runScenario({
   }
 }
 
-async function runIndependentContinuationScenario() {
+async function runLegacyCompatibilityScenario() {
   const candidateCount = 20;
   const displayNameFor = (index) => `Bounded Enrichment Chapter 12 Candidate ${index}`;
   resetScenario(candidateCount, displayNameFor);
 
   const first = await provider.torrent.search(searchRequest());
+  assert.equal(first.items.length, expectedPageSize, "legacy Host initial page must keep the bounded detail page size");
+  assert.ok(first.nextCursor, "legacy Host must retain the sequential cursor");
+  assert.ok(
+    !Object.prototype.hasOwnProperty.call(first, "parallelCursors"),
+    "Provider must not emit parallelCursors unless the Host explicitly opts in",
+  );
+}
+
+async function runIndependentContinuationScenario() {
+  const candidateCount = 20;
+  const displayNameFor = (index) => `Bounded Enrichment Chapter 12 Candidate ${index}`;
+  resetScenario(candidateCount, displayNameFor);
+
+  const first = await provider.torrent.search(searchRequest(null, true));
   assert.equal(first.items.length, expectedPageSize, "initial page must keep the bounded detail page size");
   assert.ok(first.nextCursor, "initial page must retain the sequential cursor for legacy Hosts");
-  assert.ok(Array.isArray(first.parallelCursors), "initial page must advertise independent continuation cursors");
+  assert.ok(Array.isArray(first.parallelCursors), "opted-in Host must receive independent continuation cursors");
   assert.equal(first.parallelCursors.length, 6, "20 candidates must expose six terminal continuation shards after the first page");
   assert.equal(new Set(first.parallelCursors).size, first.parallelCursors.length, "parallel continuation cursors must be unique");
   assert.ok(
@@ -188,7 +204,7 @@ async function runIndependentContinuationScenario() {
 
   const recovered = [...first.items.map((item) => item.infoHash)];
   for (const cursor of first.parallelCursors) {
-    const page = await provider.torrent.search(searchRequest(cursor));
+    const page = await provider.torrent.search(searchRequest(cursor, true));
     assert.ok(page.items.length > 0 && page.items.length <= expectedPageSize, "independent shard must contain one bounded page");
     assert.equal(page.nextCursor, null, "independent continuation shard must be terminal");
     assert.ok(!page.parallelCursors || page.parallelCursors.length === 0, "independent shard must not fan out recursively");
@@ -224,6 +240,7 @@ await runScenario({
   requireFallbackCursor: true,
 });
 
+await runLegacyCompatibilityScenario();
 await runIndependentContinuationScenario();
 
 console.log("Nyaa Provider discovery-snapshot pagination fixture: OK");
