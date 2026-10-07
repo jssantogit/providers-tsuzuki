@@ -30,6 +30,8 @@ jobs:
         run: node tooling/test_nyaa_slow_primary_fallback.mjs
       - name: Nyaa bounded detail enrichment pagination fixture
         run: node tooling/test_nyaa_detail_enrichment_pagination.mjs
+      - name: Nyaa Host torrent-file inspection fast-path fixture
+        run: node tooling/test_nyaa_host_file_inspection.mjs
       - name: Direct P2P acquisition contract fixtures
         run: node tooling/test_direct_p2p.mjs
       - name: Repository and package conformance
