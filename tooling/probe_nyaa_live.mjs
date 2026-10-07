@@ -8,12 +8,35 @@ const providerModule = await import(
 const provider = providerModule.default;
 
 const scenarios = [
-  { label: "one-piece-en", title: "One Piece", preferredLanguages: ["en"] },
-  { label: "one-piece-all-literature", title: "One Piece", preferredLanguages: [] },
-  { label: "chainsaw-man-en", title: "Chainsaw Man", preferredLanguages: ["en"] },
-  { label: "chainsaw-man-all-literature", title: "Chainsaw Man", preferredLanguages: [] },
-  { label: "spy-family-en", title: "Spy x Family", preferredLanguages: ["en"] },
-  { label: "spy-family-all-literature", title: "Spy x Family", preferredLanguages: [] },
+  { label: "one-piece-title-only-en", titles: ["One Piece"], preferredLanguages: ["en"] },
+  { label: "one-piece-title-only-all", titles: ["One Piece"], preferredLanguages: [] },
+  { label: "one-piece-chapter-1", titles: ["One Piece"], preferredLanguages: ["en"], chapterNumber: "1" },
+  {
+    label: "one-piece-japanese-primary-english-alias-chapter-1",
+    titles: ["ワンピース", "One Piece"],
+    preferredLanguages: ["en"],
+    chapterNumber: "1",
+  },
+  { label: "chainsaw-man-chapter-1", titles: ["Chainsaw Man"], preferredLanguages: ["en"], chapterNumber: "1" },
+  {
+    label: "chainsaw-man-japanese-primary-english-alias-chapter-1",
+    titles: ["チェンソーマン", "Chainsaw Man"],
+    preferredLanguages: ["en"],
+    chapterNumber: "1",
+  },
+  { label: "spy-family-chapter-1", titles: ["Spy x Family"], preferredLanguages: ["en"], chapterNumber: "1" },
+  {
+    label: "spy-family-stylized-primary-english-alias-chapter-1",
+    titles: ["SPY×FAMILY", "Spy x Family"],
+    preferredLanguages: ["en"],
+    chapterNumber: "1",
+  },
+  {
+    label: "synthetic-primary-fallback-latency",
+    titles: ["One Piece"],
+    preferredLanguages: ["en"],
+    chapterNumber: "123456789",
+  },
 ];
 
 let successfulScenarios = 0;
@@ -30,14 +53,17 @@ for (const scenario of scenarios) {
   const startedAtMillis = Date.now();
   try {
     const result = await provider.torrent.search({
-      titles: [scenario.title],
+      titles: scenario.titles,
       preferredLanguages: scenario.preferredLanguages,
+      chapterNumber: scenario.chapterNumber,
       cursor: null,
     });
     successfulScenarios += 1;
     console.log(JSON.stringify({
       type: "nyaa_live_probe",
       label: scenario.label,
+      titleCount: scenario.titles.length,
+      hasChapterHint: Boolean(scenario.chapterNumber),
       preferredLanguages: scenario.preferredLanguages,
       resultCount: result.items.length,
       elapsedMs: Math.max(0, Date.now() - startedAtMillis),
@@ -48,6 +74,8 @@ for (const scenario of scenarios) {
     console.log(JSON.stringify({
       type: "nyaa_live_probe_failure",
       label: scenario.label,
+      titleCount: scenario.titles.length,
+      hasChapterHint: Boolean(scenario.chapterNumber),
       preferredLanguages: scenario.preferredLanguages,
       elapsedMs: Math.max(0, Date.now() - startedAtMillis),
       network,
