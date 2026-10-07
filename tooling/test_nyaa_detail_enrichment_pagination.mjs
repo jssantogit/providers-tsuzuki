@@ -44,49 +44,32 @@ let activeDetailRequests = 0;
 let maxActiveDetailRequests = 0;
 let rssRequests = 0;
 let detailRequests = 0;
-let hostQueue = Promise.resolve();
-
-async function serializedHostRequest(work) {
-  const previous = hostQueue;
-  let release;
-  hostQueue = new Promise((resolve) => {
-    release = resolve;
-  });
-  await previous;
-  try {
-    return await work();
-  } finally {
-    release();
-  }
-}
 
 globalThis.tsuzuki = {
   http: {
     async request(method, url) {
-      return serializedHostRequest(async () => {
-        assert.equal(method, "GET");
-        const parsed = new URL(url);
-        assert.equal(parsed.origin, "https://nyaa.si");
+      assert.equal(method, "GET");
+      const parsed = new URL(url);
+      assert.equal(parsed.origin, "https://nyaa.si");
 
-        if (parsed.pathname === "/" && parsed.searchParams.get("page") === "rss") {
-          rssRequests += 1;
-          assert.equal(parsed.searchParams.get("q"), "Bounded Enrichment 12");
-          return JSON.stringify({ statusCode: 200, body: rss });
-        }
+      if (parsed.pathname === "/" && parsed.searchParams.get("page") === "rss") {
+        rssRequests += 1;
+        assert.equal(parsed.searchParams.get("q"), "Bounded Enrichment 12");
+        return JSON.stringify({ statusCode: 200, body: rss });
+      }
 
-        const detailMatch = parsed.pathname.match(/^\/view\/(\d+)$/);
-        if (detailMatch) {
-          detailRequests += 1;
-          activeDetailRequests += 1;
-          maxActiveDetailRequests = Math.max(maxActiveDetailRequests, activeDetailRequests);
-          await new Promise((resolve) => setImmediate(resolve));
-          activeDetailRequests -= 1;
-          const index = Number(detailMatch[1]) - 1000;
-          return JSON.stringify({ statusCode: 200, body: detailFixture(index) });
-        }
+      const detailMatch = parsed.pathname.match(/^\/view\/(\d+)$/);
+      if (detailMatch) {
+        detailRequests += 1;
+        activeDetailRequests += 1;
+        maxActiveDetailRequests = Math.max(maxActiveDetailRequests, activeDetailRequests);
+        await new Promise((resolve) => setImmediate(resolve));
+        activeDetailRequests -= 1;
+        const index = Number(detailMatch[1]) - 1000;
+        return JSON.stringify({ statusCode: 200, body: detailFixture(index) });
+      }
 
-        throw new Error(`Unexpected Nyaa fixture request: ${url}`);
-      });
+      throw new Error(`Unexpected Nyaa fixture request: ${url}`);
     },
   },
 };
@@ -112,11 +95,11 @@ do {
   assert.ok(pageCount <= 8, "bounded enrichment must finish within the Host page limit");
   assert.ok(
     result.items.length <= expectedPageSize,
-    `one Provider invocation must enrich at most ${expectedPageSize} candidates under serialized Host HTTP`,
+    `one Provider invocation must enrich at most ${expectedPageSize} candidates`,
   );
   assert.ok(
     detailRequests - detailsBeforePage <= expectedPageSize,
-    `one Provider invocation must issue at most ${expectedPageSize} detail requests under serialized Host HTTP`,
+    `one Provider invocation must issue at most ${expectedPageSize} detail requests`,
   );
   for (const item of result.items) {
     assert.equal(item.files?.length, 1, "paged candidates must retain exact-file enrichment");
@@ -125,8 +108,8 @@ do {
   cursor = result.nextCursor;
 } while (cursor != null);
 
-assert.equal(pageCount, 7, "20 accepted candidates should fit seven Host-safe pages of three");
-assert.equal(rssRequests, pageCount, "each cursor page should re-run bounded discovery against the same request");
+assert.equal(pageCount, 7, "20 accepted candidates should fit seven bounded pages of three");
+assert.equal(rssRequests, 1, "cursor pages must reuse the first discovery snapshot instead of repeating RSS search");
 assert.equal(detailRequests, candidateCount, "all accepted candidates must remain eligible for exact Host matching");
 assert.equal(new Set(recovered).size, candidateCount, "pagination must not duplicate or drop accepted candidates");
 assert.deepEqual(
@@ -134,6 +117,10 @@ assert.deepEqual(
   Array.from({ length: candidateCount }, (_value, offset) => infoHashFor(offset + 1)),
   "cursor pagination must preserve Nyaa discovery order",
 );
-assert.equal(maxActiveDetailRequests, 1, "fixture must model the serialized Android Host HTTP bridge");
+assert.ok(maxActiveDetailRequests > 1, "fixture must preserve the concurrent Host HTTP behavior observed on device");
+assert.ok(
+  maxActiveDetailRequests <= expectedPageSize,
+  "detail enrichment concurrency must remain bounded by the page size",
+);
 
-console.log("Nyaa Provider Host-serialized detail enrichment pagination fixture: OK");
+console.log("Nyaa Provider discovery-snapshot pagination fixture: OK");
