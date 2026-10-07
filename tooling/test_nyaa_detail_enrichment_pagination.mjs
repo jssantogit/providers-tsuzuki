@@ -10,14 +10,17 @@ function infoHashFor(index) {
   return index.toString(16).padStart(40, "0");
 }
 
-function searchFixture(candidateCount, displayNameFor) {
+function searchFixture(candidateCount, displayNameFor, magnetOnlyIndex = null) {
   const items = Array.from({ length: candidateCount }, (_value, offset) => {
     const index = offset + 1;
     const infoHash = infoHashFor(index);
+    const link = index === magnetOnlyIndex
+      ? `magnet:?xt=urn:btih:${infoHash}`
+      : `https://nyaa.si/download/${1000 + index}.torrent`;
     return `
     <item>
       <title>${displayNameFor(index)}</title>
-      <link>https://nyaa.si/download/${1000 + index}.torrent</link>
+      <link>${link.replaceAll("&", "&amp;")}</link>
       <guid isPermaLink="true">https://nyaa.si/view/${1000 + index}</guid>
       <nyaa:seeders>${30 - index}</nyaa:seeders>
       <nyaa:leechers>1</nyaa:leechers>
@@ -77,11 +80,11 @@ globalThis.tsuzuki = {
 const providerModule = await import(pathToFileURL(path.join(root, "main.js")).href);
 const provider = providerModule.default;
 
-function resetScenario(candidateCount, displayNameFor) {
+function resetScenario(candidateCount, displayNameFor, magnetOnlyIndex = null) {
   scenario = {
     query: "Bounded Enrichment 12",
     displayNameFor,
-    rss: searchFixture(candidateCount, displayNameFor),
+    rss: searchFixture(candidateCount, displayNameFor, magnetOnlyIndex),
   };
   activeDetailRequests = 0;
   maxActiveDetailRequests = 0;
@@ -89,7 +92,11 @@ function resetScenario(candidateCount, displayNameFor) {
   detailRequests = 0;
 }
 
-function searchRequest(cursor = null, supportsParallelCursors = false) {
+function searchRequest(
+  cursor = null,
+  supportsParallelCursors = false,
+  supportsTorrentMetadataHydration = false,
+) {
   const request = {
     titles: ["Bounded Enrichment"],
     preferredLanguages: ["en"],
@@ -98,6 +105,7 @@ function searchRequest(cursor = null, supportsParallelCursors = false) {
     cursor,
   };
   if (supportsParallelCursors) request.supportsParallelCursors = true;
+  if (supportsTorrentMetadataHydration) request.supportsTorrentMetadataHydration = true;
   return request;
 }
 
@@ -220,6 +228,28 @@ async function runIndependentContinuationScenario() {
   );
 }
 
+async function runHostMetadataHydrationScenario() {
+  const candidateCount = 20;
+  const magnetOnlyIndex = 7;
+  const displayNameFor = (index) => `Bounded Enrichment Chapter 12 Candidate ${index}`;
+  resetScenario(candidateCount, displayNameFor, magnetOnlyIndex);
+
+  const result = await provider.torrent.search(searchRequest(null, true, true));
+
+  assert.equal(result.items.length, candidateCount, "hydration-aware Host must receive the full bounded RSS candidate set in one page");
+  assert.equal(result.nextCursor, null, "hydration-aware result must not require sequential continuation traversal");
+  assert.ok(!result.parallelCursors || result.parallelCursors.length === 0, "hydration-aware result must not fan out continuation shards");
+  assert.equal(rssRequests, 1, "hydration-aware result must perform discovery exactly once");
+  assert.equal(detailRequests, 0, "hydration-aware result must not fetch Nyaa detail HTML");
+
+  for (const item of result.items) {
+    const index = Number.parseInt(item.infoHash, 16);
+    assert.equal(item.displayName, displayNameFor(index), "hydration-aware result must preserve discovery metadata");
+    assert.equal(item.torrentUrl, `https://nyaa.si/download/${1000 + index}.torrent`, "Host hydration requires a validated torrent URL");
+    assert.equal(item.files, undefined, "Provider must leave authoritative file hydration to the opted-in Host");
+  }
+}
+
 await runScenario({
   name: "normal snapshot",
   candidateCount: 20,
@@ -242,5 +272,6 @@ await runScenario({
 
 await runLegacyCompatibilityScenario();
 await runIndependentContinuationScenario();
+await runHostMetadataHydrationScenario();
 
 console.log("Nyaa Provider discovery-snapshot pagination fixture: OK");
