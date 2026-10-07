@@ -7,37 +7,33 @@ const providerModule = await import(
 );
 const provider = providerModule.default;
 
-const scenarios = [
-  { label: "one-piece-title-only-en", titles: ["One Piece"], preferredLanguages: ["en"] },
-  { label: "one-piece-title-only-all", titles: ["One Piece"], preferredLanguages: [] },
-  { label: "one-piece-chapter-1", titles: ["One Piece"], preferredLanguages: ["en"], chapterNumber: "1" },
-  {
-    label: "one-piece-japanese-primary-english-alias-chapter-1",
-    titles: ["ワンピース", "One Piece"],
-    preferredLanguages: ["en"],
-    chapterNumber: "1",
-  },
-  { label: "chainsaw-man-chapter-1", titles: ["Chainsaw Man"], preferredLanguages: ["en"], chapterNumber: "1" },
-  {
-    label: "chainsaw-man-japanese-primary-english-alias-chapter-1",
-    titles: ["チェンソーマン", "Chainsaw Man"],
-    preferredLanguages: ["en"],
-    chapterNumber: "1",
-  },
-  { label: "spy-family-chapter-1", titles: ["Spy x Family"], preferredLanguages: ["en"], chapterNumber: "1" },
-  {
-    label: "spy-family-stylized-primary-english-alias-chapter-1",
-    titles: ["SPY×FAMILY", "Spy x Family"],
-    preferredLanguages: ["en"],
-    chapterNumber: "1",
-  },
-  {
-    label: "synthetic-primary-fallback-latency",
-    titles: ["One Piece"],
-    preferredLanguages: ["en"],
-    chapterNumber: "123456789",
-  },
+const smokeTitles = [
+  ["boku-no-hero", "Boku no hero"],
+  ["black-clover", "Black Clover"],
+  ["one-piece", "One Piece"],
+  ["tokyo-ghoul", "Tokyo Ghoul"],
 ];
+
+const scenarios = smokeTitles.flatMap(([slug, title]) => [
+  {
+    label: `${slug}-title-only-real-host-shape`,
+    titles: [title],
+    preferredLanguages: [],
+  },
+  {
+    label: `${slug}-chapter-1-real-host-shape`,
+    titles: [title],
+    preferredLanguages: [],
+    chapterNumber: "1",
+  },
+]);
+
+scenarios.push({
+  label: "one-piece-missing-chapter-fallback-latency",
+  titles: ["One Piece"],
+  preferredLanguages: [],
+  chapterNumber: "123456789",
+});
 
 let successfulScenarios = 0;
 
