@@ -110,9 +110,32 @@ const validMagnetRss = rssItem({
       diagnostics.map(({ rawItemCount, acceptedCandidateCount }) => ({ rawItemCount, acceptedCandidateCount })),
       [{ rawItemCount: 1, acceptedCandidateCount: 1 }],
     );
+
+    const torrentRss = rssItem({
+      infoHash: validHash,
+      link: "https://nyaa.si/download/1111111.torrent",
+      guid: "https://nyaa.si/view/1111111",
+    });
+    const torrentResult = await runScenario({ rss: torrentRss });
+    assert.equal(
+      torrentResult.result.items.length,
+      1,
+      "Nyaa torrent URLs must also validate without a browser URL global",
+    );
+    assert.equal(torrentResult.result.items[0].torrentUrl, "https://nyaa.si/download/1111111.torrent");
   } finally {
     globalThis.URL = previousUrl;
   }
+}
+
+{
+  const encodedMagnet = rssItem({
+    infoHash: validHash,
+    link: `magnet:?dn=Acceptance&xt=urn%3Abtih%3A${validHash}`,
+    guid: "https://nyaa.si/view/1111111",
+  });
+  const { result } = await runScenario({ rss: encodedMagnet });
+  assert.equal(result.items.length, 1, "percent-encoded matching xt values must remain accepted");
 }
 
 {
@@ -137,6 +160,16 @@ const validMagnetRss = rssItem({
   assert.equal(result.items.length, 0);
   assert.ok(diagnostics.every((entry) => entry.rawItemCount === 1));
   assert.ok(diagnostics.every((entry) => entry.acceptedCandidateCount === 0));
+}
+
+{
+  const hostConfusionGuid = rssItem({
+    infoHash: validHash,
+    link: `magnet:?xt=urn:btih:${validHash}`,
+    guid: "https://nyaa.si.evil.example/view/4444444",
+  });
+  const { result } = await runScenario({ rss: hostConfusionGuid });
+  assert.equal(result.items.length, 0, "Nyaa host validation must reject suffix-confusion hosts");
 }
 
 {
