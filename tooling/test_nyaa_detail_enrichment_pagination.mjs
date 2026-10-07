@@ -77,15 +77,7 @@ globalThis.tsuzuki = {
 const providerModule = await import(pathToFileURL(path.join(root, "main.js")).href);
 const provider = providerModule.default;
 
-async function runScenario({
-  name,
-  candidateCount,
-  displayNameFor,
-  expectedRssRequests,
-  expectedPageCount,
-  requireSnapshotCursor,
-  requireFallbackCursor,
-}) {
+function resetScenario(candidateCount, displayNameFor) {
   scenario = {
     query: "Bounded Enrichment 12",
     displayNameFor,
@@ -95,6 +87,28 @@ async function runScenario({
   maxActiveDetailRequests = 0;
   rssRequests = 0;
   detailRequests = 0;
+}
+
+function searchRequest(cursor = null) {
+  return {
+    titles: ["Bounded Enrichment"],
+    preferredLanguages: ["en"],
+    chapterNumber: "12",
+    volume: 1,
+    cursor,
+  };
+}
+
+async function runScenario({
+  name,
+  candidateCount,
+  displayNameFor,
+  expectedRssRequests,
+  expectedPageCount,
+  requireSnapshotCursor,
+  requireFallbackCursor,
+}) {
+  resetScenario(candidateCount, displayNameFor);
 
   const recovered = [];
   const cursors = [];
@@ -103,13 +117,7 @@ async function runScenario({
 
   do {
     const detailsBeforePage = detailRequests;
-    const result = await provider.torrent.search({
-      titles: ["Bounded Enrichment"],
-      preferredLanguages: ["en"],
-      chapterNumber: "12",
-      volume: 1,
-      cursor,
-    });
+    const result = await provider.torrent.search(searchRequest(cursor));
 
     pageCount += 1;
     assert.ok(pageCount <= 8, `${name}: bounded enrichment must finish within the Host page limit`);
@@ -162,6 +170,40 @@ async function runScenario({
   }
 }
 
+async function runIndependentContinuationScenario() {
+  const candidateCount = 20;
+  const displayNameFor = (index) => `Bounded Enrichment Chapter 12 Candidate ${index}`;
+  resetScenario(candidateCount, displayNameFor);
+
+  const first = await provider.torrent.search(searchRequest());
+  assert.equal(first.items.length, expectedPageSize, "initial page must keep the bounded detail page size");
+  assert.ok(first.nextCursor, "initial page must retain the sequential cursor for legacy Hosts");
+  assert.ok(Array.isArray(first.parallelCursors), "initial page must advertise independent continuation cursors");
+  assert.equal(first.parallelCursors.length, 6, "20 candidates must expose six terminal continuation shards after the first page");
+  assert.equal(new Set(first.parallelCursors).size, first.parallelCursors.length, "parallel continuation cursors must be unique");
+  assert.ok(
+    first.parallelCursors.every((cursor) => cursor.startsWith("snapshot:") && cursor.length <= maxCursorChars),
+    "parallel continuation cursors must be bounded snapshot cursors",
+  );
+
+  const recovered = [...first.items.map((item) => item.infoHash)];
+  for (const cursor of first.parallelCursors) {
+    const page = await provider.torrent.search(searchRequest(cursor));
+    assert.ok(page.items.length > 0 && page.items.length <= expectedPageSize, "independent shard must contain one bounded page");
+    assert.equal(page.nextCursor, null, "independent continuation shard must be terminal");
+    assert.ok(!page.parallelCursors || page.parallelCursors.length === 0, "independent shard must not fan out recursively");
+    recovered.push(...page.items.map((item) => item.infoHash));
+  }
+
+  assert.equal(rssRequests, 1, "independent continuation traversal must not repeat RSS discovery");
+  assert.equal(detailRequests, candidateCount, "independent shards must preserve exact-file enrichment for every candidate");
+  assert.deepEqual(
+    recovered,
+    Array.from({ length: candidateCount }, (_value, offset) => infoHashFor(offset + 1)),
+    "independent continuation shards must preserve global discovery order without gaps or duplicates",
+  );
+}
+
 await runScenario({
   name: "normal snapshot",
   candidateCount: 20,
@@ -181,5 +223,7 @@ await runScenario({
   requireSnapshotCursor: true,
   requireFallbackCursor: true,
 });
+
+await runIndependentContinuationScenario();
 
 console.log("Nyaa Provider discovery-snapshot pagination fixture: OK");
