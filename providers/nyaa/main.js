@@ -365,6 +365,28 @@ function parseSearchFeed(xml) {
   return items;
 }
 
+function torrentUrlForHostHydration(candidate) {
+  if (validNyaaUrl(candidate.torrentUrl, "/download/")) return candidate.torrentUrl;
+  const detailPath = nyaaPath(candidate.detailUrl, "/view/");
+  const match = detailPath?.match(/^\/view\/(\d+)$/);
+  return match ? `${BASE_URL}/download/${match[1]}.torrent` : null;
+}
+
+function hostHydrationCandidateFor(candidate) {
+  const torrentUrl = torrentUrlForHostHydration(candidate);
+  if (torrentUrl == null) return null;
+  return {
+    infoHash: candidate.infoHash,
+    magnetUri: candidate.magnetUri,
+    torrentUrl,
+    displayName: candidate.displayName,
+    sizeBytes: candidate.sizeBytes,
+    seeders: candidate.seeders,
+    peers: candidate.peers,
+    languages: candidate.languages,
+  };
+}
+
 function parseSingleArchive(html, languages) {
   if (/class=["'][^"']*\bfolder\b[^"']*["']/i.test(html)) return null;
 
@@ -488,6 +510,14 @@ async function search(input) {
       }
       startIndex = anchorIndex + 1;
     }
+  }
+
+  if (input?.supportsTorrentMetadataHydration === true && rawCursor == null) {
+    const items = discovered.map(hostHydrationCandidateFor);
+    if (items.some((candidate) => candidate == null)) {
+      return { items: [], nextCursor: null };
+    }
+    return { items, nextCursor: null };
   }
 
   const pageCandidates = discovered.slice(startIndex, startIndex + DETAIL_PAGE_SIZE);
