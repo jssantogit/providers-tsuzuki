@@ -1,6 +1,8 @@
 const BASE_URL = "https://nyaa.si";
 const MAX_RESULTS = 20;
 const MAX_TITLES = 16;
+const DETAIL_PAGE_SIZE = 6;
+const DETAIL_CURSOR_PREFIX = "after:";
 const DISCOVERY_SOFT_BUDGET_MS = 2500;
 const TRACKERS = [
   "udp://open.stealth.si:80/announce",
@@ -124,6 +126,15 @@ function magnetFor(infoHash, displayName) {
     ...TRACKERS.map((tracker) => `tr=${encodeURIComponent(tracker)}`),
   ];
   return `magnet:?${params.join("&")}`;
+}
+
+function parseDetailCursor(value) {
+  const match = cleanText(value).match(/^after:([0-9a-f]{40}|[0-9a-f]{64})$/i);
+  return match ? match[1].toLowerCase() : null;
+}
+
+function detailCursorFor(infoHash) {
+  return `${DETAIL_CURSOR_PREFIX}${infoHash}`;
 }
 
 async function httpText(url, accept) {
@@ -281,7 +292,9 @@ async function discoverTitle(title, chapterNumber, category, deadlineMillis, pre
 }
 
 async function search(input) {
-  if (input?.cursor != null) {
+  const rawCursor = input?.cursor;
+  const cursorInfoHash = rawCursor == null ? null : parseDetailCursor(rawCursor);
+  if (rawCursor != null && cursorInfoHash == null) {
     return { items: [], nextCursor: null };
   }
 
@@ -305,12 +318,25 @@ async function search(input) {
     if (discovered.length > 0) break;
   }
 
-  const items = [];
-  for (const candidate of discovered) {
-    items.push(await enrichCandidate(candidate));
+  let startIndex = 0;
+  if (cursorInfoHash != null) {
+    const anchorIndex = discovered.findIndex((candidate) => candidate.infoHash === cursorInfoHash);
+    if (anchorIndex < 0) {
+      return { items: [], nextCursor: null };
+    }
+    startIndex = anchorIndex + 1;
   }
 
-  return { items, nextCursor: null };
+  const pageCandidates = discovered.slice(startIndex, startIndex + DETAIL_PAGE_SIZE);
+  const items = await Promise.all(pageCandidates.map((candidate) => enrichCandidate(candidate)));
+  const endIndex = startIndex + pageCandidates.length;
+  const nextCursor = (
+    pageCandidates.length > 0 && endIndex < discovered.length
+      ? detailCursorFor(pageCandidates[pageCandidates.length - 1].infoHash)
+      : null
+  );
+
+  return { items, nextCursor };
 }
 
 export default {
