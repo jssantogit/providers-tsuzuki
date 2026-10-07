@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+const NativeURL = globalThis.URL;
 const root = path.resolve("providers/nyaa");
 const fixture = (name) => fs.readFileSync(path.join(root, "tests/fixtures", name), "utf8");
 const singleFixture = fixture("single-archive.html");
@@ -39,7 +40,7 @@ async function runScenario({ rss, detailHtml, chapterNumber = "12" }) {
       async request(method, url) {
         assert.equal(method, "GET");
         requests.push(url);
-        const parsed = new URL(url);
+        const parsed = new NativeURL(url);
         if (parsed.pathname === "/" && parsed.searchParams.get("page") === "rss") {
           return JSON.stringify({ statusCode: 200, body: rss });
         }
@@ -93,6 +94,25 @@ const validMagnetRss = rssItem({
     diagnostics.map(({ rawItemCount, acceptedCandidateCount }) => ({ rawItemCount, acceptedCandidateCount })),
     [{ rawItemCount: 1, acceptedCandidateCount: 1 }],
   );
+}
+
+{
+  const previousUrl = globalThis.URL;
+  globalThis.URL = undefined;
+  try {
+    const { result, diagnostics } = await runScenario({ rss: validMagnetRss });
+    assert.equal(
+      result.items.length,
+      1,
+      "Nyaa Provider must accept valid RSS without relying on a browser URL global that QuickJS does not guarantee",
+    );
+    assert.deepEqual(
+      diagnostics.map(({ rawItemCount, acceptedCandidateCount }) => ({ rawItemCount, acceptedCandidateCount })),
+      [{ rawItemCount: 1, acceptedCandidateCount: 1 }],
+    );
+  } finally {
+    globalThis.URL = previousUrl;
+  }
 }
 
 {
