@@ -85,24 +85,36 @@ function languagesForCategory(category) {
 }
 
 function validNyaaUrl(value, expectedPrefix) {
+  const match = cleanText(value).match(/^https:\/\/nyaa\.si(\/[^?#]*)?(?:[?#].*)?$/i);
+  if (!match) return false;
+  const pathname = match[1] || "/";
+  return pathname.startsWith(expectedPrefix);
+}
+
+function decodeQueryComponent(value) {
   try {
-    const parsed = new URL(value);
-    return parsed.protocol === "https:" && parsed.hostname === "nyaa.si" && parsed.pathname.startsWith(expectedPrefix);
+    return decodeURIComponent(value.replace(/\+/g, " "));
   } catch (_error) {
-    return false;
+    return null;
   }
 }
 
 function matchingMagnet(value, infoHash) {
-  try {
-    const parsed = new URL(value);
-    if (parsed.protocol !== "magnet:") return false;
-    return parsed.searchParams
-      .getAll("xt")
-      .some((xt) => cleanText(xt).toLowerCase() === `urn:btih:${infoHash.toLowerCase()}`);
-  } catch (_error) {
-    return false;
+  const text = cleanText(value);
+  if (!/^magnet:\?/i.test(text)) return false;
+
+  const query = text.slice(text.indexOf("?") + 1);
+  const expected = `urn:btih:${infoHash.toLowerCase()}`;
+  for (const pair of query.split("&")) {
+    const separator = pair.indexOf("=");
+    if (separator < 0) continue;
+    const key = decodeQueryComponent(pair.slice(0, separator));
+    const parameter = decodeQueryComponent(pair.slice(separator + 1));
+    if (key?.toLowerCase() === "xt" && cleanText(parameter).toLowerCase() === expected) {
+      return true;
+    }
   }
+  return false;
 }
 
 function magnetFor(infoHash, displayName) {
