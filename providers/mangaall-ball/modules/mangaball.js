@@ -112,10 +112,18 @@ export async function pages(input) {
   const chapterId = sourceId(source, input?.providerChapterId);
   const response = await api("GET", "/api/v1/chapter-detail", [["chapter_id", chapterId]]);
   const chapter = response?.data?.chapter;
-  // A missing title_id cannot prove that this translation belongs to the
-  // bound work. Fail closed rather than forwarding pages for an unrelated title.
-  if (!chapter || chapter.title_id == null || String(chapter.title_id) !== workId) {
-    throw new Error("MangaAll work mismatch");
+  if (!chapter) throw new Error("MangaAll work mismatch");
+  if (chapter.title_id != null) {
+    if (String(chapter.title_id) !== workId) throw new Error("MangaAll work mismatch");
+  } else {
+    // The public ChapterDetailDto allows title_id=null. A naked chapter
+    // identifier is not proof of work ownership. Validate membership in the
+    // selected work's chapter listing instead of discarding a safe reader
+    // option or exposing pages belonging to a different canonical work.
+    const inventory = await chapters({ binding: input.binding });
+    if (!inventory.items.some(item => item.providerChapterId === source + ":" + chapterId)) {
+      throw new Error("MangaAll work mismatch");
+    }
   }
   const imageList = chapter.pages;
   if (!Array.isArray(imageList) || imageList.length === 0 || imageList.length > 5000) {
