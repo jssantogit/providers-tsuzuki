@@ -33,7 +33,7 @@ function explicitAliases(item) {
 }
 
 function normalizedTitle(value) {
-  return cleanText(value).toLowerCase().replace(/\\s+/g, " ");
+  return cleanText(value).toLowerCase().replace(/\s+/g, " ");
 }
 
 async function verifiedLookupAliases(item, requestedTitle, remainingDetails) {
