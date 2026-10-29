@@ -138,12 +138,33 @@ fixture = () => reply({ data: { chapter: {
 await assert.rejects(modules.mangaball.pages({
   binding: { externalWorkId: "mangaball:416" }, providerChapterId: "mangaball:9001",
 }), /work mismatch/i);
-fixture = () => reply({ data: { chapter: {
-  pages: ["https://mangaball.com/static/page-1.jpg"],
-} } });
+// The public MangaBall chapter detail DTO permits missing title_id.
+// In that case, verify membership in the work's own chapter listing instead
+// of rejecting a legitimate reader or trusting a bare chapter ID.
+fixture = ({ method }) => method === "POST"
+  ? reply({ code: 200, data: [{ id: "9001", number: 1, lang: "en" }] })
+  : reply({ data: { chapter: {
+    pages: ["https://mangaball.com/static/page-1.jpg"],
+  } } });
+const beforeMembership = requests.length;
+const verifiedByList = await modules.mangaball.pages({
+  binding: { externalWorkId: "mangaball:416", facetId: "en" },
+  providerChapterId: "mangaball:9001",
+});
+assert.equal(verifiedByList.pages.length, 1);
+assert.equal(requests.length - beforeMembership, 2,
+  "fallback checks the exact work listing before returning pages");
+assert.equal(requests.at(-1).method, "POST");
+
+fixture = ({ method }) => method === "POST"
+  ? reply({ code: 200, data: [{ id: "9002", number: 1, lang: "en" }] })
+  : reply({ data: { chapter: {
+    pages: ["https://mangaball.com/static/page-1.jpg"],
+  } } });
 await assert.rejects(modules.mangaball.pages({
-  binding: { externalWorkId: "mangaball:416" }, providerChapterId: "mangaball:9001",
-}), /work mismatch/i, "missing upstream title_id must not authorize cross-work reading");
+  binding: { externalWorkId: "mangaball:416", facetId: "en" },
+  providerChapterId: "mangaball:9001",
+}), /work mismatch/i, "a missing title_id without chapter-list membership is not trustworthy");
 fixture = () => reply({ data: { chapter: { title_id: "416", pages: ["https://untrusted.example/img.jpg"] } } });
 await assert.rejects(modules.mangaball.pages({
   binding: { externalWorkId: "mangaball:416" }, providerChapterId: "mangaball:9001",
