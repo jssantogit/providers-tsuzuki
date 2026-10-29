@@ -6,7 +6,7 @@ const api = makeClient("https://mangaball.com", [
   "/api/v1/chapter/chapter-listing-by-title-id",
   "/api/v1/chapter-detail",
   /^\/api\/v1\/title\/detail\/[A-Za-z0-9_-]{1,128}$/,
-]);
+], { sameOriginNavigationHeaders: true });
 function cursorPage(cursor) {
   if (cursor === null || cursor === undefined) return 1;
   if (!/^[1-9][0-9]{0,2}$/.test(String(cursor))) throw new Error("MangaAll invalid cursor");

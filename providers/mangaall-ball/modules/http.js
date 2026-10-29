@@ -1,7 +1,7 @@
 // Restrict every request to one declared source origin and reviewed endpoints.
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 
-export function makeClient(origin, allowedPaths) {
+export function makeClient(origin, allowedPaths, { sameOriginNavigationHeaders = false } = {}) {
   return async function api(method, pathname, query = [], body = null) {
     if (!allowedPaths.some((rule) => typeof rule === "string" ? pathname === rule : rule.test(pathname))) {
       throw new Error("MangaAll unsupported endpoint");
@@ -12,7 +12,14 @@ export function makeClient(origin, allowedPaths) {
     }
     const params = query.map(([k, v]) => encodeURIComponent(k) + "=" + encodeURIComponent(String(v))).join("&");
     const url = origin + pathname + (params ? "?" + params : "");
+    // KeiSource sends its own origin/referrer for MangaBall API requests.
+    // Derive values from the trusted adapter origin, never from a work ID,
+    // untrusted source response, cookie, or caller-controlled URL.
     const headers = { Accept: "application/json" };
+    if (sameOriginNavigationHeaders) {
+      headers.Origin = origin;
+      headers.Referer = origin + "/";
+    }
     if (method === "POST") headers["Content-Type"] = "application/json";
     const result = await globalThis.tsuzuki.http.request(
       method, url, JSON.stringify(headers), method === "POST" ? JSON.stringify(body) : undefined,
