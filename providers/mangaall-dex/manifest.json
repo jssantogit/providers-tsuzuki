@@ -37,5 +37,6 @@
     "en",
     "pt-br"
   ],
-  "settings": []
+  "settings": [],
+  "publication": "development"
 }
