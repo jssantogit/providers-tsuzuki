@@ -54,9 +54,9 @@ export async function lookup(input) {
   // Search results normally omit aliases even though title detail exposes
   // alternateName. Enrich only a few candidates when there is no direct exact
   // match, preserving the Host's strict unique title/alias binding rule.
-  const key = title.replace(/\\s+/g, " ").toLowerCase();
+  const key = title.replace(/\s+/g, " ").toLowerCase();
   const directlyMatched = items.some(item =>
-    item.title.replace(/\\s+/g, " ").toLowerCase() === key);
+    item.title.replace(/\s+/g, " ").toLowerCase() === key);
   if (!directlyMatched) {
     for (const candidate of items.slice(0, 3)) {
       const id = candidate.externalWorkId.slice(source.length + 1);
