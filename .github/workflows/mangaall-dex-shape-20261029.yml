@@ -1,0 +1,58 @@
+name: MangaAll MangaDex chapter metadata shape (one-time)
+
+on:
+  push:
+    branches:
+      - feat/45-mangaall-multisource
+    paths:
+      - .github/workflows/mangaall-dex-shape-20261029.yml
+
+permissions:
+  contents: read
+
+jobs:
+  shape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Report redacted schema traits of at most two chapter records
+        run: |
+          node --input-type=module <<'JS'
+          import { createHttpBridge } from './tooling/mangaall_live_probe_core.mjs';
+          import * as md from './providers/mangaall-dex/modules/mangadex.js';
+          import { getMangaDexJson } from './providers/mangaall-dex/modules/http.js';
+          const bridge = createHttpBridge({ origin:'https://api.mangadex.org', maxRequests:6 });
+          globalThis.tsuzuki = { http: bridge };
+          const found = await md.lookup({ titles:['Haikyuu!!'] });
+          const normalize = x => String(x || '').trim().toLowerCase();
+          const matches = found.items.filter(x => normalize(x.title)==='haikyuu!!' ||
+            (x.aliases||[]).some(alias=>normalize(alias)==='haikyuu!!'));
+          if (matches.length !== 1) {
+            console.log(JSON.stringify({stage:'match', candidateCount:found.items.length,exactMatchCount:matches.length}));
+            process.exit(0);
+          }
+          const binding = { externalWorkId:matches[0].externalWorkId, facetId:'en' };
+          const chapters = await md.chapters({binding});
+          for (let i=0; i<Math.min(2,chapters.items.length); i++) {
+            const id=chapters.items[i].providerChapterId.split(':')[1];
+            const chapter=await getMangaDexJson('/chapter/'+id);
+            const atHome=await getMangaDexJson('/at-home/server/'+id);
+            const fields=atHome?.chapter || {};
+            console.log(JSON.stringify({
+              ordinal:i+1,
+              chapterExternal:Boolean(chapter.data?.attributes?.externalUrl),
+              chapterStatus:chapter.data?.attributes?.status || null,
+              atHomeHashType:typeof fields.hash,
+              atHomeHashLength:typeof fields.hash==='string'?fields.hash.length:null,
+              imageListIsArray:Array.isArray(fields.data),
+              imageCount:Array.isArray(fields.data)?fields.data.length:null,
+              dataSaverCount:Array.isArray(fields.dataSaver)?fields.dataSaver.length:null,
+              baseUrlHasPort:typeof atHome.baseUrl==='string'?/^https:\/\/[^/]+:[0-9]+/.test(atHome.baseUrl):null,
+              requestCount:bridge.requestCount
+            }));
+          }
+          JS
