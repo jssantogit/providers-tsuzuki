@@ -175,8 +175,21 @@ export async function pages(input) {
   if (!ID_PATTERN.test(chapterId)) throw new Error("MangaAll invalid chapter ID");
   const response = await getMangaDexJson("/at-home/server/" + chapterId);
   const base = response.baseUrl;
-  if (typeof base !== "string" ||
-    !/^https:\/\/(?:uploads\.mangadex\.org|(?:[a-z0-9-]+\.)+mangadex\.network)$/i.test(base)) {
+  // A MangaDex@Home node can return https://host:port/ephemeral-token.
+  // Validate the authority and path without relying on the URL global in QuickJS.
+  // Do not enable Reader until Host grants for dynamic image origins are proven.
+  const match = typeof base === "string" && base.length <= 512
+    ? /^https:\/\/([A-Za-z0-9.-]+)(?::([1-9][0-9]{0,4}))?(\/[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)*)?$/.exec(base)
+    : null;
+  const host = match?.[1]?.toLowerCase();
+  const labels = host?.split(".");
+  const validLabels = labels?.every(label => /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label));
+  const port = match?.[2] == null ? null : Number(match[2]);
+  const safePath = match?.[3] == null ||
+    match[3].split("/").slice(1).every(segment => segment !== "." && segment !== "..");
+  if (!match || !validLabels || !safePath ||
+      (port != null && (port < 1 || port > 65535)) ||
+      (host !== "uploads.mangadex.org" && !host.endsWith(".mangadex.network"))) {
     throw new Error("MangaAll untrusted image origin");
   }
   const chapter = response.chapter;

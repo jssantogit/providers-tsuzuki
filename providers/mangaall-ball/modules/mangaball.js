@@ -53,7 +53,8 @@ export async function chapters(input) {
   for (const row of data.data) {
     const id = cleanId(row?.id);
     const number = chapterNumber(row?.number);
-    if (!id || number === null || seen.has(id) || row.lang !== lang) continue;
+    if (!id || number === null || seen.has(id) || typeof row.lang !== "string" ||
+        row.lang.toLowerCase() !== lang) continue;
     const title = safeText(row.name, 3900) || null;
     const volume = chapterNumber(row.volume);
     const validVolume = volume !== null && Number.isInteger(volume) ? volume : null;

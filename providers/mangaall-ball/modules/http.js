@@ -61,12 +61,21 @@ export function facetLang(input) {
 // The host will grant additional image CDN origins only after live verification.
 export function trustedImageUrl(raw, origin) {
   if (typeof raw !== "string" || raw.length === 0 || raw.length > 2048 ||
-      /[\\\\\u0000-\u001f]/.test(raw) || /%(?:2e|2f|5c)/i.test(raw)) {
+      /[\\\u0000-\u001f]/.test(raw) || /%(?:2e|2f|5c)/i.test(raw)) {
     throw new Error("MangaAll untrusted image origin");
   }
   const absolute = raw.startsWith("/") && !raw.startsWith("//") ? origin + raw : raw;
-  if (!absolute.startsWith(origin + "/") || absolute.includes("/../") ||
-      absolute.includes("/./") || absolute.includes("?redirect=")) {
+  const match = /^https:\/\/([a-z0-9.-]+)(\/[^?#\s]*)?(\?[^#\s]*)?$/i.exec(absolute);
+  const host = match?.[1]?.toLowerCase();
+  const sourceHost = origin.slice("https://".length).toLowerCase();
+  const isMangaBallCdn = sourceHost === "mangaball.com" &&
+    /^(?:[a-z0-9-]+\.)+(?:poke-black-and-white\.net|red-and-blue\.net)$/.test(host || "");
+  const pathname = match?.[2] || "/";
+  const validSegments = pathname.split("/").every(segment => segment !== "." && segment !== "..");
+  if (!match || !validSegments ||
+      (host !== sourceHost && !isMangaBallCdn) ||
+      (isMangaBallCdn && !pathname.startsWith("/storage/")) ||
+      (match[3] && /(?:redirect|url|next|target)=/i.test(match[3]))) {
     throw new Error("MangaAll untrusted image origin");
   }
   return absolute;

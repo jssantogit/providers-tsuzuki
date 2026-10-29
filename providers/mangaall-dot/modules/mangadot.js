@@ -55,7 +55,13 @@ export async function chapters(input) {
   for (const row of rows) {
     const chapterId = cleanId(row?.id);
     const number = chapterNumber(row?.chapter_number);
-    if (!chapterId || number === null || seen.has(chapterId) || row.language !== lang) continue;
+    // MangaDot's language is optional. Preserve unknown languages as unknown
+    // rather than assigning a requested facet's language to the chapter.
+    const rawLanguage = row?.language;
+    if (rawLanguage != null && typeof rawLanguage !== "string") continue;
+    const chapterLanguage = rawLanguage == null ? null : rawLanguage.toLowerCase();
+    if (!chapterId || number === null || seen.has(chapterId) ||
+        (chapterLanguage != null && chapterLanguage !== lang)) continue;
     const title = safeText(row.chapter_title, 3900) || null;
     const groups = Array.isArray(row.groups) ? row.groups : [];
     const scanlationGroup = safeText(groups[0]?.name) ||
@@ -64,7 +70,7 @@ export async function chapters(input) {
     items.push({
       providerChapterId: source + ":" + (row.source == null || row.source === "user" ? "uploads" : "chapters") + ":" + chapterId,
       rawLabel: "Ch. " + number + (title ? " " + title : ""),
-      rawNumber: number, title, language: lang,
+      rawNumber: number, title, language: chapterLanguage,
       scanlationGroup, releaseDateMillis: dateMillis(row.date_added),
     });
   }
