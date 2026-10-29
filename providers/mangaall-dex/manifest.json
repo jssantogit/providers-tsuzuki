@@ -21,7 +21,9 @@
   "permissions": {
     "network": {
       "origins": [
-        "https://api.mangadex.org"
+        "https://api.mangadex.org",
+        "https://uploads.mangadex.org",
+        "https://*.mangadex.network"
       ],
       "localNetwork": false
     },

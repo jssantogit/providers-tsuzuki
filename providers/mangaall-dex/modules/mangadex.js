@@ -189,7 +189,7 @@ export async function pages(input) {
   if (externalUrl != null && (typeof externalUrl !== "string" || externalUrl.trim())) {
     throw new Error("MangaAll external chapter");
   }
-  const response = await getMangaDexJson("/at-home/server/" + chapterId);
+  const response = await getMangaDexJson("/at-home/server/" + chapterId, [["forcePort443", "true"]]);
   const base = response.baseUrl;
   // A MangaDex@Home node can return https://host:port/ephemeral-token.
   // Validate the authority and path without relying on the URL global in QuickJS.
@@ -204,7 +204,7 @@ export async function pages(input) {
   const safePath = match?.[3] == null ||
     match[3].split("/").slice(1).every(segment => segment !== "." && segment !== "..");
   if (!match || !validLabels || !safePath ||
-      (port != null && (port < 1 || port > 65535)) ||
+      (port != null && port !== 443) ||
       (host !== "uploads.mangadex.org" && !host.endsWith(".mangadex.network"))) {
     throw new Error("MangaAll untrusted image origin");
   }
