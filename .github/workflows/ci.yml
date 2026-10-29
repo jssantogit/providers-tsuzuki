@@ -24,6 +24,8 @@ jobs:
         run: node tooling/test_mangaall.mjs
       - name: MangaAll aggregator identity and reader-routing contract
         run: node tooling/test_mangaall_identity.mjs
+      - name: MangaAll Reader page metadata and URL policy fixtures
+        run: node tooling/test_mangaall_reading.mjs
       - name: MangaAll three-source contract
         run: node tooling/test_mangaall_three_sources.mjs
       - name: Nyaa torrent contract fixtures
