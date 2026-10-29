@@ -133,4 +133,39 @@ await assert.rejects(mangaAll.reading.lookup({ titles: ["Haikyuu!!"] }), /http 4
 nextReply = () => response({ result: "error", errors: [{ detail: "server error" }] });
 await assert.rejects(mangaAll.reading.lookup({ titles: ["Haikyuu!!"] }), /invalid api response/i);
 
+// Full-page continuation must not lose chapters or infer pages from a count.
+const chapterList = Array.from({ length: 100 }, (_, index) => ({
+  id: "aaaaaaaa-bbbb-4ccc-8ddd-" + (index + 1).toString(16).padStart(12, "0"),
+  type: "chapter",
+  attributes: { chapter: String(index + 1), translatedLanguage: "en" },
+}));
+nextReply = () => response({ result: "ok", data: chapterList, total: 101, offset: 0, limit: 100 });
+const fullPage = await mangaAll.reading.chapters({
+  binding: { facetId: "en", externalWorkId: "mangadex:" + mangaId },
+});
+assert.equal(fullPage.items.length, 100);
+assert.equal(fullPage.nextCursor, "100");
+nextReply = () => response({
+  result: "ok", data: [{
+    id: "aaaaaaaa-bbbb-4ccc-8ddd-000000000065",
+    type: "chapter",
+    attributes: { chapter: "101", translatedLanguage: "en" },
+  }], total: 101, offset: 100, limit: 100,
+});
+const finalPage = await mangaAll.reading.chapters({
+  binding: { facetId: "en", externalWorkId: "mangadex:" + mangaId },
+  cursor: fullPage.nextCursor,
+});
+assert.equal(new URL(requests.at(-1).url).searchParams.get("offset"), "100");
+assert.equal(finalPage.items[0].rawNumber, 101);
+assert.equal(finalPage.nextCursor, null);
+
+// An upstream claim of a non-empty page with no rows must not become a
+// successful empty provider snapshot (which could remove existing support).
+nextReply = () => response({ result: "ok", data: [], total: 4, offset: 0, limit: 100 });
+await assert.rejects(
+  mangaAll.reading.chapters({ binding: { facetId: "en", externalWorkId: "mangadex:" + mangaId } }),
+  /incomplete page/i,
+);
+
 console.log("MangaAll source routing, MangaDex evidence and fail-closed fixtures: OK");
