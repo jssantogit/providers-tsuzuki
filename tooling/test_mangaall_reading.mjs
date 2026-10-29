@@ -43,6 +43,34 @@ assert.deepEqual(dex, {
   ],
 });
 assert.equal(new URL(requests.at(-1).url).pathname, "/at-home/server/" + chapterId);
+const dynamicBase = "https://node.mangadex.network:12345/temporary-token";
+fixture = () => reply({
+  result: "ok", baseUrl: dynamicBase,
+  chapter: { hash: hashes, data: ["1.jpg"], dataSaver: [] },
+});
+const dynamic = await modules.mangadex.pages({
+  binding: { externalWorkId: "mangadex:" + mangaId },
+  providerChapterId: "mangadex:" + chapterId,
+});
+assert.equal(dynamic.pages[0].url, dynamicBase + "/data/" + hashes + "/1.jpg",
+  "MangaDex@Home base URLs may contain port and token path");
+for (const malicious of [
+  "http://node.mangadex.network/temporary-token",
+  "https://node.mangadex.network.evil.test/temporary-token",
+  "https://uploads.mangadex.org@evil.test",
+  "https://node.mangadex.network:12345/../secrets",
+  "https://node.mangadex.network:12345/%2e%2e/secrets",
+]) {
+  fixture = () => reply({
+    result: "ok", baseUrl: malicious,
+    chapter: { hash: hashes, data: ["1.jpg"], dataSaver: [] },
+  });
+  await assert.rejects(modules.mangadex.pages({
+    binding: { externalWorkId: "mangadex:" + mangaId },
+    providerChapterId: "mangadex:" + chapterId,
+  }), /untrusted image origin/i, "MangaDex should reject " + malicious);
+}
+
 fixture = () => reply({
   result: "ok", baseUrl: "https://malicious.example",
   chapter: { hash: hashes, data: ["page-001.jpg"] },
@@ -71,6 +99,16 @@ assert.deepEqual(ball, {
     { url: "https://mangaball.com/static/page-2.png", headers: { Referer: "https://mangaball.com" } },
   ],
 });
+fixture = () => reply({ data: { chapter: {
+  title_id: "416", pages: ["https://gengar.poke-black-and-white.net/storage/page-1.webp"],
+} } });
+const cdn = await modules.mangaball.pages({
+  binding: { externalWorkId: "mangaball:416" }, providerChapterId: "mangaball:9001",
+});
+assert.deepEqual(cdn.pages, [{
+  url: "https://gengar.poke-black-and-white.net/storage/page-1.webp",
+  headers: { Referer: "https://mangaball.com" },
+}]);
 fixture = () => reply({ data: { chapter: {
   title_id: "wrong-work", pages: ["https://mangaball.com/static/page-1.jpg"],
 } } });

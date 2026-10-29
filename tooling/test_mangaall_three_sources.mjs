@@ -110,4 +110,34 @@ for (const reading of [ball, dot]) {
   reply = () => ({ statusCode: 429, body: "" });
   await assert.rejects(reading.lookup({ titles: ["Haikyuu!!"] }), /http 429/i);
 }
+
+// MangaBall uses pt-BR, which must match Tsuzuki's pt-br facet without
+// claiming that an unrelated language is Brazilian Portuguese.
+reply = () => ok({ data: [
+  { id: "9010", number: 8, lang: "pt-BR", name: "O saque" },
+  { id: "9011", number: 9, lang: "en" },
+] });
+const ballPortuguese = await ball.chapters({
+  binding: { facetId: "pt-br", externalWorkId: "mangaball:416" },
+});
+assert.equal(ballPortuguese.items.length, 1);
+assert.equal(ballPortuguese.items[0].language, "pt-br");
+assert.equal(ballPortuguese.items[0].providerChapterId, "mangaball:9010");
+
+// MangaDot's documented language field is optional. Preserve "unknown" as
+// unknown instead of fabricating an en/pt-br attribution or silently losing
+// a readable chapter. Explicit language mismatches still must be filtered.
+reply = () => ok([
+  { id: 8101, chapter_number: 6, chapter_title: "Unspecified", language: null },
+  { id: 8102, chapter_number: 7, chapter_title: "Português", language: "pt-BR" },
+  { id: 8103, chapter_number: 8, language: "en" },
+]);
+const dotPortuguese = await dot.chapters({
+  binding: { facetId: "pt-br", externalWorkId: "mangadot:317" },
+});
+assert.deepEqual(dotPortuguese.items.map(x => [x.providerChapterId, x.language]), [
+  ["mangadot:uploads:8101", null],
+  ["mangadot:uploads:8102", "pt-br"],
+]);
+
 console.log("MangaAll three isolated sources: discovery, chapter evidence and error contracts OK");
