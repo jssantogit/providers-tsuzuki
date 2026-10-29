@@ -154,6 +154,29 @@ assert.equal(aliasLookup.items.length, 1);
 assert.deepEqual(aliasLookup.items[0].aliases, ["Haikyuu!!", "ハイキュー!!"]);
 assert.equal(detailCalls, 1);
 
+// Whitespace variation in the provider's own title must not discard a
+// genuinely attested alias. This is not fuzzy title matching.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({ items: [{ hid: "haikyuu-work", title: "Haikyu   !!" }] }),
+    });
+  }
+  if (pathname === "/api/titles/haikyuu-work") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        data: { title: "Haikyu !!", alternativeTitles: ["Haikyuu!!"] },
+      }),
+    });
+  }
+  throw new Error("Unexpected normalized-title fixture request");
+};
+const whitespaceAliasLookup = await provider.reading.lookup({ titles: ["Haikyuu!!"] });
+assert.deepEqual(whitespaceAliasLookup.items[0].aliases, ["Haikyuu!!"]);
+
 // A stale/foreign detail response may never authorize an alias binding.
 globalThis.tsuzuki.http.request = async (_method, url) => {
   const pathname = new URL(url).pathname;
