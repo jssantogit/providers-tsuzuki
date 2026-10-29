@@ -18,6 +18,19 @@ globalThis.tsuzuki = {
   http: {
     async request(method, url, headersJson) {
       requests.push({ method, url, headers: JSON.parse(headersJson) });
+      // MangaDex chapter identity must be checked before fetching at-home
+      // image metadata: a providerChapterId alone does not prove the work.
+      if (new URL(url).pathname === "/chapter/" + chapterId) {
+        return JSON.stringify({
+          statusCode: 200,
+          body: JSON.stringify({
+            result: "ok",
+            data: { id: chapterId, type: "chapter", relationships: [
+              { type: "manga", id: relatedMangaId },
+            ] },
+          }),
+        });
+      }
       return JSON.stringify(fixture({ method, url }));
     },
   },
@@ -26,6 +39,7 @@ const reply = (body) => ({ statusCode: 200, body: JSON.stringify(body) });
 const mangaId = "11111111-2222-4333-8444-555555555555";
 const chapterId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const hashes = "a".repeat(32);
+let relatedMangaId = mangaId;
 
 fixture = () => reply({
   result: "ok", baseUrl: "https://uploads.mangadex.org",
@@ -43,6 +57,15 @@ assert.deepEqual(dex, {
   ],
 });
 assert.equal(new URL(requests.at(-1).url).pathname, "/at-home/server/" + chapterId);
+assert.equal(requests.some(({ url }) => new URL(url).pathname === "/chapter/" + chapterId), true);
+relatedMangaId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+await assert.rejects(modules.mangadex.pages({
+  binding: { externalWorkId: "mangadex:" + mangaId },
+  providerChapterId: "mangadex:" + chapterId,
+}), /work mismatch/i, "a chapter from another manga must never be exposed to this binding");
+assert.equal(new URL(requests.at(-1).url).pathname, "/chapter/" + chapterId,
+  "foreign chapter must be rejected before image URL resolution");
+relatedMangaId = mangaId;
 const dynamicBase = "https://node.mangadex.network:12345/temporary-token";
 fixture = () => reply({
   result: "ok", baseUrl: dynamicBase,
