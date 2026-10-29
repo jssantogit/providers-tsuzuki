@@ -73,6 +73,34 @@ reply = () => ok({
   data: [works.mangaball],
   pagination: { total: 26, current_page: 1, last_page: 2 },
 });
+// Search result is not necessarily the edition's canonical display title.
+// Resolve a bounded source-verified alternative name before the Host applies
+// its safe exact title/alias binding policy.
+reply = ({ parsed }) => parsed.pathname === "/api/v1/title/detail/416"
+  ? ok({ data: {
+    id: "416", name: "Haikyu!!",
+    alternateName: ["Haikyuu!!", "ハイキュー!!"],
+  } })
+  : ok({ data: [{ id: "416", name: "Haikyu!!" }],
+    pagination: { current_page: 1, last_page: 1 }, code: 200 });
+const aliasCandidate = await ball.lookup({ titles: ["Haikyuu!!"] });
+assert.deepEqual(aliasCandidate.items[0].aliases, ["Haikyuu!!", "ハイキュー!!"]);
+assert.equal(calls.at(-1).method, "GET");
+assert.equal(new URL(calls.at(-1).url).pathname, "/api/v1/title/detail/416");
+
+// Never trust alternative titles from the details of a different work.
+reply = ({ parsed }) => parsed.pathname === "/api/v1/title/detail/416"
+  ? ok({ data: { id: "999", alternateName: ["Haikyuu!!"] } })
+  : ok({ data: [{ id: "416", name: "Haikyu!!" }],
+    pagination: { current_page: 1, last_page: 1 }, code: 200 });
+const alienAlias = await ball.lookup({ titles: ["Haikyuu!!"] });
+assert.deepEqual(alienAlias.items[0].aliases, [],
+  "a mismatched details response may not create a false work binding");
+
+reply = () => ok({
+  code: 200, data: [works.mangaball],
+  pagination: { total: 26, current_page: 1, last_page: 2 },
+});
 const ballPageOne = await ball.lookup({ titles: ["Haikyuu!!"] });
 assert.equal(ballPageOne.nextCursor, "2");
 reply = () => ok({
