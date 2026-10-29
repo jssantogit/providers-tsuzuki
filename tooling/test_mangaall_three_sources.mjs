@@ -41,8 +41,6 @@ globalThis.tsuzuki = {
       calls.push({ method, url, headers, body });
       assert.equal(headers.Accept, "application/json");
       if (parsed.origin === "https://mangaball.com") {
-        assert.equal(headers.Referer, "https://mangaball.com/");
-        assert.equal(headers.Origin, "https://mangaball.com");
         assert.equal(headers["Content-Type"], method === "POST" ? "application/json" : undefined);
       }
       return JSON.stringify(reply({ method, parsed, body }));

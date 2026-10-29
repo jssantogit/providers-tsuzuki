@@ -24,7 +24,8 @@ export async function lookup(input) {
   if (!title) throw new Error("MangaAll missing lookup title");
   const page = cursorPage(input?.cursor);
   const data = await api("GET", "/api/v1/title/search-advanced", [
-    ["keyword", title], ["page", page], ["limit", 24], ["adult_mode", "no_18"],
+    ["keyword", title], ["page", page], ["limit", 24],
+    ["tag_mode", "AND"], ["adult_mode", "no_18"],
   ]);
   // MangaBall has used both page/total_pages (older DTO) and
   // current_page/last_page (documented live responses). The first empty
