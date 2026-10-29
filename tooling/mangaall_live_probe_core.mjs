@@ -77,8 +77,19 @@ function exactKey(value) {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ").toLowerCase() : "";
 }
 function safeOutcome(error) {
-  const match = /^MangaAll HTTP (\d{3})/.exec(error?.message || "");
-  return match ? "upstream_http_" + match[1] : "upstream_failed";
+  const message = typeof error?.message === "string" ? error.message : "";
+  const http = /^MangaAll HTTP (\d{3})\b/.exec(message);
+  if (http) return "upstream_http_" + http[1];
+  const known = [
+    ["MangaAll invalid JSON", "invalid_json"],
+    ["MangaAll invalid API response", "invalid_api_response"],
+    ["MangaAll untrusted image origin", "untrusted_image_origin"],
+    ["MangaAll invalid page metadata", "invalid_page_metadata"],
+    ["MangaAll work mismatch", "work_mismatch"],
+    ["MangaAll incomplete page", "incomplete_page"],
+    ["MangaAll inconsistent page", "inconsistent_page"],
+  ];
+  return known.find(([prefix]) => message.startsWith(prefix))?.[1] || "upstream_failed";
 }
 function insideGrant(page, allowedOrigins) {
   if (!page || typeof page.url !== "string") return false;
@@ -99,7 +110,7 @@ export async function inspectSource({
   try {
     page = await adapter.lookup({ titles: [title], cursor: null });
   } catch (error) {
-    return { ...base, outcome: safeOutcome(error) };
+    return { ...base, phase: "lookup", outcome: safeOutcome(error) };
   }
   if (!Array.isArray(page?.items) || page.items.length > 100) {
     return { ...base, outcome: "invalid_lookup" };
@@ -130,7 +141,7 @@ export async function inspectSource({
       cursor: null,
     });
   } catch (error) {
-    return { ...base, outcome: safeOutcome(error) };
+    return { ...base, phase: "chapters", outcome: safeOutcome(error) };
   }
   if (!Array.isArray(chapters?.items) || chapters.items.length > 10000 ||
       chapters.items.some(item => typeof item?.providerChapterId !== "string" ||
@@ -151,7 +162,7 @@ export async function inspectSource({
       providerChapterId: chapters.items[0].providerChapterId,
     });
   } catch (error) {
-    return { ...base, outcome: safeOutcome(error) };
+    return { ...base, phase: "pages", outcome: safeOutcome(error), chapterCount: chapters.items.length };
   }
   if (delivery?.type !== "page_list" || !Array.isArray(delivery.pages) ||
       delivery.pages.length === 0 || delivery.pages.length > 5000) {
