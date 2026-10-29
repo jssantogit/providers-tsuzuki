@@ -5,6 +5,7 @@ const api = makeClient("https://mangaball.com", [
   "/api/v1/title/search-advanced",
   "/api/v1/chapter/chapter-listing-by-title-id",
   "/api/v1/chapter-detail",
+  /^\/api\/v1\/title\/detail\/[A-Za-z0-9_-]{1,128}$/,
 ]);
 function cursorPage(cursor) {
   if (cursor === null || cursor === undefined) return 1;
@@ -49,6 +50,34 @@ export async function lookup(input) {
       externalWorkId: source + ":" + id,
       title: name, aliases: [], url: "https://mangaball.com/title-detail/" + id, language: null,
     });
+  }
+  // Search results normally omit aliases even though title detail exposes
+  // alternateName. Enrich only a few candidates when there is no direct exact
+  // match, preserving the Host's strict unique title/alias binding rule.
+  const key = title.replace(/\\s+/g, " ").toLowerCase();
+  const directlyMatched = items.some(item =>
+    item.title.replace(/\\s+/g, " ").toLowerCase() === key);
+  if (!directlyMatched) {
+    for (const candidate of items.slice(0, 3)) {
+      const id = candidate.externalWorkId.slice(source.length + 1);
+      try {
+        const detail = await api("GET", "/api/v1/title/detail/" + id);
+        const record = detail?.data;
+        if ((detail.code != null && detail.code !== 200) ||
+            !record || String(record.id) !== id || !Array.isArray(record.alternateName)) continue;
+        const seenAliases = new Set([candidate.title.toLowerCase()]);
+        for (const raw of record.alternateName) {
+          const alias = safeText(raw);
+          if (!alias || seenAliases.has(alias.toLowerCase())) continue;
+          seenAliases.add(alias.toLowerCase());
+          candidate.aliases.push(alias);
+          if (candidate.aliases.length >= 32) break;
+        }
+      } catch (_) {
+        // An unavailable detail endpoint must not falsify the search result,
+        // create an unverified alias, or prompt unrestricted retries.
+      }
+    }
   }
   const nextCursor = page < last ? String(page + 1) : null;
   return { items, nextCursor };
