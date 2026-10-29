@@ -154,25 +154,33 @@ export async function inspectSource({
     exactMatchCount: 1, chapterCount: 0,
   };
   if (typeof adapter.pages !== "function") return { ...base, outcome: "pages_unavailable" };
-  let delivery;
-  try {
-    delivery = await adapter.pages({
-      binding: {
-        providerId, facetId: language, externalWorkId: chosen.externalWorkId,
-      },
-      providerChapterId: chapters.items[0].providerChapterId,
-    });
-  } catch (error) {
-    return { ...base, phase: "pages", outcome: safeOutcome(error), chapterCount: chapters.items.length };
+  // Some catalogs list external-license chapters before hosted chapters.
+  // Try a small bounded sample before classifying the whole source as
+  // evidence-only. Do not bypass upstream errors or download image bytes.
+  for (const chapter of chapters.items.slice(0, 3)) {
+    let delivery;
+    try {
+      delivery = await adapter.pages({
+        binding: {
+          providerId, facetId: language, externalWorkId: chosen.externalWorkId,
+        },
+        providerChapterId: chapter.providerChapterId,
+      });
+    } catch (error) {
+      const outcome = safeOutcome(error);
+      if (outcome === "external_chapter") continue;
+      return { ...base, phase: "pages", outcome, chapterCount: chapters.items.length };
+    }
+    if (delivery?.type !== "page_list" || !Array.isArray(delivery.pages) ||
+        delivery.pages.length === 0 || delivery.pages.length > 5000) {
+      return { ...base, outcome: "pages_unavailable" };
+    }
+    return {
+      ...base, outcome: "observed", candidateCount: page.items.length,
+      exactMatchCount: 1, chapterCount: chapters.items.length,
+      pageMetadataCount: delivery.pages.length,
+      pagesInsideGrantedOrigins: delivery.pages.every(p => insideGrant(p, allowedOrigins)),
+    };
   }
-  if (delivery?.type !== "page_list" || !Array.isArray(delivery.pages) ||
-      delivery.pages.length === 0 || delivery.pages.length > 5000) {
-    return { ...base, outcome: "pages_unavailable" };
-  }
-  return {
-    ...base, outcome: "observed", candidateCount: page.items.length,
-    exactMatchCount: 1, chapterCount: chapters.items.length,
-    pageMetadataCount: delivery.pages.length,
-    pagesInsideGrantedOrigins: delivery.pages.every(p => insideGrant(p, allowedOrigins)),
-  };
+  return { ...base, phase: "pages", outcome: "external_chapter", chapterCount: chapters.items.length };
 }
