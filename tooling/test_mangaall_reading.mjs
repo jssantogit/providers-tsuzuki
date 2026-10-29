@@ -25,6 +25,12 @@ globalThis.tsuzuki = {
   http: {
     async request(method, url, headersJson) {
       requests.push({ method, url, headers: JSON.parse(headersJson) });
+      if (new URL(url).origin === "https://mangaball.com") {
+        const headers = JSON.parse(headersJson);
+        assert.equal(headers.Referer, "https://mangaball.com/");
+        assert.equal(headers.Origin, "https://mangaball.com");
+        if (method === "POST") assert.equal(headers["Content-Type"], "application/json");
+      }
       // MangaDex chapter identity must be checked before fetching at-home
       // image metadata: a providerChapterId alone does not prove the work.
       if (new URL(url).pathname === "/chapter/" + chapterId) {
@@ -138,8 +144,8 @@ assert.equal(new URL(requests.at(-1).url).searchParams.get("chapter_id"), "9001"
 assert.deepEqual(ball, {
   type: "page_list",
   pages: [
-    { url: "https://mangaball.com/static/page-1.jpg", headers: { Referer: "https://mangaball.com" } },
-    { url: "https://mangaball.com/static/page-2.png", headers: { Referer: "https://mangaball.com" } },
+    { url: "https://mangaball.com/static/page-1.jpg", headers: { Referer: "https://mangaball.com/" } },
+    { url: "https://mangaball.com/static/page-2.png", headers: { Referer: "https://mangaball.com/" } },
   ],
 });
 fixture = () => reply({ data: { chapter: {
@@ -150,7 +156,7 @@ const cdn = await modules.mangaball.pages({
 });
 assert.deepEqual(cdn.pages, [{
   url: "https://gengar.poke-black-and-white.net/storage/page-1.webp",
-  headers: { Referer: "https://mangaball.com" },
+  headers: { Referer: "https://mangaball.com/" },
 }]);
 fixture = () => reply({ data: { chapter: {
   title_id: "wrong-work", pages: ["https://mangaball.com/static/page-1.jpg"],

@@ -31,6 +31,25 @@ const oversized = createHttpBridge({
 await assert.rejects(oversized.request("GET", "https://mangadot.net/api/search", "{}"),
   /response too large/i);
 
+const mangaBallBridge = createHttpBridge({
+  origin: "https://mangaball.com",
+  fetchImpl: async (_url, opts) => {
+    assert.equal(opts.headers.Referer, "https://mangaball.com/");
+    assert.equal(opts.headers.Origin, "https://mangaball.com");
+    assert.equal(opts.headers["Content-Type"], "application/json");
+    return { status: 200, text: async () => "{}" };
+  },
+});
+await mangaBallBridge.request("POST", "https://mangaball.com/api/v1/chapter/chapter-listing-by-title-id",
+  JSON.stringify({ Referer: "https://mangaball.com/", Origin: "https://mangaball.com",
+    "Content-Type": "application/json" }), JSON.stringify({ title_id: "416" }));
+await assert.rejects(mangaBallBridge.request("GET", "https://mangaball.com/api/v1/title/search-advanced",
+  JSON.stringify({ Referer: "https://evil.example/" })),
+  /forbidden header/i, "the preflight must not allow a forged external Referer");
+await assert.rejects(mangaBallBridge.request("GET", "https://mangaball.com/api/v1/title/search-advanced",
+  JSON.stringify({ Origin: "https://evil.example" })),
+  /forbidden header/i, "the preflight must not allow cross-source Origin");
+
 const title = "Haikyuu!!";
 const baseBinding = { facetId: "en", providerId: "app.tsuzuki.mangaall.mangadot" };
 const exactCandidate = { title: "Haikyu!!", aliases: ["Haikyuu!!"], externalWorkId: "mangadot:314" };

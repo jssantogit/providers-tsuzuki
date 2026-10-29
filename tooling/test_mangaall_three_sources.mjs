@@ -40,6 +40,11 @@ globalThis.tsuzuki = {
       const headers = JSON.parse(headersJson);
       calls.push({ method, url, headers, body });
       assert.equal(headers.Accept, "application/json");
+      if (parsed.origin === "https://mangaball.com") {
+        assert.equal(headers.Referer, "https://mangaball.com/");
+        assert.equal(headers.Origin, "https://mangaball.com");
+        assert.equal(headers["Content-Type"], method === "POST" ? "application/json" : undefined);
+      }
       return JSON.stringify(reply({ method, parsed, body }));
     },
   },
@@ -63,6 +68,8 @@ assert.deepEqual(ballLookup, { items: [{
 assert.equal(calls.at(-1).method, "GET");
 assert.equal(new URL(calls.at(-1).url).pathname, "/api/v1/title/search-advanced");
 assert.equal(new URL(calls.at(-1).url).searchParams.get("keyword"), "Haikyuu!!");
+assert.equal(new URL(calls.at(-1).url).searchParams.get("tag_mode"), "AND");
+assert.equal(new URL(calls.at(-1).url).searchParams.get("adult_mode"), "no_18");
 // MangaBall's documented response uses current_page/last_page and code=200.
 // Empty results on the first page are a valid result, not a parser failure.
 reply = () => ok({
