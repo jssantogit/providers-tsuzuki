@@ -138,4 +138,12 @@ assert.equal(metadataInvalid.phase, "pages");
 assert.equal(metadataInvalid.outcome, "invalid_page_metadata");
 
 assert.equal(JSON.stringify(upstreamError).includes("private.example"), false);
+const externalRelease = await inspectSource({
+  sourceId: "mangadot", title, language: "en", providerId: baseBinding.providerId,
+  allowedOrigins: ["https://mangadot.net"],
+  adapter: { ...adapter, pages: async () => { throw Error("MangaAll external chapter"); } },
+});
+assert.equal(externalRelease.phase, "pages");
+assert.equal(externalRelease.outcome, "external_chapter");
+assert.equal(externalRelease.chapterCount, 1);
 console.log("MangaAll opt-in live-probe safety and stage reporting fixtures: OK");

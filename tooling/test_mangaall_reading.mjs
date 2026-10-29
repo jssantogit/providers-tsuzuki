@@ -25,7 +25,7 @@ globalThis.tsuzuki = {
           statusCode: 200,
           body: JSON.stringify({
             result: "ok",
-            data: { id: chapterId, type: "chapter", relationships: [
+            data: { id: chapterId, type: "chapter", attributes: chapterExternal ? {externalUrl:"https://publisher.example/chapter"} : {}, relationships: [
               { type: "manga", id: relatedMangaId },
             ] },
           }),
@@ -40,6 +40,7 @@ const mangaId = "11111111-2222-4333-8444-555555555555";
 const chapterId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const hashes = "a".repeat(32);
 let relatedMangaId = mangaId;
+let chapterExternal = false;
 
 fixture = () => reply({
   result: "ok", baseUrl: "https://uploads.mangadex.org",
@@ -66,6 +67,15 @@ await assert.rejects(modules.mangadex.pages({
 assert.equal(new URL(requests.at(-1).url).pathname, "/chapter/" + chapterId,
   "foreign chapter must be rejected before image URL resolution");
 relatedMangaId = mangaId;
+chapterExternal = true;
+await assert.rejects(modules.mangadex.pages({
+  binding: { externalWorkId: "mangadex:" + mangaId },
+  providerChapterId: "mangadex:" + chapterId,
+}), /external chapter/i, "MangaDex external releases are evidence but not internally readable");
+assert.equal(new URL(requests.at(-1).url).pathname, "/chapter/" + chapterId,
+  "never fetch MangaDex@Home for an external release");
+chapterExternal = false;
+
 const dynamicBase = "https://node.mangadex.network:12345/temporary-token";
 fixture = () => reply({
   result: "ok", baseUrl: dynamicBase,
