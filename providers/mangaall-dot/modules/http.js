@@ -57,3 +57,17 @@ export function facetLang(input) {
   if (lang !== "en" && lang !== "pt-br") throw new Error("MangaAll unsupported language");
   return lang;
 }
+
+// The host will grant additional image CDN origins only after live verification.
+export function trustedImageUrl(raw, origin) {
+  if (typeof raw !== "string" || raw.length === 0 || raw.length > 2048 ||
+      /[\\\\\u0000-\u001f]/.test(raw) || /%(?:2e|2f|5c)/i.test(raw)) {
+    throw new Error("MangaAll untrusted image origin");
+  }
+  const absolute = raw.startsWith("/") && !raw.startsWith("//") ? origin + raw : raw;
+  if (!absolute.startsWith(origin + "/") || absolute.includes("/../") ||
+      absolute.includes("/./") || absolute.includes("?redirect=")) {
+    throw new Error("MangaAll untrusted image origin");
+  }
+  return absolute;
+}

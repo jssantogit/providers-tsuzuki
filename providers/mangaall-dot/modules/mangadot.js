@@ -1,8 +1,9 @@
-import { makeClient, safeText, sourceId, chapterNumber, dateMillis, facetLang } from "./http.js";
+import { makeClient, safeText, sourceId, chapterNumber, dateMillis, facetLang, trustedImageUrl } from "./http.js";
 
 const source = "mangadot";
 const api = makeClient("https://mangadot.net", [
   "/api/search", /^\/api\/manga\/[1-9][0-9]{0,15}\/chapters\/list$/,
+  /^\/api\/(?:uploads|chapters)\/[1-9][0-9]{0,15}\/images$/,
 ]);
 function cleanId(v) {
   if (typeof v === "number" && Number.isSafeInteger(v) && v > 0) return String(v);
@@ -61,11 +62,38 @@ export async function chapters(input) {
       safeText(row.group_name) || safeText(row.scanlator_name) || null;
     seen.add(chapterId);
     items.push({
-      providerChapterId: source + ":" + chapterId,
+      providerChapterId: source + ":" + (row.source == null || row.source === "user" ? "uploads" : "chapters") + ":" + chapterId,
       rawLabel: "Ch. " + number + (title ? " " + title : ""),
       rawNumber: number, title, language: lang,
       scanlationGroup, releaseDateMillis: dateMillis(row.date_added),
     });
   }
   return { items, nextCursor: null };
+}
+
+// Distinguish user uploads from title chapters in the stable source-scoped ID.
+// No source URL, path or dynamic origin from input is used to build the endpoint.
+export async function pages(input) {
+  const workId = sourceId(source, input?.binding?.externalWorkId);
+  if (!cleanId(workId)) throw new Error("MangaAll invalid work ID");
+  const chapterKey = input?.providerChapterId;
+  const match = typeof chapterKey === "string"
+    ? /^mangadot:(uploads|chapters):([1-9][0-9]{0,15})$/.exec(chapterKey) : null;
+  if (!match) throw new Error("MangaAll invalid chapter ID");
+  const kind = match[1], id = match[2];
+  const response = await api("GET", "/api/" + kind + "/" + id + "/images");
+  if (!response?.manga || String(response.manga.id) !== workId) {
+    throw new Error("MangaAll work mismatch");
+  }
+  if (!Array.isArray(response.images) || response.images.length === 0 ||
+      response.images.length > 5000) throw new Error("MangaAll invalid page metadata");
+  const referer = "https://mangadot.net/chapter/" + id +
+    (kind === "uploads" ? "?source=user" : "");
+  return {
+    type: "page_list",
+    pages: response.images.map((item) => ({
+      url: trustedImageUrl(item?.url, "https://mangadot.net"),
+      headers: { Referer: referer },
+    })),
+  };
 }

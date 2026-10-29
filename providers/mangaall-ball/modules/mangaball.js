@@ -1,9 +1,10 @@
-import { makeClient, safeText, sourceId, chapterNumber, dateMillis, facetLang } from "./http.js";
+import { makeClient, safeText, sourceId, chapterNumber, dateMillis, facetLang, trustedImageUrl } from "./http.js";
 
 const source = "mangaball";
 const api = makeClient("https://mangaball.com", [
   "/api/v1/title/search-advanced",
   "/api/v1/chapter/chapter-listing-by-title-id",
+  "/api/v1/chapter-detail",
 ]);
 function cursorPage(cursor) {
   if (cursor === null || cursor === undefined) return 1;
@@ -67,4 +68,27 @@ export async function chapters(input) {
     });
   }
   return { items, nextCursor: null };
+}
+
+// Prototype page delivery: only pages on the currently authorized source
+// origin are accepted. External CDNs require explicit Host grants and review.
+export async function pages(input) {
+  const workId = sourceId(source, input?.binding?.externalWorkId);
+  const chapterId = sourceId(source, input?.providerChapterId);
+  const response = await api("GET", "/api/v1/chapter-detail", [["chapter_id", chapterId]]);
+  const chapter = response?.data?.chapter;
+  if (!chapter || (chapter.title_id != null && String(chapter.title_id) !== workId)) {
+    throw new Error("MangaAll work mismatch");
+  }
+  const imageList = chapter.pages;
+  if (!Array.isArray(imageList) || imageList.length === 0 || imageList.length > 5000) {
+    throw new Error("MangaAll invalid page metadata");
+  }
+  return {
+    type: "page_list",
+    pages: imageList.map((url) => ({
+      url: trustedImageUrl(url, "https://mangaball.com"),
+      headers: { Referer: "https://mangaball.com" },
+    })),
+  };
 }

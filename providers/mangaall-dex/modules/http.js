@@ -3,7 +3,7 @@ const MAX_JSON_BYTES = 1024 * 1024;
 
 // Only fixed, reviewed endpoints and origins are available to this adapter.
 export async function getMangaDexJson(endpoint, pairs = []) {
-  if (endpoint !== "/manga" && endpoint !== "/chapter") {
+  if (endpoint !== "/manga" && endpoint !== "/chapter" && !/^\\/at-home\\/server\\/[0-9a-f-]{36}$/i.test(endpoint)) {
     throw new Error("MangaAll unsupported MangaDex endpoint");
   }
   const query = pairs.map(([key, value]) =>
@@ -34,7 +34,7 @@ export async function getMangaDexJson(endpoint, pairs = []) {
   } catch (_) {
     throw new Error("MangaAll invalid JSON");
   }
-  if (result?.result !== "ok" || !Array.isArray(result.data)) {
+  if (result?.result !== "ok" || (endpoint.startsWith("/at-home/") ? !result.chapter : !Array.isArray(result.data))) {
     throw new Error("MangaAll invalid API response");
   }
   return result;

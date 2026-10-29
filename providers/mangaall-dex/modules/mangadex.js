@@ -162,3 +162,36 @@ export async function chapters(input) {
   }
   return { items, nextCursor };
 }
+
+// Internal Reader prototype. Do not export from main.js or advertise reading.pages
+// until image-host grants, MangaDex attribution/removal policy and Android smoke pass.
+export async function pages(input) {
+  parseWorkId(input?.binding?.externalWorkId);
+  const rawId = input?.providerChapterId;
+  if (typeof rawId !== "string" || !rawId.startsWith(SOURCE + ":")) {
+    throw new Error("MangaAll invalid chapter ID");
+  }
+  const chapterId = rawId.slice(SOURCE.length + 1);
+  if (!ID_PATTERN.test(chapterId)) throw new Error("MangaAll invalid chapter ID");
+  const response = await getMangaDexJson("/at-home/server/" + chapterId);
+  const base = response.baseUrl;
+  if (typeof base !== "string" ||
+    !/^https:\/\/(?:uploads\.mangadex\.org|(?:[a-z0-9-]+\.)+mangadex\.network)$/i.test(base)) {
+    throw new Error("MangaAll untrusted image origin");
+  }
+  const chapter = response.chapter;
+  const hash = chapter?.hash;
+  const files = chapter?.data;
+  if (typeof hash !== "string" || !/^[0-9a-f]{16,128}$/i.test(hash) ||
+      !Array.isArray(files) || files.length === 0 || files.length > 5000) {
+    throw new Error("MangaAll invalid page metadata");
+  }
+  const pages = files.map((file) => {
+    if (typeof file !== "string" || !/^[A-Za-z0-9._-]{1,255}$/.test(file) ||
+        file === "." || file === "..") {
+      throw new Error("MangaAll invalid page filename");
+    }
+    return { url: base + "/data/" + hash + "/" + file, headers: {} };
+  });
+  return { type: "page_list", pages };
+}

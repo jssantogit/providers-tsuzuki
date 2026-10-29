@@ -96,7 +96,7 @@ reply = () => ok([
 ]);
 const dotChapters = await dot.chapters({ binding: { facetId: "en", externalWorkId: "mangadot:317" } });
 assert.deepEqual(dotChapters, { items: [{
-  providerChapterId: "mangadot:8001", rawLabel: "Ch. 4 Victory",
+  providerChapterId: "mangadot:uploads:8001", rawLabel: "Ch. 4 Victory",
   rawNumber: 4, title: "Victory", language: "en",
   scanlationGroup: "Scan B", releaseDateMillis: Date.parse("2026-09-02T00:00:00Z"),
 }], nextCursor: null });
