@@ -58,7 +58,7 @@ export async function chapters(input) {
   const id = sourceId(source, input?.binding?.externalWorkId);
   if (!cleanId(id)) throw new Error("MangaAll invalid work ID");
   const lang = facetLang(input);
-  const rows = await api("GET", "/api/manga/" + id + "/chapters/list");
+  const rows = await api("GET", "/api/manga/" + id + "/chapters/list", [["lang", lang]]);
   if (!Array.isArray(rows) || rows.length > 16000) throw new Error("MangaAll invalid API response");
   const items = [], seen = new Set();
   for (const row of rows) {
