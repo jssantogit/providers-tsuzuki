@@ -183,4 +183,53 @@ const externalOnly = await inspectSource({
 assert.equal(externalOnly.outcome, "external_chapter");
 assert.equal(externalOnly.chapterCount, 2);
 
+// A wildcard grants a HTTPS subdomain, not the apex, a lookalike domain,
+// credentials or a non-standard port. This check is diagnostic, never an
+// authorization to fetch image bytes.
+for (const [url, expected] of [
+  ["https://edge.mangadex.network/data/one.webp", true],
+  ["https://nested.edge.mangadex.network/data/two.webp", true],
+  ["https://mangadex.network/data/three.webp", false],
+  ["https://evil-mangadex.network/data/four.webp", false],
+  ["https://edge.mangadex.network:8443/data/five.webp", false],
+  ["https://user:pass@edge.mangadex.network/data/six.webp", false],
+]) {
+  const inspected = await inspectSource({
+    sourceId: "mangadot", title, language: "en", providerId: baseBinding.providerId,
+    allowedOrigins: ["https://api.mangadex.org", "https://*.mangadex.network"],
+    adapter: { ...adapter, pages: async () => ({
+      type: "page_list", pages: [{ url, headers: {} }],
+    }) },
+  });
+  assert.equal(inspected.pagesInsideGrantedOrigins, expected, url);
+}
+
+// Some works have only external chapters at the beginning of their feed.
+// Spread the same three-attempt cap across the first, middle and last entry,
+// or a legitimate internal chapter outside the first three stays invisible.
+const sampledIds = [];
+const mixedChapterProvider = {
+  ...adapter,
+  chapters: async () => ({ items: Array.from({ length: 8 }, (_, i) => ({
+    providerChapterId: "mangadot:uploads:" + (100 + i), rawNumber: i + 1,
+  })), nextCursor: null }),
+  pages: async ({ providerChapterId }) => {
+    sampledIds.push(providerChapterId);
+    if (providerChapterId !== "mangadot:uploads:103") {
+      throw Error("MangaAll external chapter");
+    }
+    return { type: "page_list", pages: [{
+      url: "https://mangadot.net/pages/103.webp", headers: {},
+    }] };
+  },
+};
+const mixedResult = await inspectSource({
+  sourceId: "mangadot", title, language: "en", providerId: baseBinding.providerId,
+  allowedOrigins: ["https://mangadot.net"], adapter: mixedChapterProvider,
+});
+assert.equal(mixedResult.outcome, "observed");
+assert.equal(mixedResult.chapterCount, 8);
+assert.deepEqual(sampledIds, ["mangadot:uploads:100", "mangadot:uploads:103"]);
+assert.ok(sampledIds.length <= 3, "never expand the bounded upstream probe");
+
 console.log("MangaAll opt-in live-probe safety and stage reporting fixtures: OK");
