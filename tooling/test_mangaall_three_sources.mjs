@@ -42,6 +42,10 @@ globalThis.tsuzuki = {
       assert.equal(headers.Accept, "application/json");
       if (parsed.origin === "https://mangaball.com") {
         assert.equal(headers["Content-Type"], method === "POST" ? "application/json" : undefined);
+        // KeiSource sends its own actual origin, not a borrowed cookie, session,
+        // browser fingerprint or external host origin.
+        assert.equal(headers.Origin, "https://mangaball.com");
+        assert.equal(headers.Referer, "https://mangaball.com/");
       }
       return JSON.stringify(reply({ method, parsed, body }));
     },

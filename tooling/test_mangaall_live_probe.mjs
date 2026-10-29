@@ -15,8 +15,13 @@ await assert.rejects(bridge.request("GET", "https://evil.example/api/search", "{
 await assert.rejects(bridge.request("POST", "https://mangadot.net/api/search",
   JSON.stringify({ Cookie: "session=secret" }), "{}"), /forbidden header/i);
 await assert.rejects(bridge.request("DELETE", "https://mangadot.net/api/search", "{}"), /unsupported method/i);
+await assert.rejects(bridge.request("GET", "https://mangadot.net/api/search",
+  JSON.stringify({ Origin: "https://evil.example" })), /forbidden header/i);
+await assert.rejects(bridge.request("GET", "https://mangadot.net/api/search",
+  JSON.stringify({ Referer: "https://evil.example/" })), /forbidden header/i);
 assert.equal(requests.length, 0, "invalid authority never reaches transport");
-const raw = await bridge.request("GET", "https://mangadot.net/api/search?search=Haikyu", "{}");
+const raw = await bridge.request("GET", "https://mangadot.net/api/search?search=Haikyu",
+  JSON.stringify({ Referer: "https://mangadot.net/", Origin: "https://mangadot.net" }));
 assert.equal(JSON.parse(raw).statusCode, 200);
 assert.equal(requests[0].opts.redirect, "manual", "redirects cannot bypass origin grants");
 await bridge.request("GET", "https://mangadot.net/api/search", "{}");
