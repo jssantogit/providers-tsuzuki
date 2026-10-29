@@ -12,7 +12,7 @@ const ADAPTERS = Object.freeze({ mangadex: mangaDex });
 function soleActiveAdapter() {
   const enabled = SOURCES.filter((source) => source.enabled);
   if (enabled.length !== 1 || !ADAPTERS[enabled[0].id]) {
-    throw new Error("MangaAll Host V1 requires exactly one active source");
+    throw new Error("MangaAll MangaDex adapter requires exactly one active source");
   }
   return ADAPTERS[enabled[0].id];
 }

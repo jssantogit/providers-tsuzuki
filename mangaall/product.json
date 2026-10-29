@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "id": "app.tsuzuki.mangaall",
+  "name": "MangaAll",
+  "role": "multi-source-chapter-evidence-and-reading",
+  "publicationStatus": "prototype",
+  "integrationModel": "source-isolated-adapters-Host-V1",
+  "sourceIds": [
+    "mangalivre",
+    "mangadex",
+    "mangafire",
+    "mangaball",
+    "mangadot",
+    "animexnovel",
+    "mangaflix"
+  ],
+  "sources": [
+    {
+      "id": "mangalivre",
+      "name": "Manga Livre.to",
+      "status": "planned"
+    },
+    {
+      "id": "mangadex",
+      "name": "MangaDex",
+      "status": "prototype",
+      "adapterProviderId": "app.tsuzuki.mangaall.mangadex",
+      "readingStatus": "unverified"
+    },
+    {
+      "id": "mangafire",
+      "name": "MangaFire",
+      "status": "planned"
+    },
+    {
+      "id": "mangaball",
+      "name": "MangaBall",
+      "status": "prototype",
+      "adapterProviderId": "app.tsuzuki.mangaall.mangaball",
+      "readingStatus": "unverified"
+    },
+    {
+      "id": "mangadot",
+      "name": "MangaDot",
+      "status": "prototype",
+      "adapterProviderId": "app.tsuzuki.mangaall.mangadot",
+      "readingStatus": "unverified"
+    },
+    {
+      "id": "animexnovel",
+      "name": "AnimeXNovel",
+      "status": "planned"
+    },
+    {
+      "id": "mangaflix",
+      "name": "MangaFlix",
+      "status": "planned"
+    }
+  ],
+  "capabilities": {
+    "chapterEvidence": "planned",
+    "readingPages": "planned"
+  },
+  "firstPhysicalSmokeSources": [
+    "mangadex",
+    "mangaball",
+    "mangadot"
+  ]
+}
