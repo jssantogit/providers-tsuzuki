@@ -25,10 +25,19 @@ export async function lookup(input) {
   const data = await api("GET", "/api/v1/title/search-advanced", [
     ["keyword", title], ["page", page], ["limit", 24], ["adult_mode", "no_18"],
   ]);
-  if (!Array.isArray(data.data) || !data.pagination || !Number.isInteger(data.pagination.page)
-      || !Number.isInteger(data.pagination.total_pages) || data.pagination.page !== page
-      || data.pagination.total_pages < 0 || data.pagination.total_pages > 32
-      || data.data.length > 24 || (page < data.pagination.total_pages && data.data.length === 0)) {
+  // MangaBall has used both page/total_pages (older DTO) and
+  // current_page/last_page (documented live responses). The first empty
+  // search page can legitimately have last_page=0; do not treat it as a
+  // network failure or synthesize extra pages.
+  const paging = data?.pagination;
+  const current = paging?.current_page ?? paging?.page;
+  const last = paging?.last_page ?? paging?.total_pages;
+  if ((data?.code != null && data.code !== 200) ||
+      !Array.isArray(data?.data) || !paging ||
+      !Number.isInteger(current) || !Number.isInteger(last) ||
+      current !== page || last < 0 || last > 32 ||
+      data.data.length > 24 ||
+      (page < last && data.data.length === 0)) {
     throw new Error("MangaAll invalid API response");
   }
   const seen = new Set(), items = [];
@@ -41,22 +50,37 @@ export async function lookup(input) {
       title: name, aliases: [], url: "https://mangaball.com/title-detail/" + id, language: null,
     });
   }
-  const nextCursor = page < data.pagination.total_pages ? String(page + 1) : null;
+  const nextCursor = page < last ? String(page + 1) : null;
   return { items, nextCursor };
 }
 export async function chapters(input) {
   const workId = sourceId(source, input?.binding?.externalWorkId);
   const lang = facetLang(input);
   const data = await api("POST", "/api/v1/chapter/chapter-listing-by-title-id", [], { title_id: workId });
-  if (!Array.isArray(data.data) || data.data.length > 16000) throw new Error("MangaAll invalid API response");
+  // The API has two documented response schemas. Older feeds return flat
+  // data: ChapterDto[]; grouped feeds return ALL_CHAPTERS with independent
+  // translations. Never collapse translations solely by chapter number.
+  const grouped = Array.isArray(data?.ALL_CHAPTERS);
+  const rows = grouped ? data.ALL_CHAPTERS : data?.data;
+  if ((data?.code != null && data.code !== 200) ||
+      !Array.isArray(rows) || rows.length > 16000) {
+    throw new Error("MangaAll invalid API response");
+  }
   const items = [], seen = new Set();
-  for (const row of data.data) {
+  function add(row, parent = null) {
     const id = cleanId(row?.id);
-    const number = chapterNumber(row?.number);
-    if (!id || number === null || seen.has(id) || typeof row.lang !== "string" ||
-        row.lang.toLowerCase() !== lang) continue;
-    const title = safeText(row.name, 3900) || null;
-    const volume = chapterNumber(row.volume);
+    const language = row?.language ?? row?.lang;
+    const numeric = parent
+      ? parent.number_float ?? parent.number
+      : row?.number;
+    // Group chapter numbers may be formatted as "Ch. 12".
+    const raw = typeof numeric === "string"
+      ? numeric.replace(/^ch\\.\\s*/i, "").trim() : numeric;
+    const number = chapterNumber(raw);
+    if (!id || number === null || seen.has(id) ||
+        typeof language !== "string" || language.toLowerCase() !== lang) return;
+    const title = safeText(row?.name ?? parent?.title, 3900) || null;
+    const volume = chapterNumber(parent?.volume ?? row?.volume);
     const validVolume = volume !== null && Number.isInteger(volume) ? volume : null;
     let label = (validVolume && validVolume > 0 ? "Vol. " + validVolume + " " : "") + "Ch. " + number;
     if (title) label += " " + title;
@@ -65,8 +89,18 @@ export async function chapters(input) {
       providerChapterId: source + ":" + id, rawLabel: label, rawNumber: number,
       ...(validVolume ? { volume: validVolume } : {}),
       title, language: lang, scanlationGroup: safeText(row?.group?.name) || null,
-      releaseDateMillis: dateMillis(row.created_at),
+      releaseDateMillis: dateMillis(row?.created_at ?? parent?.created_at),
     });
+  }
+  for (const row of rows) {
+    if (grouped) {
+      if (!Array.isArray(row?.translations) || row.translations.length > 64) {
+        throw new Error("MangaAll invalid API response");
+      }
+      for (const translation of row.translations) add(translation, row);
+    } else {
+      add(row);
+    }
   }
   return { items, nextCursor: null };
 }
