@@ -75,7 +75,7 @@ export async function chapters(input) {
       : row?.number;
     // Group chapter numbers may be formatted as "Ch. 12".
     const raw = typeof numeric === "string"
-      ? numeric.replace(/^ch\\.\\s*/i, "").trim() : numeric;
+      ? numeric.replace(/^ch\.\s*/i, "").trim() : numeric;
     const number = chapterNumber(raw);
     if (!id || number === null || seen.has(id) ||
         typeof language !== "string" || language.toLowerCase() !== lang) return;
