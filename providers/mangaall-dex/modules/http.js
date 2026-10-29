@@ -19,7 +19,7 @@ export async function getMangaDexJson(endpoint, pairs = []) {
   const raw = await globalThis.tsuzuki.http.request(
     "GET",
     url,
-    JSON.stringify({ Accept: "application/json" }),
+    JSON.stringify({ Accept: "application/json", "User-Agent": "Tsuzuki-MangaAll/0.1 (+https://github.com/jssantogit/providers-tsuzuki)" }),
   );
   let envelope;
   try {

@@ -1,7 +1,7 @@
 // Non-shipping diagnostic utility. HTTP requests only to each adapter's
 // manifest origin, with strict method/header/redirect limits. No challenge bypass.
 const METHODS = new Set(["GET", "POST"]);
-const HEADERS = new Set(["accept", "content-type"]);
+const HEADERS = new Set(["accept", "content-type", "user-agent"]);
 
 async function readBounded(response, maxResponseBytes) {
   if (!response.body || typeof response.body.getReader !== "function") {
@@ -51,6 +51,7 @@ export function createHttpBridge({
       if (!headers || typeof headers !== "object" || Array.isArray(headers) ||
           Object.entries(headers).some(([key, value]) =>
             !HEADERS.has(key.toLowerCase()) || typeof value !== "string" ||
+            (key.toLowerCase() === "user-agent" && value !== "Tsuzuki-MangaAll/0.1 (+https://github.com/jssantogit/providers-tsuzuki)") ||
             /[\r\n]/.test(value) || value.length > 128)) {
         throw Error("MangaAll forbidden header");
       }
