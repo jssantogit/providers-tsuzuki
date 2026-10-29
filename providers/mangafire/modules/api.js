@@ -53,7 +53,7 @@ export async function apiJson(path, params = {}) {
       return parseJsonBody(response.body);
     } catch (error) {
       const htmlChallenge = typeof response.body === "string" &&
-        /^\\s*(?:<!doctype\\s+html|<html(?:\\s|>))/i.test(response.body);
+        /^\s*(?:<!doctype\s+html|<html(?:\s|>))/i.test(response.body);
       if (!error.challengeRequired && !htmlChallenge) throw error;
       return browserJson(url);
     }
