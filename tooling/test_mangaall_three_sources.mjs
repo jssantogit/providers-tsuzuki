@@ -102,6 +102,20 @@ assert.deepEqual(dotChapters, { items: [{
 }], nextCursor: null });
 assert.equal(new URL(calls.at(-1).url).pathname, "/api/manga/317/chapters/list");
 
+// The public MangaDot DTO also accepts cursor-only pagination metadata.
+// The Host cursor remains a bounded page number, never an arbitrary upstream URL.
+reply = () => ok({
+  manga_list: [works.mangadot],
+  pagination: { next_cursor: "another-page" },
+});
+const cursorFirst = await dot.lookup({ titles: ["Haikyuu!!"], cursor: "1" });
+assert.equal(cursorFirst.nextCursor, "2");
+assert.equal(new URL(calls.at(-1).url).searchParams.get("page"), "1");
+reply = () => ok({ manga_list: [works.mangadot], pagination: { next_cursor: null } });
+const cursorLast = await dot.lookup({ titles: ["Haikyuu!!"], cursor: cursorFirst.nextCursor });
+assert.equal(new URL(calls.at(-1).url).searchParams.get("page"), "2");
+assert.equal(cursorLast.nextCursor, null);
+
 for (const reading of [ball, dot]) {
   reply = () => ({ statusCode: 200, body: "<html>blocked</html>" });
   await assert.rejects(reading.lookup({ titles: ["Haikyuu!!"] }), /invalid json/i);
