@@ -125,4 +125,58 @@ const browserLookup = await provider.reading.lookup({ titles: ["One Piece"] });
 assert.equal(browserUsed, true);
 assert.equal(browserLookup.items[0].externalWorkId, "one-piece-test");
 
+// A differently spelled search hit must not be silently discarded when MangaFire's
+// own detail endpoint attests an exact alternative title.
+let detailCalls = 0;
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        items: [{ hid: "haikyuu-work", slug: "haikyu", title: "Haikyu!!" }],
+      }),
+    });
+  }
+  if (pathname === "/api/titles/haikyuu-work") {
+    detailCalls++;
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        data: { title: "Haikyu!!", alternativeTitles: ["Haikyuu!!", "ハイキュー!!"] },
+      }),
+    });
+  }
+  throw new Error("Unexpected detail lookup request");
+};
+const aliasLookup = await provider.reading.lookup({ titles: ["Haikyuu!!"] });
+assert.equal(aliasLookup.items.length, 1);
+assert.deepEqual(aliasLookup.items[0].aliases, ["Haikyuu!!", "ハイキュー!!"]);
+assert.equal(detailCalls, 1);
+
+// An HTTP 200 containing a human-facing challenge is not a successful JSON page.
+let challenged200Fallbacks = 0;
+globalThis.tsuzuki.http.request = async () => JSON.stringify({
+  statusCode: 200,
+  body: "<!doctype html><html><title>Just a moment</title></html>",
+});
+globalThis.tsuzuki.browser.readText = async (_url, selector) => {
+  assert.equal(selector, "body");
+  challenged200Fallbacks++;
+  return JSON.stringify(searchFixture);
+};
+const htmlChallengeLookup = await provider.reading.lookup({ titles: ["One Piece"] });
+assert.equal(htmlChallengeLookup.items[0].externalWorkId, "one-piece-test");
+assert.equal(challenged200Fallbacks, 1);
+
+// A genuine malformed JSON body must fail instead of masquerading as empty chapters.
+globalThis.tsuzuki.http.request = async () => JSON.stringify({
+  statusCode: 200,
+  body: "{not valid json",
+});
+await assert.rejects(
+  provider.reading.lookup({ titles: ["One Piece"] }),
+  /JSON|Unexpected token|Expected property/i,
+);
+
 console.log("MangaFire Provider conformance fixtures: OK");
