@@ -154,6 +154,31 @@ assert.equal(aliasLookup.items.length, 1);
 assert.deepEqual(aliasLookup.items[0].aliases, ["Haikyuu!!", "ハイキュー!!"]);
 assert.equal(detailCalls, 1);
 
+// A stale/foreign detail response may never authorize an alias binding.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        items: [{ hid: "haikyuu-work", slug: "haikyu", title: "Haikyu!!" }],
+      }),
+    });
+  }
+  if (pathname === "/api/titles/haikyuu-work") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        data: { title: "Different Work", alternativeTitles: ["Haikyuu!!"] },
+      }),
+    });
+  }
+  throw new Error("Unexpected lookup fixture request");
+};
+const mismatchedDetailLookup = await provider.reading.lookup({ titles: ["Haikyuu!!"] });
+assert.equal(mismatchedDetailLookup.items.length, 1);
+assert.deepEqual(mismatchedDetailLookup.items[0].aliases, []);
+
 // An HTTP 200 containing a human-facing challenge is not a successful JSON page.
 let challenged200Fallbacks = 0;
 globalThis.tsuzuki.http.request = async () => JSON.stringify({
