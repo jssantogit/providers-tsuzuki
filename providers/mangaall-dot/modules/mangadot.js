@@ -25,11 +25,20 @@ export async function lookup(input) {
     ["search", title], ["page", page], ["limit", 56],
   ]);
   const rows = data.manga_list ?? data.results;
-  const pages = data.pagination;
-  if (!Array.isArray(rows) || rows.length > 56 || !pages
-      || !Number.isInteger(pages.current_page) || !Number.isInteger(pages.total_pages)
-      || pages.current_page !== page || pages.total_pages < 0 || pages.total_pages > 32
-      || (page < pages.total_pages && rows.length === 0)) {
+  // The MangaDot pagination DTO permits either total_pages/current_page or
+  // next_cursor. A missing pagination block denotes one page, not an error.
+  const pages = data.pagination ?? null;
+  const current = pages?.current_page ?? pages?.currentPage ?? pages?.page ?? null;
+  const total = pages?.total_pages ?? pages?.totalPages ?? pages?.last_page ?? null;
+  const cursor = pages?.next_cursor ?? pages?.nextCursor ?? pages?.cursor ?? null;
+  const hasNext = total != null
+    ? page < total
+    : typeof cursor === "string" && cursor.length > 0;
+  if (!Array.isArray(rows) || rows.length > 56 ||
+      (current != null && (!Number.isInteger(current) || current !== page)) ||
+      (total != null && (!Number.isInteger(total) || total < 0 || total > 32)) ||
+      (cursor != null && typeof cursor !== "string") ||
+      (hasNext && (rows.length === 0 || page >= 32))) {
     throw new Error("MangaAll invalid API response");
   }
   const seen = new Set(), items = [];
@@ -43,7 +52,7 @@ export async function lookup(input) {
       title, aliases: [], url: "https://mangadot.net/manga/" + id, language: null,
     });
   }
-  return { items, nextCursor: page < pages.total_pages ? String(page + 1) : null };
+  return { items, nextCursor: hasNext ? String(page + 1) : null };
 }
 export async function chapters(input) {
   const id = sourceId(source, input?.binding?.externalWorkId);
