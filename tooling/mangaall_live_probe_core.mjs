@@ -165,10 +165,14 @@ export async function inspectSource({
     exactMatchCount: 1, chapterCount: 0,
   };
   if (typeof adapter.pages !== "function") return { ...base, outcome: "pages_unavailable" };
-  // Some catalogs list external-license chapters before hosted chapters.
-  // Try a small bounded sample before classifying the whole source as
-  // evidence-only. Do not bypass upstream errors or download image bytes.
-  for (const chapter of chapters.items.slice(0, 3)) {
+  // The first chapters may be external links, even if later chapters
+  // are hosted. Spread the same three-attempt budget across the feed instead
+  // of always sampling only the beginning. This is a diagnostic sample, not
+  // a guarantee of full Reader availability or a reason to bypass errors.
+  const count = chapters.items.length;
+  const sampleIndices = [...new Set([0, Math.floor((count - 1) / 2), count - 1])];
+  for (const index of sampleIndices) {
+    const chapter = chapters.items[index];
     let delivery;
     try {
       delivery = await adapter.pages({
