@@ -78,7 +78,9 @@ export async function pages(input) {
   const chapterId = sourceId(source, input?.providerChapterId);
   const response = await api("GET", "/api/v1/chapter-detail", [["chapter_id", chapterId]]);
   const chapter = response?.data?.chapter;
-  if (!chapter || (chapter.title_id != null && String(chapter.title_id) !== workId)) {
+  // A missing title_id cannot prove that this translation belongs to the
+  // bound work. Fail closed rather than forwarding pages for an unrelated title.
+  if (!chapter || chapter.title_id == null || String(chapter.title_id) !== workId) {
     throw new Error("MangaAll work mismatch");
   }
   const imageList = chapter.pages;
