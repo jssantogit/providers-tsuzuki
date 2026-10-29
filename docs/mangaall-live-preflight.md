@@ -24,6 +24,30 @@ an invitation to circumvent the site.
 Upstream availability, request policies and attribution must be verified
 before running this probe and before signed publication.
 
+## Segurança do diagnóstico — correção de 29/10/2026
+
+Na [PR #47](https://github.com/jssantogit/providers-tsuzuki/pull/47), o
+pré-smoke agora reconhece `https://*.mangadex.network` conforme o grant
+HTTPS do Host: subdomínios legítimos na porta padrão são aceitos como
+**metadados dentro dos grants existentes**; domínio raiz, host parecido,
+credenciais e portas não padrão são rejeitados. Isso corrige um falso
+negativo do relatório, **sem conceder novas permissões** e sem baixar imagens.
+
+A escolha de até três capítulos do primeiro lote passou de "os três
+primeiros" para "primeiro, central e último". Isso encontra capítulos
+internos que podem estar depois de capítulos externos e mantém o limite
+de 8 HTTP requests por fonte. Se só forem encontrados capítulos externos,
+o resultado descreve **a amostra**, não a disponibilidade de leitura da
+obra inteira. Os testes foram reproduzidos RED na
+[CI #40970659592](https://github.com/jssantogit/providers-tsuzuki/actions/runs/40970659592)
+e na [CI #40970737112](https://github.com/jssantogit/providers-tsuzuki/actions/runs/40970737112),
+antes do [GREEN #40970807663](https://github.com/jssantogit/providers-tsuzuki/actions/runs/40970807663)
+na revisão `948643f4`.
+
+Nada disso comprova acesso HTTP real no Galaxy A54, remove o 403 do
+runner ou autoriza `reading.pages@1`. Os três adaptadores permanecem
+`publication: development` e sem distribuição assinada.
+
 ## Primeiro preflight real — 2026-10-29
 
 Execução única e deliberadamente limitada, no **GitHub-hosted Ubuntu runner**:
