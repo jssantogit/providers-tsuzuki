@@ -33,6 +33,7 @@ globalThis.tsuzuki = {
       assert.equal(method, "GET");
       assert.equal(new URL(url).origin, "https://api.mangadex.org");
       assert.equal(JSON.parse(headersJson).Accept, "application/json");
+      assert.match(JSON.parse(headersJson)["User-Agent"] || "", /^Tsuzuki-MangaAll\/0\.1 \(\+https:\/\/github\.com\/jssantogit\/providers-tsuzuki\)$/);
       if (!nextReply) throw new Error("Unexpected HTTP request");
       return JSON.stringify(nextReply());
     },
