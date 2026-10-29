@@ -95,11 +95,20 @@ function safeOutcome(error) {
   return known.find(([prefix]) => message.startsWith(prefix))?.[1] || "upstream_failed";
 }
 function insideGrant(page, allowedOrigins) {
-  if (!page || typeof page.url !== "string") return false;
+  if (!page || typeof page.url !== "string" || !Array.isArray(allowedOrigins)) return false;
   try {
     const u = new URL(page.url);
-    return !u.username && !u.password && !u.hash &&
-      u.protocol === "https:" && allowedOrigins.includes(u.origin);
+    if (u.username || u.password || u.hash || u.protocol !== "https:" || u.port) return false;
+    return allowedOrigins.some((grant) => {
+      if (typeof grant !== "string") return false;
+      if (!grant.startsWith("https://*.")) return u.origin === grant;
+      // Honor the Host's HTTPS subdomain grant; never match the apex,
+      // lookalike suffix, credentials, or a non-standard port.
+      const suffix = grant.slice("https://*.".length);
+      return /^[a-z0-9.-]+$/i.test(suffix) &&
+        u.hostname.endsWith("." + suffix) &&
+        u.hostname.length > suffix.length + 1;
+    });
   } catch (_) { return false; }
 }
 
