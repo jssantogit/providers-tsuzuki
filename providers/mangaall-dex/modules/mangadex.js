@@ -166,13 +166,23 @@ export async function chapters(input) {
 // Internal Reader prototype. Do not export from main.js or advertise reading.pages
 // until image-host grants, MangaDex attribution/removal policy and Android smoke pass.
 export async function pages(input) {
-  parseWorkId(input?.binding?.externalWorkId);
+  const workId = parseWorkId(input?.binding?.externalWorkId);
   const rawId = input?.providerChapterId;
   if (typeof rawId !== "string" || !rawId.startsWith(SOURCE + ":")) {
     throw new Error("MangaAll invalid chapter ID");
   }
   const chapterId = rawId.slice(SOURCE.length + 1);
   if (!ID_PATTERN.test(chapterId)) throw new Error("MangaAll invalid chapter ID");
+  // At-home delivery metadata does not identify the manga. Check the chapter's
+  // actual MangaDex relationship before constructing a Reader URL.
+  const entity = await getMangaDexJson("/chapter/" + chapterId);
+  const related = entity.data?.relationships;
+  if (entity.data?.id?.toLowerCase() !== chapterId.toLowerCase() ||
+      !Array.isArray(related) ||
+      !related.some(rel => rel?.type === "manga" &&
+        typeof rel.id === "string" && rel.id.toLowerCase() === workId.toLowerCase())) {
+    throw new Error("MangaAll work mismatch");
+  }
   const response = await getMangaDexJson("/at-home/server/" + chapterId);
   const base = response.baseUrl;
   // A MangaDex@Home node can return https://host:port/ephemeral-token.
