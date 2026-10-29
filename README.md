@@ -9,6 +9,10 @@ This repository contains Tsuzuki-native SCRIPT Providers, repository publishing 
 ```text
 providers/                 Provider source trees
   mangafire/               First reference HTTPS reading Provider
+  mangaall-dex/            MangaAll / MangaDex source adapter (experimental)
+  mangaall-ball/           MangaAll / MangaBall source adapter (experimental)
+  mangaall-dot/            MangaAll / MangaDot source adapter (experimental)
+mangaall/                  MangaAll product identity and aggregation contract
 repository/                Signed-repository publication configuration
   config.json
 tooling/                   Build, conformance, index, signing and verification tools
@@ -16,6 +20,24 @@ dist/                      Published .tsz artifacts and signed index
 .github/workflows/         CI and manual publication workflows
 docs/                      Authoring and repository notes
 ```
+
+## MangaAll — multifonte (experimental)
+
+**MangaAll is not MangaDex.** MangaAll is the user-facing multi-source product for:
+(i) real chapter evidence feeding Tsuzuki ICE, which retains canonical editorial
+authority; and (ii) readable chapter pages delivered by source-specific adapters
+when Reader permissions and upstream rules allow them.
+
+The mandatory first live smoke includes MangaDex, MangaBall and MangaDot.
+All seven sources remain in scope; see [MangaAll product](mangaall/README.md),
+[issue #45](https://github.com/jssantogit/providers-tsuzuki/issues/45) and
+[Host group support #166](https://github.com/jssantogit/tsuzuki/issues/166).
+
+The current source packages are **private implementation units**, not three
+independent products. A one-install MangaAll UX/Host group has not yet shipped.
+Reader page parsers are prototypes; `reading.pages` is not advertised until
+real page delivery, CDN grants, attribution and Android smoke are validated.
+Do not publish these artifacts to the signed index yet.
 
 ## First Provider: MangaFire
 

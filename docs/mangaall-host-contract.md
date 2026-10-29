@@ -1,96 +1,82 @@
-# MangaAll — source routing and Host V1 contract (2026-10-29)
+# MangaAll — produto multifonte, ICE e Reader
 
-Status: **initial implementation / architectural spike**, not ready for publication.
-Product name and minimum seven-source scope are approved by the user.
-For the **first real smoke**, three source-isolated SCRIPT packages are the working prototype. A single grouped MangaAll UI/installation flow remains an open product/Host design question.
+**Estado: protótipo na [PR #47](https://github.com/jssantogit/providers-tsuzuki/pull/47), sem distribuição assinada ou smoke físico.**
 
-## Intent
+## Contrato do produto (corrigido em 29/10/2026)
 
-Offer one discoverable MangaAll experience while preserving the independently
-maintained MangaFire provider, the Tsuzuki canonical work identity, and opt-in
-network capabilities. Every source must retain its own provenance, permission,
-availability and failure status. MangaAll must not turn chapter numbers into
-authoritative editorial chapter identities.
+**MangaAll não é MangaDex.** `app.tsuzuki.mangaall` é a identidade do produto
+agregador e não pode anunciar apenas o MangaDex. MangaDex é uma fonte interna,
+assim como MangaBall e MangaDot, que precisam funcionar juntas no primeiro smoke.
+As outras quatro fontes iniciais planejadas são Manga Livre.to, MangaFire,
+AnimeXNovel e MangaFlix; MANGA Plus permanece candidato adicional.
 
-## Ground truth from existing code
+O MangaAll tem **duas capacidades obrigatórias**:
+1. **Capítulos canônicos:** descobrir obras/chapters/variants com números, idiomas,
+   grupos, data e identidade verificáveis e oferecer observações
+   `PROVIDER_PROVISIONAL` ao ICE. O ICE continua a única autoridade para
+   reconciliação de capítulo e edição; não gerar 1..N nem afirmar vínculo
+   só por título, número ou disponibilidade de páginas.
+2. **Leitura:** selecionar a origem correta para o capítulo, resolver imagens
+   reais por `reading.pages@1` com grants e termos apropriados, e fornecer
+   recursos ao Reader mantendo identidade canônica e progresso independentes.
 
-- MangaAll SCRIPT provider identity: `app.tsuzuki.mangaall`.
-- `CollectProviderReadingEvidence.readingTargets()` enumerates enabled SCRIPT
-  providers with reading.lookup and reading.chapters capabilities, then facets.
-- `CollectProviderReadingEvidence.discoverBinding()` selects exactly one
-  normalized title/alias match per provider + facet; if zero or ambiguous, no
-  binding is published.
-- `ProviderReadingBindingRepository.get(canonicalTitleId, providerId, facetId)`
-  tracks only one binding in that scope; an external work ID is **not**
-  another source-isolation dimension in the lookup key.
-- Current SCRIPT grants are manifest-wide `network.origins` and
-  `browser.origins`. A JavaScript-internal toggle cannot enforce per-source
-  privilege revocation in the Host.
-- `PROVIDER_PROVISIONAL` observations can inform ICE when supported by the
-  current Host branch, but never assert an editorial publisher or guarantee
-  Reader pages.
+Uma fonte pode oferecer capítulos sem páginas durante desenvolvimento, mas
+isso **não é aceite de leitura nem conclusão do MangaAll**.
 
-## What this PR does
+## Implementação atual
 
-- Declares all seven source descriptors as a planned coverage matrix.
-- Enables the MangaDex experimental evidence adapter within the primary MangaAll package.
-- Adds isolated MangaAll / MangaBall and MangaAll / MangaDot child packages, with
-  independent HTTP grants, source-specific work identities and bounded chapter APIs.
-- The first real test requires all **three** to produce actual lookup/binding/chapter evidence.
-  Contract fixtures are not a real upstream or Android smoke.
-- Supports title aliases, stable prefixed work/chapter IDs, en and pt-br chapter
-  feeds, bounded cursors, safe failure on unexpected protocol responses.
-- Supplies no Reader delivery and no permission for unrelated HTTP sites.
-- Runs fixture tests and repository/package conformance without publishing.
+| Camada | Identidade | Responsabilidade | Estado |
+| --- | --- | --- | --- |
+| Produto | `app.tsuzuki.mangaall` em `mangaall/product.json` | MangaAll, seleção de fontes e UX de instalação única | Contrato, sem Host integrado |
+| Adapter MangaDex | `app.tsuzuki.mangaall.mangadex` | Discovery e capítulos `en/pt-br`, páginas via MangaDex@Home | Prototipado, não publicado |
+| Adapter MangaBall | `app.tsuzuki.mangaall.mangaball` | Discovery, chapters e URLs de páginas por API | Prototipado, não publicado |
+| Adapter MangaDot | `app.tsuzuki.mangaall.mangadot` | Discovery, chapters com origem upload/chapter e imagens | Prototipado, não publicado |
 
-## The unresolved multi-source contract
+`mangaall/index.js` é um contrato de agregação **não executável diretamente
+pelo SCRIPT Host V1**. Já implementa resultados por origem, falha independente,
+rotas explícitas de `chapters` e `pages`, rejeição de workId/chapterId sem a
+fonte correta. Não deve ser embalado como se fosse um provider MangaDex.
 
-Activating multiple sources under a single provider/facet makes two correct
-title matches ambiguous; the Host can then bind neither. Using an arbitrary
-source prefix in the external ID does not fix the Host repository lookup key.
-The current two language facets do not solve this collision either.
+## Por que há unidades de execução com IDs internos distintos?
 
-**Option A — extend Host with stable source-qualified binding identities:**
-a source key must participate in (title, provider, source, language/facet)
-binding persistence, consent, provenance, cancellation, routing and chapter
-refresh snapshots. Migrations/backups must preserve existing IDs and grants.
-Host must independently authorize each network origin and avoid cross-source
-fallback without explicit edition validation.
+O Host V1 armazena um binding por `(canonicalTitleId, providerId, facetId)`,
+não por source interno. Se três sites com o mesmo título retornarem candidatos
+na mesma facet de um único `providerId`, o motor considera ambiguidade e não
+materializa um vínculo confiável. Além disso, `manifest.permissions.network.origins`
+autoriza todo o provider, sem revogação segura por adaptador JS.
 
-**Option B — use independent child Provider IDs for individual sources, with a
-unified MangaAll discover/install view:** leverages current Host origin grants
-and unique binding keys, but requires UI grouping and careful repository
-installation and updates. Shared JS libraries may reduce duplication without
-conflating runtime authority.
+Os adaptadores isolados são **compatibilidade transitória** com o Host atual,
+não autorização para mostrar três cards finais nem para pedir novo cadastro de
+repositórios. A integração necessária no aplicativo está registrada na
+[issue #166 do Tsuzuki](https://github.com/jssantogit/tsuzuki/issues/166):
+uma experiência/instalação MangaAll com subfontes isoladas por grants,
+proveniência e diagnóstico, com transição segura de bindings, Reader e backup.
 
-The first-smoke implementation follows **Option B as an incremental technical
-prototype**, not as a final decision for the user-facing install screen. A single
-MangaAll-branded experience remains required, with all three sources independently
-visible and diagnosable. The primary package `app.tsuzuki.mangaall` currently serves
-MangaDex; child IDs are `app.tsuzuki.mangaall.mangaball` and
-`app.tsuzuki.mangaall.mangadot`. No duplicate MangaDex child is published.
+## Reader: trabalho ainda não liberado
 
-Before publication, decide how the MangaAll group is installed/updated/discovered
-without making the user manually re-enroll their existing signed repository.
-Avoid conflating successful lookup with canonical editorial authority.
+Os módulos das três fontes têm funções `pages()` internas e testes de fixtures
+com IDs por origem, HTTPS e origens de imagens restritas. **Nenhum manifesto
+anuncia `reading.pages@1`** e nenhum Reader Android foi validado. Isso evita
+prometer leitura quando o MangaDex@Home devolve CDN dinâmico, MangaBall devolve
+CDNs terceiros ou MangaDot devolve URLs que precisam de revisão. Expandir grants
+somente após confirmar domínios, redirects, direitos e atribuição.
 
-## Safety and release gates
+O MangaDex exige crédito à fonte e aos grupos, remoção de conteúdo mediante
+pedido de grupos e proíbe monetização/publicidade em apps que usam a API:
+https://gitlab.com/mangadex-pub/mangadex-api-docs/-/blob/main/index.md
 
-- Existing repo ID/signature/sequence and installed MangaFire package are
-  untouched. No migration, no Main-branch publication in this PR.
-- Runtime source attribution must remain visible; MangaDex requires attribution
-  and restricts monetized API applications; chapter reading additionally
-  requires scanlation credit and honoring group takedown requests. Confirm
-  project distribution/compliance before any signed publication.
-  Official documentation: https://gitlab.com/mangadex-pub/mangadex-api-docs/-/blob/main/index.md
-- Manga Livre.to, AnimeXNovel, MangaFlix and MangaFire as a MangaAll subsource
-  remain **planned and non-executable**. MangaBall and MangaDot have experimental
-  lookup/chapters implementations but are **not yet live-verified or published**.
-  Validate exact API response shapes, allowed use, binding identity, local grants
-  and error handling before first Android smoke; no pages Reader are advertised.
-- Separate `lookup`, `chapters`, and `pages` capability claims and test
-  explicit, genuine page delivery before enabling Reader.
-- Snapshot and fallback behavior must preserve successful sources when another
-  fails; never treat an upstream error as a complete empty chapter inventory.
-- Smoke physical tests need a signed, in-place update preserving the existing
-  installation and repository configuration; not a Dev C or clean install.
+## Gates da primeira validação real
+
+- Confirmar chamadas ao vivo das **três fontes**, payloads reais, limites de uso,
+  idiomas e aliases, sem depender do MangaFire existente.
+- Host único MangaAll instalado/gerenciado pelo repositório assinado
+  existente, com subfontes opt-in, grants específicos e sem perda de progresso.
+- `lookup → binding → chapters → ICE` para MangaDex, MangaBall e MangaDot,
+  com evidências por fonte, edição e idioma; rejeitar resultados ambíguos.
+- `reading.pages@1 → Reader` para os mesmos três, com páginas realmente
+  renderizadas e permissão dos hosts de imagem. Se uma fonte falhar, registrar
+  bloqueio sem afirmar que a capacidade está pronta.
+- TDD+CI, Android instrumentado e **smoke físico in-place** no Galaxy A54
+  com APK Release `app.tsuzuki` e mesma assinatura/banco.
+- Não modificar `app.tsuzuki.mangafire`, `dist/index.json`,
+  `repository/config.json`, grants nem assinatura antes de aceite.

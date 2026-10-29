@@ -1,25 +1,3 @@
-/*
- * MangaAll SCRIPT Provider — opt-in prototype.
- * Host V1 binds one work per provider+facet. Until source-qualified bindings
- * are implemented, only the explicitly enabled adapter may participate.
- * Do not publish this package to the signed repository before policy review.
- */
+/* MangaDex is one internal MangaAll source, never the MangaAll product. */
 import * as mangaDex from "./modules/mangadex.js";
-import { SOURCES } from "./modules/sources.js";
-
-const ADAPTERS = Object.freeze({ mangadex: mangaDex });
-
-function soleActiveAdapter() {
-  const enabled = SOURCES.filter((source) => source.enabled);
-  if (enabled.length !== 1 || !ADAPTERS[enabled[0].id]) {
-    throw new Error("MangaAll MangaDex adapter requires exactly one active source");
-  }
-  return ADAPTERS[enabled[0].id];
-}
-
-export default {
-  reading: {
-    lookup: (input) => soleActiveAdapter().lookup(input),
-    chapters: (input) => soleActiveAdapter().chapters(input),
-  },
-};
+export default { reading: { lookup: mangaDex.lookup, chapters: mangaDex.chapters } };

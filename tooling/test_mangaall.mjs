@@ -15,12 +15,12 @@ assert.deepEqual(
 assert.deepEqual(manifest.permissions.network.origins, ["https://api.mangadex.org"]);
 assert.equal(manifest.permissions.storage.enabled, false);
 
-const { SOURCES } = await import(pathToFileURL(path.join(root, "modules/sources.js")).href);
+const product = JSON.parse(fs.readFileSync(path.resolve("mangaall/product.json"), "utf8"));
 assert.deepEqual(
-  SOURCES.map(({ id }) => id),
+  product.sources.map(({ id }) => id),
   ["mangalivre", "mangadex", "mangafire", "mangaball", "mangadot", "animexnovel", "mangaflix"],
 );
-assert.deepEqual(SOURCES.filter((source) => source.enabled).map((source) => source.id), ["mangadex"]);
+assert.deepEqual(product.firstPhysicalSmokeSources, ["mangadex", "mangaball", "mangadot"]);
 
 const mangaId = "11111111-2222-4333-8444-555555555555";
 const chapterId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
