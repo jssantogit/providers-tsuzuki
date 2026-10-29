@@ -138,6 +138,12 @@ fixture = () => reply({ data: { chapter: {
 await assert.rejects(modules.mangaball.pages({
   binding: { externalWorkId: "mangaball:416" }, providerChapterId: "mangaball:9001",
 }), /work mismatch/i);
+fixture = () => reply({ data: { chapter: {
+  pages: ["https://mangaball.com/static/page-1.jpg"],
+} } });
+await assert.rejects(modules.mangaball.pages({
+  binding: { externalWorkId: "mangaball:416" }, providerChapterId: "mangaball:9001",
+}), /work mismatch/i, "missing upstream title_id must not authorize cross-work reading");
 fixture = () => reply({ data: { chapter: { title_id: "416", pages: ["https://untrusted.example/img.jpg"] } } });
 await assert.rejects(modules.mangaball.pages({
   binding: { externalWorkId: "mangaball:416" }, providerChapterId: "mangaball:9001",
