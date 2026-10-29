@@ -78,11 +78,24 @@ function preferChapterVariant(candidate, current) {
   return Number(candidate?.id) < Number(current?.id);
 }
 
+function verifiedItems(response, capability) {
+  if (!response || !Array.isArray(response.items)) {
+    throw new Error(`MangaFire ${capability} invalid items array`);
+  }
+  return response.items;
+}
+
 function mergeChapterVariants(items) {
   const selected = new Map();
   for (const item of items) {
-    const number = Number(item?.number);
-    if (!Number.isFinite(number)) continue;
+    const rawNumber = item?.number;
+    const number = Number(rawNumber);
+    if (rawNumber == null || rawNumber === "" || !Number.isFinite(number)) {
+      throw new Error("MangaFire chapters invalid items number");
+    }
+    if (item?.id == null || String(item.id).trim() === "") {
+      throw new Error("MangaFire chapters invalid items id");
+    }
     const key = String(number);
     const current = selected.get(key);
     if (current == null || preferChapterVariant(item, current)) {
@@ -103,7 +116,7 @@ async function lookup(input) {
     if (!title) continue;
 
     const response = await searchTitles(title);
-    for (const item of response?.items ?? []) {
+    for (const item of verifiedItems(response, "lookup")) {
       const externalWorkId = cleanText(item?.hid);
       const candidateTitle = cleanText(item?.title);
       if (!externalWorkId || !candidateTitle || seen.has(externalWorkId)) continue;
@@ -141,7 +154,7 @@ async function chapters(input) {
 
   const response = await chaptersForTitle(externalWorkId, language, page);
   const result = [];
-  for (const item of mergeChapterVariants(response?.items ?? [])) {
+  for (const item of mergeChapterVariants(verifiedItems(response, "chapters"))) {
     const id = item?.id == null ? "" : String(item.id);
     const number = Number(item?.number);
     if (!id || !Number.isFinite(number)) continue;
