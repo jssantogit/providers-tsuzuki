@@ -2,7 +2,7 @@
 
 Status: **initial implementation / architectural spike**, not ready for publication.
 Product name and minimum seven-source scope are approved by the user.
-A simultaneous multi-source runtime contract has **not** yet been selected or approved.
+For the **first real smoke**, three source-isolated SCRIPT packages are the working prototype. A single grouped MangaAll UI/installation flow remains an open product/Host design question.
 
 ## Intent
 
@@ -33,7 +33,11 @@ authoritative editorial chapter identities.
 ## What this PR does
 
 - Declares all seven source descriptors as a planned coverage matrix.
-- Enables only the MangaDex experimental evidence adapter within MangaAll.
+- Enables the MangaDex experimental evidence adapter within the primary MangaAll package.
+- Adds isolated MangaAll / MangaBall and MangaAll / MangaDot child packages, with
+  independent HTTP grants, source-specific work identities and bounded chapter APIs.
+- The first real test requires all **three** to produce actual lookup/binding/chapter evidence.
+  Contract fixtures are not a real upstream or Android smoke.
 - Supports title aliases, stable prefixed work/chapter IDs, en and pt-br chapter
   feeds, bounded cursors, safe failure on unexpected protocol responses.
 - Supplies no Reader delivery and no permission for unrelated HTTP sites.
@@ -59,10 +63,16 @@ and unique binding keys, but requires UI grouping and careful repository
 installation and updates. Shared JS libraries may reduce duplication without
 conflating runtime authority.
 
-The correct implementation should preserve the single *user-facing MangaAll*
-experience without simulating security isolation in JavaScript. Do not pick
-option A or B by default or enable more sources until evidence and explicit
-architecture review establish the least disruptive contract.
+The first-smoke implementation follows **Option B as an incremental technical
+prototype**, not as a final decision for the user-facing install screen. A single
+MangaAll-branded experience remains required, with all three sources independently
+visible and diagnosable. The primary package `app.tsuzuki.mangaall` currently serves
+MangaDex; child IDs are `app.tsuzuki.mangaall.mangaball` and
+`app.tsuzuki.mangaall.mangadot`. No duplicate MangaDex child is published.
+
+Before publication, decide how the MangaAll group is installed/updated/discovered
+without making the user manually re-enroll their existing signed repository.
+Avoid conflating successful lookup with canonical editorial authority.
 
 ## Safety and release gates
 
@@ -73,9 +83,11 @@ architecture review establish the least disruptive contract.
   requires scanlation credit and honoring group takedown requests. Confirm
   project distribution/compliance before any signed publication.
   Official documentation: https://gitlab.com/mangadex-pub/mangadex-api-docs/-/blob/main/index.md
-- Manga Livre.to, MangaBall, MangaDotNet, AnimeXNovel, MangaFlix and MangaFire
-  as a MangaAll subsource remain **planned and non-executable**. Confirm service
-  identity, supported languages, legitimate transport and terms separately.
+- Manga Livre.to, AnimeXNovel, MangaFlix and MangaFire as a MangaAll subsource
+  remain **planned and non-executable**. MangaBall and MangaDot have experimental
+  lookup/chapters implementations but are **not yet live-verified or published**.
+  Validate exact API response shapes, allowed use, binding identity, local grants
+  and error handling before first Android smoke; no pages Reader are advertised.
 - Separate `lookup`, `chapters`, and `pages` capability claims and test
   explicit, genuine page delivery before enabling Reader.
 - Snapshot and fallback behavior must preserve successful sources when another
