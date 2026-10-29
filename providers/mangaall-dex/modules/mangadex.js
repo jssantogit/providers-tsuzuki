@@ -183,6 +183,12 @@ export async function pages(input) {
         typeof rel.id === "string" && rel.id.toLowerCase() === workId.toLowerCase())) {
     throw new Error("MangaAll work mismatch");
   }
+  const externalUrl = entity.data?.attributes?.externalUrl;
+  // External releases still contribute chapter evidence to ICE, but MangaDex
+  // cannot deliver their pages through MangaDex@Home. Do not fabricate pages.
+  if (externalUrl != null && (typeof externalUrl !== "string" || externalUrl.trim())) {
+    throw new Error("MangaAll external chapter");
+  }
   const response = await getMangaDexJson("/at-home/server/" + chapterId);
   const base = response.baseUrl;
   // A MangaDex@Home node can return https://host:port/ephemeral-token.

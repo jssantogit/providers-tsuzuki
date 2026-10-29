@@ -85,6 +85,7 @@ function safeOutcome(error) {
     ["MangaAll invalid API response", "invalid_api_response"],
     ["MangaAll untrusted image origin", "untrusted_image_origin"],
     ["MangaAll invalid page metadata", "invalid_page_metadata"],
+    ["MangaAll external chapter", "external_chapter"],
     ["MangaAll work mismatch", "work_mismatch"],
     ["MangaAll incomplete page", "incomplete_page"],
     ["MangaAll inconsistent page", "inconsistent_page"],
