@@ -23,3 +23,43 @@ an invitation to circumvent the site.
 
 Upstream availability, request policies and attribution must be verified
 before running this probe and before signed publication.
+
+## Primeiro preflight real — 2026-10-29
+
+Execução única e deliberadamente limitada, no **GitHub-hosted Ubuntu runner**:
+
+| Fonte | Resultado | Interpretação segura |
+| --- | --- | --- |
+| MangaDex | 4 requisições, primeiro resultado `upstream_failed` | Reclassificado por inspeção posterior como `phase=pages`, `invalid_page_metadata`; 5 capítulos evidenciados no primeiro lote |
+| MangaBall | HTTP 403 na primeira requisição | Bloqueio deste ambiente; não prova indisponibilidade global nem problema no Android |
+| MangaDot | HTTP 403 na primeira requisição | Bloqueio deste ambiente; não prova indisponibilidade global nem problema no Android |
+
+Traces preservados:
+- [Três fontes #40902087863](https://github.com/jssantogit/providers-tsuzuki/actions/runs/40902087863)
+- [Estágio MangaDex #40902575241](https://github.com/jssantogit/providers-tsuzuki/actions/runs/40902575241)
+- [Formato anonimizado de dois capítulos #40902791104](https://github.com/jssantogit/providers-tsuzuki/actions/runs/40902791104)
+
+A inspeção da estrutura de **dois** registros do MangaDex verificou
+`externalUrl` presente e arrays `chapter.data=[]` e `chapter.dataSaver=[]`,
+com `chapter.hash` vazio. A ausência de páginas é legítima para lançamentos
+externos: esses capítulos podem alimentar **evidências do ICE**, mas o MangaDex
+não fornece conteúdo interno ao Reader. O protótipo passou a identificar
+`external_chapter` antes de chamar MangaDex@Home. Não inventar imagens nem
+abrir a URL externa como se fosse um recurso sob as permissões do MangaDex.
+
+A saída do probe não inclui URLs, cookies, identificadores nem conteúdo de
+imagens. Os probes não seguem redirects, não contornam 403/429 e não executam
+autenticação. Os workflows de disparo único foram removidos da branch após
+os testes. O comando manual `--live` permanece disponível, mas **não deve ser
+executado de forma recorrente ou usado para driblar bloqueios**.
+
+**Critério do primeiro smoke não atendido:** nenhuma das três fontes teve
+páginas efetivamente carregadas no Reader do Tsuzuki. Para testar MangaDex,
+selecionar um capítulo permitido com páginas internas e confirmar os grants
+dinâmicos de imagens, atribuição e política de uso. Para MangaBall/MangaDot,
+confirmar o acesso normal ao serviço no dispositivo, sem bypass de proteções,
+antes de anunciar `reading.pages@1`.
+
+A API MangaDex exige identificação honesta do cliente via `User-Agent`,
+crédito à fonte e aos grupos e respeito aos pedidos de remoção:
+https://gitlab.com/mangadex-pub/mangadex-api-docs/-/blob/main/index.md
