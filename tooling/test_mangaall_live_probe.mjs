@@ -146,4 +146,36 @@ const externalRelease = await inspectSource({
 assert.equal(externalRelease.phase, "pages");
 assert.equal(externalRelease.outcome, "external_chapter");
 assert.equal(externalRelease.chapterCount, 1);
+// MangaDex may return external-only chapters first; do not conclude that
+// the entire work is unreadable when a later source-hosted chapter is valid.
+const twoChapterProvider = {
+  ...adapter,
+  chapters: async () => ({ items: [
+    { providerChapterId: "mangadot:uploads:100", rawNumber: 1 },
+    { providerChapterId: "mangadot:uploads:101", rawNumber: 2 },
+  ], nextCursor: null }),
+  pages: async ({ providerChapterId }) => {
+    if (providerChapterId.endsWith(":100")) throw Error("MangaAll external chapter");
+    return { type: "page_list", pages: [
+      { url: "https://mangadot.net/pages/101.webp", headers: {} },
+    ] };
+  },
+};
+const secondReadable = await inspectSource({
+  sourceId: "mangadot", title, language: "en", providerId: baseBinding.providerId,
+  allowedOrigins: ["https://mangadot.net"], adapter: twoChapterProvider,
+});
+assert.equal(secondReadable.outcome, "observed");
+assert.equal(secondReadable.chapterCount, 2);
+assert.equal(secondReadable.pageMetadataCount, 1);
+const externalOnly = await inspectSource({
+  sourceId: "mangadot", title, language: "en", providerId: baseBinding.providerId,
+  allowedOrigins: ["https://mangadot.net"],
+  adapter: { ...twoChapterProvider, pages: async () => {
+    throw Error("MangaAll external chapter");
+  } },
+});
+assert.equal(externalOnly.outcome, "external_chapter");
+assert.equal(externalOnly.chapterCount, 2);
+
 console.log("MangaAll opt-in live-probe safety and stage reporting fixtures: OK");
