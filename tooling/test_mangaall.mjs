@@ -3,10 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-const root = path.resolve("providers/mangaall");
+const root = path.resolve("providers/mangaall-dex");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
-assert.equal(manifest.id, "app.tsuzuki.mangaall");
-assert.equal(manifest.name, "MangaAll");
+assert.equal(manifest.id, "app.tsuzuki.mangaall.mangadex");
+assert.equal(manifest.name, "MangaAll / MangaDex");
 assert.deepEqual(
   manifest.capabilities.map(({ id }) => id),
   ["reading.lookup", "reading.chapters"],
