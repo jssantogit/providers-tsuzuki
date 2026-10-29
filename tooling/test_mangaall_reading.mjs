@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 
 const root = path.resolve("providers");
+const manifestDex = JSON.parse(fs.readFileSync(path.join(root, "mangaall-dex", "manifest.json"), "utf8"));
+assert.deepEqual(manifestDex.permissions.network.origins, [
+  "https://api.mangadex.org",
+  "https://uploads.mangadex.org",
+  "https://*.mangadex.network",
+], "image requests must have narrow explicit Host origin authority");
 const modules = {};
 for (const [id, dir, file] of [
   ["mangadex", "mangaall-dex", "mangadex"],
@@ -58,6 +65,8 @@ assert.deepEqual(dex, {
   ],
 });
 assert.equal(new URL(requests.at(-1).url).pathname, "/at-home/server/" + chapterId);
+assert.equal(new URL(requests.at(-1).url).searchParams.get("forcePort443"), "true",
+  "MangaDex@Home must select HTTPS port 443 to match Host's fixed-origin grants");
 assert.equal(requests.some(({ url }) => new URL(url).pathname === "/chapter/" + chapterId), true);
 relatedMangaId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
 await assert.rejects(modules.mangadex.pages({
@@ -76,7 +85,7 @@ assert.equal(new URL(requests.at(-1).url).pathname, "/chapter/" + chapterId,
   "never fetch MangaDex@Home for an external release");
 chapterExternal = false;
 
-const dynamicBase = "https://node.mangadex.network:12345/temporary-token";
+const dynamicBase = "https://node.mangadex.network/temporary-token";
 fixture = () => reply({
   result: "ok", baseUrl: dynamicBase,
   chapter: { hash: hashes, data: ["1.jpg"], dataSaver: [] },
@@ -88,6 +97,7 @@ const dynamic = await modules.mangadex.pages({
 assert.equal(dynamic.pages[0].url, dynamicBase + "/data/" + hashes + "/1.jpg",
   "MangaDex@Home base URLs may contain port and token path");
 for (const malicious of [
+  "https://node.mangadex.network:12345/temporary-token",
   "http://node.mangadex.network/temporary-token",
   "https://node.mangadex.network.evil.test/temporary-token",
   "https://uploads.mangadex.org@evil.test",
