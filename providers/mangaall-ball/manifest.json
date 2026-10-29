@@ -1,0 +1,41 @@
+{
+  "manifestVersion": 1,
+  "id": "app.tsuzuki.mangaall.mangaball",
+  "name": "MangaAll / MangaBall",
+  "version": {
+    "name": "0.1.0-dev",
+    "code": 1
+  },
+  "minHostApi": 1,
+  "entrypoint": "main.js",
+  "capabilities": [
+    {
+      "id": "reading.lookup",
+      "version": 1
+    },
+    {
+      "id": "reading.chapters",
+      "version": 1
+    }
+  ],
+  "permissions": {
+    "network": {
+      "origins": [
+        "https://mangaball.com"
+      ],
+      "localNetwork": false
+    },
+    "browser": {
+      "origins": []
+    },
+    "storage": {
+      "enabled": false
+    },
+    "secrets": []
+  },
+  "contentLanguages": [
+    "en",
+    "pt-br"
+  ],
+  "settings": []
+}

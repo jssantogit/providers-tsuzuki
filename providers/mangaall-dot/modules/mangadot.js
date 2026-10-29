@@ -1,0 +1,71 @@
+import { makeClient, safeText, sourceId, chapterNumber, dateMillis, facetLang } from "./http.js";
+
+const source = "mangadot";
+const api = makeClient("https://mangadot.net", [
+  "/api/search", /^\/api\/manga\/[1-9][0-9]{0,15}\/chapters\/list$/,
+]);
+function cleanId(v) {
+  if (typeof v === "number" && Number.isSafeInteger(v) && v > 0) return String(v);
+  if (typeof v === "string" && /^[1-9][0-9]{0,15}$/.test(v)) return v;
+  return null;
+}
+function pageNumber(cursor) {
+  if (cursor === undefined || cursor === null) return 1;
+  if (!/^[1-9][0-9]{0,2}$/.test(String(cursor))) throw new Error("MangaAll invalid cursor");
+  const n = Number(cursor);
+  if (n > 32) throw new Error("MangaAll invalid cursor");
+  return n;
+}
+export async function lookup(input) {
+  const title = safeText(input?.titles?.[0]);
+  if (!title) throw new Error("MangaAll missing lookup title");
+  const page = pageNumber(input?.cursor);
+  const data = await api("GET", "/api/search", [
+    ["search", title], ["page", page], ["limit", 56],
+  ]);
+  const rows = data.manga_list ?? data.results;
+  const pages = data.pagination;
+  if (!Array.isArray(rows) || rows.length > 56 || !pages
+      || !Number.isInteger(pages.current_page) || !Number.isInteger(pages.total_pages)
+      || pages.current_page !== page || pages.total_pages < 0 || pages.total_pages > 32
+      || (page < pages.total_pages && rows.length === 0)) {
+    throw new Error("MangaAll invalid API response");
+  }
+  const seen = new Set(), items = [];
+  for (const row of rows) {
+    const id = cleanId(row?.manga_id ?? row?.id);
+    const title = safeText(row?.title);
+    if (!id || !title || seen.has(id)) continue;
+    seen.add(id);
+    items.push({
+      externalWorkId: source + ":" + id,
+      title, aliases: [], url: "https://mangadot.net/manga/" + id, language: null,
+    });
+  }
+  return { items, nextCursor: page < pages.total_pages ? String(page + 1) : null };
+}
+export async function chapters(input) {
+  const id = sourceId(source, input?.binding?.externalWorkId);
+  if (!cleanId(id)) throw new Error("MangaAll invalid work ID");
+  const lang = facetLang(input);
+  const rows = await api("GET", "/api/manga/" + id + "/chapters/list");
+  if (!Array.isArray(rows) || rows.length > 16000) throw new Error("MangaAll invalid API response");
+  const items = [], seen = new Set();
+  for (const row of rows) {
+    const chapterId = cleanId(row?.id);
+    const number = chapterNumber(row?.chapter_number);
+    if (!chapterId || number === null || seen.has(chapterId) || row.language !== lang) continue;
+    const title = safeText(row.chapter_title, 3900) || null;
+    const groups = Array.isArray(row.groups) ? row.groups : [];
+    const scanlationGroup = safeText(groups[0]?.name) ||
+      safeText(row.group_name) || safeText(row.scanlator_name) || null;
+    seen.add(chapterId);
+    items.push({
+      providerChapterId: source + ":" + chapterId,
+      rawLabel: "Ch. " + number + (title ? " " + title : ""),
+      rawNumber: number, title, language: lang,
+      scanlationGroup, releaseDateMillis: dateMillis(row.date_added),
+    });
+  }
+  return { items, nextCursor: null };
+}
