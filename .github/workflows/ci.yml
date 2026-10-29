@@ -22,6 +22,8 @@ jobs:
         run: node tooling/test_mangafire.mjs
       - name: MangaAll source and chapter evidence fixtures
         run: node tooling/test_mangaall.mjs
+      - name: MangaAll experimental publication safety
+        run: node tooling/test_mangaall_publication.mjs
       - name: MangaAll aggregator identity and reader-routing contract
         run: node tooling/test_mangaall_identity.mjs
       - name: MangaAll Reader page metadata and URL policy fixtures
