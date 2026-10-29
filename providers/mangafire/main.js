@@ -4,14 +4,58 @@
  * See assets/THIRD_PARTY_NOTICES.txt.
  */
 
-import { BASE_URL, chaptersForTitle, pagesForChapter, searchTitles } from "./modules/api.js";
+import { BASE_URL, chaptersForTitle, pagesForChapter, searchTitles, titleDetails } from "./modules/api.js";
 
 const LANGUAGE = "en";
 const MAX_LOOKUP_TITLES = 3;
 const MAX_LOOKUP_RESULTS = 20;
+const MAX_ALIAS_DETAIL_LOOKUPS = 5;
+const MAX_ALIASES = 32;
 
 function cleanText(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+// Never synthesize an alias from similar spelling. Only the source's own
+// explicitly supplied title metadata can attest a different canonical name.
+function explicitAliases(item) {
+  const values = [item?.aliases, item?.alternativeTitles, item?.altTitles, item?.otherNames, item?.synonyms];
+  const names = [];
+  for (const value of values) {
+    const entries = Array.isArray(value) ? value : [];
+    for (const entry of entries) {
+      const name = cleanText(typeof entry === "string" ? entry : entry?.title ?? entry?.name);
+      if (name && name.length <= 1024 && !names.includes(name)) names.push(name);
+      if (names.length >= MAX_ALIASES) return names;
+    }
+  }
+  return names;
+}
+
+function normalizedTitle(value) {
+  return cleanText(value).toLocaleLowerCase("en").replace(/\\s+/g, " ");
+}
+
+async function verifiedLookupAliases(item, requestedTitle, remainingDetails) {
+  const direct = explicitAliases(item);
+  if (direct.length > 0 || normalizedTitle(item?.title) === normalizedTitle(requestedTitle) || remainingDetails <= 0) {
+    return { aliases: direct, detailsUsed: 0 };
+  }
+  const hid = cleanText(item?.hid);
+  if (!hid) return { aliases: direct, detailsUsed: 0 };
+  try {
+    const response = await titleDetails(hid);
+    // A detail response is accepted only when its primary title corroborates
+    // the search hit. If it disagrees, do not attach potentially foreign aliases.
+    const record = response?.data;
+    if (!record || normalizedTitle(record.title) !== normalizedTitle(item.title)) {
+      return { aliases: direct, detailsUsed: 1 };
+    }
+    return { aliases: explicitAliases(record), detailsUsed: 1 };
+  } catch {
+    // A failing optional detail lookup cannot create a false work binding.
+    return { aliases: direct, detailsUsed: 1 };
+  }
 }
 
 function titleUrl(item) {
@@ -52,6 +96,7 @@ async function lookup(input) {
   const titles = Array.isArray(input?.titles) ? input.titles : [];
   const seen = new Set();
   const items = [];
+  let detailLookups = 0;
 
   for (const rawTitle of titles.slice(0, MAX_LOOKUP_TITLES)) {
     const title = cleanText(rawTitle);
@@ -63,10 +108,12 @@ async function lookup(input) {
       const candidateTitle = cleanText(item?.title);
       if (!externalWorkId || !candidateTitle || seen.has(externalWorkId)) continue;
       seen.add(externalWorkId);
+      const detail = await verifiedLookupAliases(item, title, MAX_ALIAS_DETAIL_LOOKUPS - detailLookups);
+      detailLookups += detail.detailsUsed;
       items.push({
         externalWorkId,
         title: candidateTitle,
-        aliases: [],
+        aliases: detail.aliases,
         url: titleUrl(item),
         language: LANGUAGE,
       });

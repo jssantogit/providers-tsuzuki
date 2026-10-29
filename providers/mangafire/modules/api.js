@@ -52,7 +52,9 @@ export async function apiJson(path, params = {}) {
     try {
       return parseJsonBody(response.body);
     } catch (error) {
-      if (!error.challengeRequired) throw error;
+      const htmlChallenge = typeof response.body === "string" &&
+        /^\\s*(?:<!doctype\\s+html|<html(?:\\s|>))/i.test(response.body);
+      if (!error.challengeRequired && !htmlChallenge) throw error;
       return browserJson(url);
     }
   }
@@ -70,6 +72,10 @@ export async function searchTitles(title) {
     page: 1,
     limit: 20,
   });
+}
+
+export async function titleDetails(externalWorkId) {
+  return apiJson(`/api/titles/${encodeURIComponent(externalWorkId)}`);
 }
 
 export async function chaptersForTitle(externalWorkId, language, page) {
