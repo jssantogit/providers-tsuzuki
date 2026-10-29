@@ -1,0 +1,38 @@
+name: MangaAll MangaDex focused source diagnostics (one-time)
+
+on:
+  push:
+    branches:
+      - feat/45-mangaall-multisource
+    paths:
+      - .github/workflows/mangaall-dex-diagnostics-20261029.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Sample MangaDex only once without redirects or image downloads
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import { createHttpBridge, inspectSource } from './tooling/mangaall_live_probe_core.mjs';
+          import * as adapter from './providers/mangaall-dex/modules/mangadex.js';
+          const manifest = JSON.parse(fs.readFileSync('providers/mangaall-dex/manifest.json', 'utf8'));
+          const origin = manifest.permissions.network.origins[0];
+          const bridge = createHttpBridge({ origin, maxRequests: 6, timeoutMs: 12000 });
+          globalThis.tsuzuki = { http: bridge };
+          const result = await inspectSource({
+            sourceId: 'mangadex', title: 'Haikyuu!!',
+            language: 'en', providerId: manifest.id,
+            allowedOrigins: [origin], adapter
+          });
+          console.log(JSON.stringify({ ...result, requestCount: bridge.requestCount }));
+          JS
