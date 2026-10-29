@@ -19,7 +19,13 @@ for (const source of cases) {
   assert.equal(manifest.id, source.id);
   assert.ok(manifest.name.startsWith("MangaAll"));
   assert.deepEqual(manifest.capabilities.map((v) => v.id), ["reading.lookup", "reading.chapters"]);
-  assert.deepEqual(manifest.permissions.network.origins, [source.origin]);
+  if (source.key === "mangadex") {
+    assert.deepEqual(manifest.permissions.network.origins, [
+      "https://api.mangadex.org", "https://uploads.mangadex.org", "https://*.mangadex.network",
+    ]);
+  } else {
+    assert.deepEqual(manifest.permissions.network.origins, [source.origin]);
+  }
   assert.equal(manifest.permissions.storage.enabled, false);
   assert.deepEqual(manifest.permissions.browser.origins, []);
 }

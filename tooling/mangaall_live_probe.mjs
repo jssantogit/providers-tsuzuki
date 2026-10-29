@@ -19,7 +19,14 @@ for (const [sourceId, folder, moduleName] of configs) {
   const root = path.resolve("providers", folder);
   const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
   const origins = manifest.permissions?.network?.origins;
-  if (!Array.isArray(origins) || origins.length !== 1 ||
+  // The probe is API-only; it never downloads or follows image URLs.
+  // MangaDex's reviewed image origins are grants for the future Reader,
+  // not additional API hosts the preflight may contact.
+  const expectedOrigins = sourceId === "mangadex"
+    ? ["https://api.mangadex.org", "https://uploads.mangadex.org", "https://*.mangadex.network"]
+    : sourceId === "mangaball" ? ["https://mangaball.com"] : ["https://mangadot.net"];
+  if (!Array.isArray(origins) ||
+      JSON.stringify(origins) !== JSON.stringify(expectedOrigins) ||
       manifest.publication !== "development") {
     throw Error("MangaAll probe requires one isolated development source origin");
   }
