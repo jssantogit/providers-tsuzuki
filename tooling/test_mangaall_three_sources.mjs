@@ -4,7 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const cases = [
-  { key: "mangadex", dir: "mangaall", id: "app.tsuzuki.mangaall", origin: "https://api.mangadex.org" },
+  { key: "mangadex", dir: "mangaall-dex", id: "app.tsuzuki.mangaall.mangadex", origin: "https://api.mangadex.org" },
   { key: "mangaball", dir: "mangaall-ball", id: "app.tsuzuki.mangaall.mangaball", origin: "https://mangaball.com" },
   { key: "mangadot", dir: "mangaall-dot", id: "app.tsuzuki.mangaall.mangadot", origin: "https://mangadot.net" },
 ];
