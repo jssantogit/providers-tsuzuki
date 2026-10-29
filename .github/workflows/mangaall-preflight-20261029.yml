@@ -1,0 +1,23 @@
+name: MangaAll 3-source upstream preflight (one-time)
+
+on:
+  push:
+    branches:
+      - feat/45-mangaall-multisource
+    paths:
+      - .github/workflows/mangaall-preflight-20261029.yml
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Probe three public source APIs once (no redirects, no retries, no image downloads)
+        run: node tooling/mangaall_live_probe.mjs --live
