@@ -112,5 +112,30 @@ const upstreamError = await inspectSource({
   adapter: { ...adapter, lookup: async () => { throw Error("MangaAll HTTP 429 https://private.example"); } },
 });
 assert.equal(upstreamError.outcome, "upstream_http_429");
+assert.equal(upstreamError.phase, "lookup");
+const chaptersRejected = await inspectSource({
+  sourceId: "mangadot", title, language: "en", providerId: baseBinding.providerId,
+  allowedOrigins: ["https://mangadot.net"],
+  adapter: { ...adapter, chapters: async () => { throw Error("MangaAll invalid API response"); } },
+});
+assert.equal(chaptersRejected.phase, "chapters");
+assert.equal(chaptersRejected.outcome, "invalid_api_response");
+const imagesRejected = await inspectSource({
+  sourceId: "mangadot", title, language: "en", providerId: baseBinding.providerId,
+  allowedOrigins: ["https://mangadot.net"],
+  adapter: { ...adapter, pages: async () => { throw Error("MangaAll untrusted image origin https://private.example"); } },
+});
+assert.equal(imagesRejected.phase, "pages");
+assert.equal(imagesRejected.outcome, "untrusted_image_origin");
+assert.equal(imagesRejected.chapterCount, 1);
+assert.equal(JSON.stringify(imagesRejected).includes("private.example"), false);
+const metadataInvalid = await inspectSource({
+  sourceId: "mangadot", title, language: "en", providerId: baseBinding.providerId,
+  allowedOrigins: ["https://mangadot.net"],
+  adapter: { ...adapter, pages: async () => { throw Error("MangaAll invalid page metadata"); } },
+});
+assert.equal(metadataInvalid.phase, "pages");
+assert.equal(metadataInvalid.outcome, "invalid_page_metadata");
+
 assert.equal(JSON.stringify(upstreamError).includes("private.example"), false);
 console.log("MangaAll opt-in live-probe safety and stage reporting fixtures: OK");
