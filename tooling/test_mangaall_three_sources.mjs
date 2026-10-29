@@ -57,6 +57,37 @@ assert.deepEqual(ballLookup, { items: [{
 assert.equal(calls.at(-1).method, "GET");
 assert.equal(new URL(calls.at(-1).url).pathname, "/api/v1/title/search-advanced");
 assert.equal(new URL(calls.at(-1).url).searchParams.get("keyword"), "Haikyuu!!");
+// MangaBall's documented response uses current_page/last_page and code=200.
+// Empty results on the first page are a valid result, not a parser failure.
+reply = () => ok({
+  code: 200,
+  message: "Get data successfully",
+  data: [],
+  pagination: { total: 0, limit: 24, start: 0, current_page: 1, last_page: 0 },
+});
+assert.deepEqual(await ball.lookup({ titles: ["Haikyuu!!"] }), {
+  items: [], nextCursor: null,
+});
+reply = () => ok({
+  code: 200,
+  data: [works.mangaball],
+  pagination: { total: 26, current_page: 1, last_page: 2 },
+});
+const ballPageOne = await ball.lookup({ titles: ["Haikyuu!!"] });
+assert.equal(ballPageOne.nextCursor, "2");
+reply = () => ok({
+  code: 200, data: [works.mangaball],
+  pagination: { total: 26, current_page: 2, last_page: 2 },
+});
+assert.equal((await ball.lookup({
+  titles: ["Haikyuu!!"], cursor: ballPageOne.nextCursor,
+})).nextCursor, null);
+// A website-level error with HTTP 200 must not be treated as a successful
+// complete-empty response that could erase a canonical evidence snapshot.
+reply = () => ok({ code: 500, message: "failed", data: [],
+  pagination: { current_page: 1, last_page: 1 } });
+await assert.rejects(ball.lookup({ titles: ["Haikyuu!!"] }), /invalid api response/i);
+
 
 reply = ({ method, body }) => {
   assert.equal(method, "POST");
@@ -77,6 +108,48 @@ assert.deepEqual(ballChapters, { items: [{
   scanlationGroup: "A Team", releaseDateMillis: Date.parse("2026-09-01T00:00:00Z"),
 }], nextCursor: null });
 await assert.rejects(ball.chapters({ binding: { facetId: "en", externalWorkId: "mangadot:317" } }), /unsupported source/i);
+// Another observed MangaBall chapter-list format groups translations under
+// ALL_CHAPTERS. Preserve separate translation IDs; do not collapse same
+// chapter number into one synthetic chapter.
+reply = ({ body }) => {
+  assert.deepEqual(JSON.parse(body), { title_id: "416" });
+  return ok({ code: 200, ALL_LANGUAGES: ["en", "pt-br"], ALL_CHAPTERS: [
+    { number: "Ch. 12", number_float: 12, title: "Quick Attack",
+      translations: [
+        { id: "9201", language: "en", name: "Ch. 12 - Quick Attack",
+          group: { name: "Scan A" } },
+        { id: "9202", language: "en", name: "Ch. 12 - Quick Attack",
+          group: { name: "Scan B" } },
+        { id: "9203", language: "pt-br", name: "Capítulo 12",
+          group: { name: "Tradução C" } },
+      ],
+    },
+    { number: "Extra", number_float: null, translations: [{
+      id: "9301", language: "en", name: "Extra: artwork",
+    }] },
+  ] });
+};
+const translated = await ball.chapters({
+  binding: { facetId: "en", externalWorkId: "mangaball:416" },
+});
+assert.deepEqual(translated.items.map(ch => [
+  ch.providerChapterId, ch.rawNumber, ch.language, ch.scanlationGroup,
+]), [
+  ["mangaball:9201", 12, "en", "Scan A"],
+  ["mangaball:9202", 12, "en", "Scan B"],
+]);
+const translatedPortuguese = await ball.chapters({
+  binding: { facetId: "pt-br", externalWorkId: "mangaball:416" },
+});
+assert.deepEqual(translatedPortuguese.items.map(ch => [
+  ch.providerChapterId, ch.rawNumber, ch.language,
+]), [["mangaball:9203", 12, "pt-br"]]);
+// Refuse malformed ALL_CHAPTERS instead of silently returning empty evidence.
+reply = () => ok({ code: 200, ALL_CHAPTERS: {} });
+await assert.rejects(ball.chapters({
+  binding: { facetId: "en", externalWorkId: "mangaball:416" },
+}), /invalid api response/i);
+
 
 const dot = loaders.mangadot;
 reply = () => ok({ manga_list: [works.mangadot], pagination: { current_page: 1, total_pages: 1 } });
