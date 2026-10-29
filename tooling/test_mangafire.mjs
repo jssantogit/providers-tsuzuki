@@ -204,4 +204,32 @@ await assert.rejects(
   /JSON|Unexpected token|Expected property/i,
 );
 
+// Missing item arrays are malformed successful HTTP payloads, not empty results.
+globalThis.tsuzuki.http.request = async () => JSON.stringify({
+  statusCode: 200,
+  body: JSON.stringify({ data: { captcha: true }, meta: { lastPage: 1 } }),
+});
+await assert.rejects(
+  provider.reading.lookup({ titles: ["One Piece"] }),
+  /invalid.*items|missing.*items|malformed.*items/i,
+);
+await assert.rejects(
+  provider.reading.chapters({
+    binding: { externalWorkId: "one-piece-test", facetId: "en" },
+    cursor: null,
+  }),
+  /invalid.*items|missing.*items|malformed.*items/i,
+);
+
+// Real empty inventories must remain distinguishable from schema failures.
+globalThis.tsuzuki.http.request = async () => JSON.stringify({
+  statusCode: 200,
+  body: JSON.stringify({ items: [], meta: { lastPage: 1, hasNext: false } }),
+});
+const genuineEmpty = await provider.reading.chapters({
+  binding: { externalWorkId: "one-piece-test", facetId: "en" },
+  cursor: null,
+});
+assert.deepEqual(genuineEmpty, { items: [], nextCursor: null });
+
 console.log("MangaFire Provider conformance fixtures: OK");
