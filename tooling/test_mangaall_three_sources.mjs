@@ -217,6 +217,8 @@ assert.deepEqual(dotChapters, { items: [{
   scanlationGroup: "Scan B", releaseDateMillis: Date.parse("2026-09-02T00:00:00Z"),
 }], nextCursor: null });
 assert.equal(new URL(calls.at(-1).url).pathname, "/api/manga/317/chapters/list");
+assert.equal(new URL(calls.at(-1).url).searchParams.get("lang"), "en",
+  "MangaDot chapters must request the selected facet from the upstream API");
 
 // The public MangaDot DTO also accepts cursor-only pagination metadata.
 // The Host cursor remains a bounded page number, never an arbitrary upstream URL.
@@ -269,5 +271,7 @@ assert.deepEqual(dotPortuguese.items.map(x => [x.providerChapterId, x.language])
   ["mangadot:uploads:8101", null],
   ["mangadot:uploads:8102", "pt-br"],
 ]);
+assert.equal(new URL(calls.at(-1).url).searchParams.get("lang"), "pt-br",
+  "MangaDot must pass the Brazilian Portuguese facet to chapter discovery");
 
 console.log("MangaAll three isolated sources: discovery, chapter evidence and error contracts OK");
