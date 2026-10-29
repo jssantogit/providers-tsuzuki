@@ -12,7 +12,11 @@ assert.deepEqual(
   ["reading.lookup", "reading.chapters"],
   "MangaAll initially produces evidence, not Reader pages",
 );
-assert.deepEqual(manifest.permissions.network.origins, ["https://api.mangadex.org"]);
+assert.deepEqual(manifest.permissions.network.origins, [
+  "https://api.mangadex.org",
+  "https://uploads.mangadex.org",
+  "https://*.mangadex.network",
+]);
 assert.equal(manifest.permissions.storage.enabled, false);
 
 const product = JSON.parse(fs.readFileSync(path.resolve("mangaall/product.json"), "utf8"));
