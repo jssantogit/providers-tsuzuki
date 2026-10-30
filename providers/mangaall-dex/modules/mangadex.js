@@ -1,4 +1,4 @@
-import { getMangaDexJson } from "./http.js";
+import { getMangaDexJson, MANGAALL_USER_AGENT } from "./http.js";
 
 const SOURCE = "mangadex";
 const ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -223,7 +223,7 @@ export async function pages(input) {
         file === "." || file === "..") {
       throw new Error("MangaAll invalid page filename");
     }
-    return { url: base + "/data/" + hash + "/" + file, headers: {} };
+    return { url: base + "/data/" + hash + "/" + file, headers: { "User-Agent": MANGAALL_USER_AGENT } };
   });
   return { type: "page_list", pages };
 }
