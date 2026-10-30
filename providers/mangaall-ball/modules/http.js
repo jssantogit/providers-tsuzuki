@@ -15,7 +15,13 @@ export function makeClient(origin, allowedPaths, { sameOriginNavigationHeaders =
     // KeiSource sends its own origin/referrer for MangaBall API requests.
     // Derive values from the trusted adapter origin, never from a work ID,
     // untrusted source response, cookie, or caller-controlled URL.
-    const headers = { Accept: "application/json" };
+    // Unlike Keiyoushi's Android client, the isolated SCRIPT Host has no
+    // inherited UserAgentInterceptor. Identify the real caller consistently
+    // with the MangaDex adapter; never impersonate Mihon or a browser.
+    const headers = {
+      Accept: "application/json",
+      "User-Agent": "Tsuzuki-MangaAll/0.1 (+https://github.com/jssantogit/providers-tsuzuki)",
+    };
     if (sameOriginNavigationHeaders) {
       headers.Origin = origin;
       headers.Referer = origin + "/";
