@@ -1,6 +1,6 @@
 # MangaAll — fontes ativas e preparação de leitura (30/10/2026)
 
-Estado: **MangaDex e MangaDot em desenvolvimento; MangaBall pausado** por decisão do usuário enquanto não houver autorização verificável de API. Não remover a identidade `app.tsuzuki.mangaall.mangaball`; ela poderá ser retomada em outra revisão. Não consultar MangaBall, contornar 403, usar cookies de outros apps ou imitar navegador/Mihon.
+Estado: **MangaDex e MangaDot liberados somente para publicação assinada de lookup/chapters; MangaBall pausado** por decisão do usuário enquanto não houver autorização verificável de API. Não remover a identidade `app.tsuzuki.mangaall.mangaball`; ela poderá ser retomada em outra revisão. Não consultar MangaBall, contornar 403, usar cookies de outros apps ou imitar navegador/Mihon.
 
 ## Instalação e integridade
 
@@ -8,7 +8,7 @@ Estado: **MangaDex e MangaDot em desenvolvimento; MangaBall pausado** por decis�
 - `mangaall/product.json` lista somente MangaDex e MangaDot em `firstPhysicalSmokeSources`. MangaBall tem `status=paused-awaiting-api-approval`.
 - `mangaall/index.js` nunca seleciona MangaBall para `lookupAcross`; `chapters/pages` rejeitam explicitamente a fonte pausada.
 - Host [PR #167](https://github.com/jssantogit/tsuzuki/pull/167): catálogo e `ProviderRepositoryManager.installMangaAll` exigem somente as duas fontes ativas, com verificação de índice assinado, repository/trust origin, staging atômico e revogação. Identidade MangaBall reservada e seus artefatos não baixados.
-- Os manifestos MangaDex/MangaDot permanecem `publication=development`, sem `reading.pages@1`. Não há APK de validação do MangaAll nem merge autorizado.
+- Manifestos MangaDex/MangaDot usam `publication=metadata-only`, versão `0.1.0`/code 1 e somente `reading.lookup@1` + `reading.chapters@1`; MangaBall continua `development`. O índice assinado poderá transportar evidências sem páginas; não há APK de validação nem aceite da leitura.
 
 ## Verificações por fonte
 
@@ -42,7 +42,24 @@ No MangaAll, a estrutura das rotas e Referer da página já coincidem, com checa
 
 **Atribuição verificada no Host:** `ProviderChapterObservation.scanlationGroup` existe e `mangadex.chapters()` a preenche quando a API devolve uma relação `scanlation_group`. Mas `ProviderChapterEvidenceAdapter.toEvidence()` não transfere o campo, pois `ChapterEvidence` não possui grupo de scanlation; `ProviderReadingDelivery.PageList` também não fornece dados de crédito ao Reader. Logo, ainda não há uma rota comprovada para exibir o grupo correto de cada capítulo MangaDex no Reader. **Não contornar o requisito com crédito genérico**: projetar a atribuição por variante/produtor sem corromper identidade/progresso, assegurar exibição no Default Skin, cobrir com teste de integração, e validar processo de pedido de remoção antes de publicar.
 
-**Decisão de release:** permanecem dois impedimentos de aceite. (1) A política oficial [MangaDex](https://gitlab.com/mangadex-pub/mangadex-api-docs/-/blob/main/index.md) exige crédito ao serviço e grupo, atendimento a pedidos de remoção e ausência de anúncios/serviços pagos; a UI/fluxo operacional precisa ter comprovação desse contrato. (2) A entrega física de páginas reais em MangaDex/MangaDot não foi demonstrada; MangaDot descreve proteção anti-scraping e nenhuma solução Keiyoushi específica foi encontrada. Portanto `publication=development` e ausência de `reading.pages@1` são **gates deliberados**; CI unitária verde não libera distribuição. MangaBall permanece pausado.
+**Decisão de release:** permanecem dois impedimentos de aceite. (1) A política oficial [MangaDex](https://gitlab.com/mangadex-pub/mangadex-api-docs/-/blob/main/index.md) exige crédito ao serviço e grupo, atendimento a pedidos de remoção e ausência de anúncios/serviços pagos; a UI/fluxo operacional precisa ter comprovação desse contrato. (2) A entrega física de páginas reais em MangaDex/MangaDot não foi demonstrada; MangaDot descreve proteção anti-scraping e nenhuma solução Keiyoushi específica foi encontrada. Portanto a **publicação restrita a metadata-only** e a ausência de `reading.pages@1` são **gates deliberados**; CI unitária verde não libera distribuição. MangaBall permanece pausado.
+
+## Autorização de publicação assinada restrita (30/10/2026)
+
+O usuário solicitou publicar o Provider assinado no repositório já matriculado. **Isso
+autoriza apenas o pacote de evidências de capítulos** de MangaDex e MangaDot, sem
+anunciar Reader, sem simular autorização para MangaBall e sem rotacionar a chave.
+Manter o repositório `app.tsuzuki.providers`, key ID
+`tsuzuki-provider-root-2026-02` e fingerprint existente. A publicação deve
+incluir exatamente as duas identidades `app.tsuzuki.mangaall.mangadex` e
+`app.tsuzuki.mangaall.mangadot`, preservar providers existentes e manter
+`app.tsuzuki.mangaall.mangaball` fora do índice assinado.
+O workflow em `main` assina o índice com o secret previamente configurado.
+Mudar somente `repository.sequence` de forma estritamente crescente. Não
+publicar um conjunto assinado incompleto nem chaves novas.
+
+Esta é uma **prévia verificável de inventário**, não o aceite de páginas e
+tampouco um APK. A instalação agrupada no Host depende da PR #167.
 
 ## Gates pendentes
 
