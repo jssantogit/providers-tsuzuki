@@ -24,7 +24,11 @@ assert.deepEqual(
   product.sources.map(({ id }) => id),
   ["mangalivre", "mangadex", "mangafire", "mangaball", "mangadot", "animexnovel", "mangaflix"],
 );
-assert.deepEqual(product.firstPhysicalSmokeSources, ["mangadex", "mangaball", "mangadot"]);
+assert.deepEqual(product.firstPhysicalSmokeSources, ["mangadex", "mangadot"],
+  "the first smoke must not require paused MangaBall");
+assert.equal(product.sources.find(({ id }) => id === "mangaball")?.status,
+  "paused-awaiting-api-approval",
+  "MangaBall is preserved for later, never auto-activated in the current smoke");
 
 const mangaId = "11111111-2222-4333-8444-555555555555";
 const chapterId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
