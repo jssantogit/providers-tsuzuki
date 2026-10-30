@@ -28,3 +28,20 @@ Estado: 2026-10-30. Registro técnico da [PR #47](https://github.com/jssantogit/
 As [regras públicas do MangaBall](https://mangaball.com/article/site-rule) proíbem bots/scraping automatizado sem aprovação explícita da API. **Não** automatizar desafios, importar cookies de outros apps, imitar browser/Mihon, alternar IP/VPN para evitar bloqueios nem executar probes repetidos como reação ao 403. Os ajustes desta auditoria são compatibilidade legítima de protocolo e fixtures offline.
 
 Próxima validação, condicionada à autorização de uso: no Android, executar uma única coleta sanitizada por fonte, distinguir HTTP/TLS/DNS e confrontar `lookup → binding → chapters → ICE` com o mesmo título; validar Reader apenas após permissão de imagem/CDN e `reading.pages@1` seguro. Não publicar/mesclar nem gerar APK MangaAll com leitura prometida antes dessas provas.
+
+
+## Política técnica — imagens, autorização e ativação (30/10/2026)
+
+A [licença Apache 2.0 do Keiyoushi](https://github.com/keiyoushi/extensions-source/blob/main/README.md) permite estudar/adaptar código sujeito a avisos e condições da licença; **não concede ao Tsuzuki uma autorização de API**. O projeto Keiyoushi declara não possuir afiliação com as fontes. As [regras oficiais do MangaBall](https://mangaball.com/article/site-rule) exigem **aprovação explícita de API** para bots ou scraping automatizado e orientam contatar a moderação via Discord. Não foi demonstrado um contrato de autorização transferível do Keiyoushi ao Tsuzuki.
+
+### Matriz fail-closed para o primeiro smoke
+
+| Fonte | Origem/URL dos metadados de imagens | Grants atuais da fonte | Resultado offline / próxima exigência |
+| --- | --- | --- | --- |
+| MangaDex | `https://uploads.mangadex.org/data/…` ou `https://<node>.mangadex.network/<token>/data/…` | `api.mangadex.org`, `uploads.mangadex.org`, `*.mangadex.network` | URLs HTTPS/443 dentro do escopo validáveis pelo Host; **Reader ainda não ativado**, verificação física e política MangaDex pendentes |
+| MangaBall | `https://mangaball.com/…` ou CDN observado em fixtures Keiyoushi, por exemplo `https://gengar.poke-black-and-white.net/storage/…` / `*.red-and-blue.net/storage/…` | **somente** `mangaball.com` | Primeira origem coberta, CDNs **não cobertos**; Host rejeita imagem externa. Não conceder wildcard amplo para produzir leitura artificialmente; exigir aprovação de API e evidência específica antes de grants de CDN |
+| MangaDot | `https://mangadot.net/pages/…` em fixtures atuais | **somente** `mangadot.net` | URLs same-origin cabem no Host; novos CDNs exigiriam contrato e grants novos, não presumidos |
+
+Regressão offline [`tooling/test_mangaall_image_origin_contract.mjs`](../tooling/test_mangaall_image_origin_contract.mjs) vinculada à Provider CI verifica origens exatas/wildcards/HTTPS/443, **prova que as CDNs MangaBall não têm grant**, e impede anúncio/exportação prematura de `reading.pages@1` nos três manifests. Esse teste reproduz a semântica de `ProviderOriginRule` para fixtures, **não é uma execução de imagem nem substitui testes nativos do Host**.
+
+Gates restantes para liberação: autorização de acesso por fonte (MangaBall em particular); prova de URLs reais e escopo dos CDNs; Reader headers e página realmente renderizada no Samsung; evidências `lookup → chapters → ICE` com binding verificável; teste de regressão de progresso/capítulos; CI Release assinada in-place. Manter os três adaptadores `development` e a PR Draft até aceite.
