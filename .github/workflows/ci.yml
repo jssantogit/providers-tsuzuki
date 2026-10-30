@@ -20,6 +20,20 @@ jobs:
           python-version: '3.13'
       - name: MangaFire contract fixtures
         run: node tooling/test_mangafire.mjs
+      - name: MangaAll source and chapter evidence fixtures
+        run: node tooling/test_mangaall.mjs
+      - name: MangaAll opt-in live probe boundary tests (offline fixtures)
+        run: node tooling/test_mangaall_live_probe.mjs
+      - name: MangaAll experimental publication safety
+        run: node tooling/test_mangaall_publication.mjs
+      - name: MangaAll aggregator identity and reader-routing contract
+        run: node tooling/test_mangaall_identity.mjs
+      - name: MangaAll Reader page metadata and URL policy fixtures
+        run: node tooling/test_mangaall_reading.mjs
+      - name: MangaAll image origin permission and activation gate
+        run: node tooling/test_mangaall_image_origin_contract.mjs
+      - name: MangaAll three-source contract
+        run: node tooling/test_mangaall_three_sources.mjs
       - name: Nyaa torrent contract fixtures
         run: node tooling/test_nyaa.mjs
       - name: Nyaa item acceptance matrix

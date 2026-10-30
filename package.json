@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tooling/test_mangafire.mjs",
+    "test": "node tooling/test_mangafire.mjs && node tooling/test_mangaall.mjs && node tooling/test_mangaall_three_sources.mjs && node tooling/test_mangaall_identity.mjs && node tooling/test_mangaall_reading.mjs && node tooling/test_mangaall_image_origin_contract.mjs && node tooling/test_mangaall_publication.mjs && node tooling/test_mangaall_live_probe.mjs",
     "check": "python3 tooling/check_repository.py"
   }
 }

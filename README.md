@@ -9,6 +9,10 @@ This repository contains Tsuzuki-native SCRIPT Providers, repository publishing 
 ```text
 providers/                 Provider source trees
   mangafire/               First reference HTTPS reading Provider
+  mangaall-dex/            MangaAll / MangaDex signed chapter-evidence adapter
+  mangaall-ball/           MangaAll / MangaBall paused (not published)
+  mangaall-dot/            MangaAll / MangaDot signed chapter-evidence adapter
+mangaall/                  MangaAll product identity and aggregation contract
 repository/                Signed-repository publication configuration
   config.json
 tooling/                   Build, conformance, index, signing and verification tools
@@ -16,6 +20,29 @@ dist/                      Published .tsz artifacts and signed index
 .github/workflows/         CI and manual publication workflows
 docs/                      Authoring and repository notes
 ```
+
+## MangaAll — signed metadata-only preview
+
+**MangaAll is not MangaDex.** It is one multi-source product for real chapter evidence and,
+eventually, reading in the Tsuzuki Reader. Its active source-isolated signed packages are:
+
+- `app.tsuzuki.mangaall.mangadex`: MangaDex source, `reading.lookup@1` and `reading.chapters@1`.
+- `app.tsuzuki.mangaall.mangadot`: MangaDot source, `reading.lookup@1` and `reading.chapters@1`.
+
+Both use the existing signed repository identity and public key. They provide **chapter
+observations to ICE, not independently verified editorial chapters**. `reading.pages@1`
+is intentionally absent: real image delivery, scanlation attribution, provider access
+terms and Android Reader smoke have not passed. Publishing the signed packages does not
+certify Reader pages or complete canonical inventory.
+
+MangaBall is paused pending upstream API authorization; its source and identity stay in
+the repo but `publication=development` keeps it outside the signed index. The Host
+MangaAll family installer requires [Host PR #167](https://github.com/jssantogit/tsuzuki/pull/167)
+to be integrated; older Hosts may list two individual source adapters instead.
+
+See [current release gates](docs/mangaall-active-sources-readiness.md),
+[MangaAll product](mangaall/README.md), and
+[provider issue #45](https://github.com/jssantogit/providers-tsuzuki/issues/45).
 
 ## First Provider: MangaFire
 

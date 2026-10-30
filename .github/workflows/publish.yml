@@ -40,6 +40,8 @@ jobs:
           root = pathlib.Path('providers')
           for manifest_path in sorted(root.glob('*/manifest.json')):
               manifest = json.loads(manifest_path.read_text())
+              if manifest.get('publication') == 'development':
+                  continue
               output = pathlib.Path('dist/providers') / f"{manifest['id']}-{manifest['version']['code']}.tsz"
               subprocess.run(['python3', 'tooling/build_provider.py', str(manifest_path.parent), str(output)], check=True)
           PY

@@ -13,6 +13,8 @@ for (const name of fs.readdirSync(providersRoot).sort()) {
   const manifestPath = path.join(providersRoot, name, "manifest.json");
   if (!fs.existsSync(manifestPath)) continue;
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  // Never sign unreleased MangaAll adapter prototypes, even on manual publish.
+  if (manifest.publication === "development") continue;
   const artifactName = `${manifest.id}-${manifest.version.code}.tsz`;
   const artifactPath = path.join(distRoot, artifactName);
   if (!fs.existsSync(artifactPath)) throw new Error(`missing built artifact ${artifactPath}`);
