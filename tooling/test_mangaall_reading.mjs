@@ -141,8 +141,8 @@ assert.equal(new URL(requests.at(-1).url).searchParams.get("chapter_id"), "9001"
 assert.deepEqual(ball, {
   type: "page_list",
   pages: [
-    { url: "https://mangaball.com/static/page-1.jpg", headers: { Referer: "https://mangaball.com" } },
-    { url: "https://mangaball.com/static/page-2.png", headers: { Referer: "https://mangaball.com" } },
+    { url: "https://mangaball.com/static/page-1.jpg", headers: { Referer: "https://mangaball.com/", Origin: "https://mangaball.com" } },
+    { url: "https://mangaball.com/static/page-2.png", headers: { Referer: "https://mangaball.com/", Origin: "https://mangaball.com" } },
   ],
 });
 fixture = () => reply({ data: { chapter: {
@@ -153,7 +153,7 @@ const cdn = await modules.mangaball.pages({
 });
 assert.deepEqual(cdn.pages, [{
   url: "https://gengar.poke-black-and-white.net/storage/page-1.webp",
-  headers: { Referer: "https://mangaball.com" },
+  headers: { Referer: "https://mangaball.com/", Origin: "https://mangaball.com" },
 }]);
 fixture = () => reply({ data: { chapter: {
   title_id: "wrong-work", pages: ["https://mangaball.com/static/page-1.jpg"],
