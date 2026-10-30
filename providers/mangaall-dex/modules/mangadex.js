@@ -96,7 +96,10 @@ export async function lookup(input) {
       externalWorkId: SOURCE + ":" + item.id.toLowerCase(),
       title: titles.title,
       aliases: titles.aliases,
-      url: "https://mangadex.org/title/" + item.id.toLowerCase(),
+      // Candidate URL is optional. The Host validates it against manifest
+      // permissions, and mangadex.org is intentionally not a browser grant.
+      // Keep the verified source identity without silently expanding grants.
+      url: null,
       // MangaDex titles are multilingual; facets constrain chapters, not work identity.
       language: null,
     });
