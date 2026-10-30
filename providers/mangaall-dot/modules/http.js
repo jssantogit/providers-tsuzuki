@@ -1,5 +1,7 @@
 // Restrict every request to one declared source origin and reviewed endpoints.
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+// Fixed source origin and real caller identity, not borrowed Mihon/browser state.
+export const MANGAALL_USER_AGENT = "Tsuzuki-MangaAll/0.1 (+https://github.com/jssantogit/providers-tsuzuki)";
 
 export function makeClient(origin, allowedPaths) {
   return async function api(method, pathname, query = [], body = null) {
@@ -12,7 +14,12 @@ export function makeClient(origin, allowedPaths) {
     }
     const params = query.map(([k, v]) => encodeURIComponent(k) + "=" + encodeURIComponent(String(v))).join("&");
     const url = origin + pathname + (params ? "?" + params : "");
-    const headers = { Accept: "application/json" };
+    const headers = {
+      Accept: "application/json",
+      Origin: origin,
+      Referer: origin + "/",
+      "User-Agent": MANGAALL_USER_AGENT,
+    };
     if (method === "POST") headers["Content-Type"] = "application/json";
     const result = await globalThis.tsuzuki.http.request(
       method, url, JSON.stringify(headers), method === "POST" ? JSON.stringify(body) : undefined,
