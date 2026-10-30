@@ -118,6 +118,42 @@ const upstreamError = await inspectSource({
 });
 assert.equal(upstreamError.outcome, "upstream_http_429");
 assert.equal(upstreamError.phase, "lookup");
+// Browser API 200, provider 403 and TLS reset are materially different.
+// Verify the opt-in preflight reports only bounded transport families from
+// machine error codes, not raw exception text (URLs, IPs or server details).
+for (const [code, expected] of [
+  ["ENOTFOUND", "transport_dns"],
+  ["EAI_AGAIN", "transport_dns"],
+  ["ERR_SSL_WRONG_VERSION_NUMBER", "transport_tls"],
+  ["ERR_TLS_CERT_ALTNAME_INVALID", "transport_tls"],
+  ["ECONNRESET", "transport_connect"],
+  ["UND_ERR_CONNECT_TIMEOUT", "transport_timeout"],
+]) {
+  const failure = await inspectSource({
+    sourceId: "mangadot", title, language: "en", providerId: baseBinding.providerId,
+    allowedOrigins: ["https://mangadot.net"],
+    adapter: { ...adapter, lookup: async () => {
+      const error = new TypeError("fetch failed https://private.example/token");
+      error.cause = Object.assign(new Error("private internal address"), { code });
+      throw error;
+    } },
+  });
+  assert.equal(failure.phase, "lookup");
+  assert.equal(failure.outcome, expected, code);
+  assert.equal(JSON.stringify(failure).includes("private.example"), false);
+  assert.equal(JSON.stringify(failure).includes("private internal address"), false);
+}
+const unknownTransport = await inspectSource({
+  sourceId: "mangadot", title, language: "en", providerId: baseBinding.providerId,
+  allowedOrigins: ["https://mangadot.net"],
+  adapter: { ...adapter, lookup: async () => {
+    const error = new Error("TLS? https://private.example");
+    error.cause = { code: "UNKNOWN_PRIVATE_CODE" };
+    throw error;
+  } },
+});
+assert.equal(unknownTransport.outcome, "upstream_failed");
+
 const chaptersRejected = await inspectSource({
   sourceId: "mangadot", title, language: "en", providerId: baseBinding.providerId,
   allowedOrigins: ["https://mangadot.net"],
