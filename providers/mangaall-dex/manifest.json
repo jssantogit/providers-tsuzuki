@@ -3,7 +3,7 @@
   "id": "app.tsuzuki.mangaall.mangadex",
   "name": "MangaAll / MangaDex",
   "version": {
-    "name": "0.1.0-dev",
+    "name": "0.1.0",
     "code": 1
   },
   "minHostApi": 1,
@@ -40,5 +40,5 @@
     "pt-br"
   ],
   "settings": [],
-  "publication": "development"
+  "publication": "metadata-only"
 }
