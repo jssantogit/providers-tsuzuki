@@ -1,0 +1,102 @@
+name: MangaAll MangaDex one-shot chapter metadata preflight
+
+# This intentionally runs once when added to the feature branch, or on manual
+# dispatch. No schedule, retries, cookies, image downloads or MangaBall access.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/45-mangaall-multisource
+    paths:
+      - '.github/workflows/mangaall-mangadex-chapter-metadata-preflight.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  manga-dex-chapter:
+    name: Validate one public chapter and At-Home metadata route
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fetch bounded MangaDex metadata without downloading any image
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const api = "https://api.mangadex.org";
+          const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+          const headers = {
+            Accept: "application/json",
+            "User-Agent": "Tsuzuki-MangaAll/0.1 (+https://github.com/jssantogit/providers-tsuzuki)",
+          };
+          let count = 0;
+          async function get(path) {
+            if (count >= 4) throw Error("request_budget_exhausted");
+            count++;
+            const response = await fetch(api + path, {
+              redirect: "manual", headers,
+              signal: AbortSignal.timeout(12000),
+            });
+            if (response.status !== 200) throw Error("upstream_http_" + response.status);
+            if (!response.headers.get("content-type")?.includes("application/json")) {
+              throw Error("upstream_not_json");
+            }
+            const length = Number(response.headers.get("content-length") || 0);
+            if (length > 1024 * 1024) throw Error("upstream_too_large");
+            const body = await response.text();
+            if (body.length > 1024 * 1024) throw Error("upstream_too_large");
+            return JSON.parse(body);
+          }
+          try {
+            const listing = await get("/manga?title=Dandadan&limit=3");
+            const manga = listing?.data?.find(item => item?.type === "manga" &&
+              uuid.test(item.id || "") &&
+              Object.values(item.attributes?.title || {}).some(
+                value => typeof value === "string" && value.toLowerCase() === "dandadan",
+              ));
+            if (!manga) throw Error("manga_identity_unavailable");
+            const feed = await get(
+              "/chapter?manga=" + manga.id +
+              "&translatedLanguage%5B%5D=en&contentRating%5B%5D=safe&limit=10",
+            );
+            const chapter = feed?.data?.find(item =>
+              item?.type === "chapter" && uuid.test(item.id || "") &&
+              item?.attributes?.translatedLanguage === "en" &&
+              !item?.attributes?.externalUrl &&
+              /^(?:[0-9]+)(?:\.[0-9]+)?$/.test(item?.attributes?.chapter || ""));
+            if (!chapter) throw Error("readable_chapter_unavailable");
+            const entity = await get("/chapter/" + chapter.id);
+            if (entity?.data?.id?.toLowerCase() !== chapter.id.toLowerCase() ||
+                !entity.data.relationships?.some(rel =>
+                  rel?.type === "manga" && rel?.id?.toLowerCase() === manga.id.toLowerCase())) {
+              throw Error("chapter_work_mismatch");
+            }
+            const atHome = await get("/at-home/server/" + chapter.id + "?forcePort443=true");
+            const base = new URL(atHome?.baseUrl || "");
+            const trusted = base.protocol === "https:" &&
+              !base.username && !base.password &&
+              (!base.port || base.port === "443") &&
+              (base.hostname === "uploads.mangadex.org" ||
+               (base.hostname.endsWith(".mangadex.network") &&
+                base.hostname !== "mangadex.network"));
+            const hash = atHome?.chapter?.hash;
+            const files = atHome?.chapter?.data;
+            if (!trusted || typeof hash !== "string" ||
+                !/^[0-9a-f]{16,128}$/i.test(hash) ||
+                !Array.isArray(files) || files.length === 0 || files.length > 5000 ||
+                files.some(file => typeof file !== "string" ||
+                  !/^[A-Za-z0-9._-]{1,255}$/.test(file) || file === "." || file === "..")) {
+              throw Error("untrusted_or_empty_athome_metadata");
+            }
+            console.log("MangaDex public metadata: manga exact, chapter belongs to manga, At-Home HTTPS and bounded file listing, requests=" + count + ", image_requests=0");
+          } catch (error) {
+            const allowed = /^upstream_http_[0-9]{3}$|^(?:manga_identity_unavailable|readable_chapter_unavailable|chapter_work_mismatch|untrusted_or_empty_athome_metadata|upstream_not_json|upstream_too_large|request_budget_exhausted)$/;
+            console.error("MangaDex preflight: " + (allowed.test(error?.message || "") ?
+              error.message : "transport_or_schema_failure") + " (no retry)");
+            process.exitCode = 1;
+          }
+          NODE
