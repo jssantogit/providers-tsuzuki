@@ -8,8 +8,9 @@ MangaAll **não é MangaDex**. Seu papel é reunir adaptadores HTTP(S) que forne
 2. Fontes de **leitura** para o Reader, com `reading.pages@1` somente após
    páginas reais, permissões de rede e termos do serviço serem validados.
 
-MangaDex, MangaBall e MangaDot constituem o conjunto mínimo do primeiro smoke
-real, e fazem parte da mesma experiência MangaAll. Manga Livre.to, MangaFire,
+MangaDex e MangaDot são as fontes ativas desta etapa e podem ser instaladas como
+adaptadores assinados de metadados/capítulos. MangaBall está pausado até autorização da
+API, com identidade e código preservados, fora do índice assinado. Manga Livre.to, MangaFire,
 AnimeXNovel e MangaFlix seguem no escopo de ampliação posterior. MangaFire
 existente (`app.tsuzuki.mangafire`) não será alterado nesta frente.
 
@@ -29,6 +30,9 @@ sem mudar o contrato Host ou criar um grupo coordenado. Não publicar o root
 `app.tsuzuki.mangaall` como um alias de MangaDex nem reivindicar isolamento
 de fontes sem enforcement do Host.
 
-A implementação atual oferece somente `lookup` e `chapters` em fixtures;
-`reading.pages` permanece pendente e não é anunciada pelos manifestos.
-Nenhum smoke físico ou consulta upstream real ocorreu neste incremento.
+A versão `0.1.0` dos adaptadores MangaDex e MangaDot anuncia somente `lookup` e
+`chapters` no índice assinado, com cobertura offline de fixtures; `reading.pages`
+permanece desabilitada por contrato. A API pública MangaDex respondeu a busca
+limitada de título, mas o preflight de capítulos não comprovou um capítulo legível;
+MangaDot não teve leitura física comprovada. Publicação assinada de metadados
+**não equivale a Reader habilitado nem a capítulos editoriais confirmados**.
