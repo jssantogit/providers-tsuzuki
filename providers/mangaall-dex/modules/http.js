@@ -1,4 +1,5 @@
 const ORIGIN = "https://api.mangadex.org";
+export const MANGAALL_USER_AGENT = "Tsuzuki-MangaAll/0.1 (+https://github.com/jssantogit/providers-tsuzuki)";
 const MAX_JSON_BYTES = 1024 * 1024;
 
 // Only fixed, reviewed endpoints and origins are available to this adapter.
@@ -19,7 +20,7 @@ export async function getMangaDexJson(endpoint, pairs = []) {
   const raw = await globalThis.tsuzuki.http.request(
     "GET",
     url,
-    JSON.stringify({ Accept: "application/json", "User-Agent": "Tsuzuki-MangaAll/0.1 (+https://github.com/jssantogit/providers-tsuzuki)" }),
+    JSON.stringify({ Accept: "application/json", "User-Agent": MANGAALL_USER_AGENT }),
   );
   let envelope;
   try {
