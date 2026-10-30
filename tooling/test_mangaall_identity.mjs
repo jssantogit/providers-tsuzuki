@@ -39,20 +39,22 @@ const gateway = createMangaAll({
   },
 });
 const discovery = await gateway.lookupAcross({ titles: ["Haikyuu!!"] });
-assert.deepEqual(Object.keys(discovery), ["mangadex", "mangaball", "mangadot"]);
+assert.deepEqual(Object.keys(discovery), ["mangadex", "mangadot"],
+  "paused MangaBall must not be queried during MangaAll discovery");
 assert.deepEqual(discovery.mangadex, {
   status: "success", items: [{ externalWorkId: "mangadex:work-1" }], nextCursor: null,
 });
-assert.deepEqual(discovery.mangaball, { status: "error", reason: "source_failed" });
+assert.equal(Object.hasOwn(discovery, "mangaball"), false,
+  "paused MangaBall must not receive even a failed lookup");
 assert.deepEqual(discovery.mangadot, {
   status: "success", items: [{ externalWorkId: "mangadot:work-3" }], nextCursor: null,
 });
-assert.deepEqual(await gateway.chapters("mangaball", {
+await assert.rejects(gateway.chapters("mangaball", {
   binding: { externalWorkId: "mangaball:work-17" },
-}), { items: [chapter], nextCursor: null });
-assert.deepEqual(await gateway.pages("mangaball", {
+}), /paused/i, "MangaAll must not query chapter inventory of a paused source");
+await assert.rejects(gateway.pages("mangaball", {
   binding: { externalWorkId: "mangaball:work-17" }, providerChapterId: "mangaball:chapter-17",
-}), { type: "page_list", pages: [{ url: "https://mangaball.com/test.jpg" }] });
+}), /paused/i, "MangaAll must not invoke Reader on a paused source");
 await assert.rejects(gateway.chapters("mangadot", {
   binding: { externalWorkId: "mangaball:work-17" },
 }), /source mismatch/i);
@@ -63,4 +65,4 @@ await assert.rejects(gateway.chapters("unrecognized", {
   binding: { externalWorkId: "unrecognized:work" },
 }), /unknown source/i);
 
-console.log("MangaAll aggregate identity, three independent adapters and reader contract: OK");
+console.log("MangaAll aggregation: MangaDex and MangaDot active, MangaBall preserved but paused; routing isolation OK");
