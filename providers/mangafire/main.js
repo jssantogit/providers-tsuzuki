@@ -180,8 +180,9 @@ async function chapters(input) {
   }
 
   const response = await chaptersForTitle(externalWorkId, language, page);
+  const rawItems = verifiedItems(response, "chapters");
   const result = [];
-  for (const item of mergeChapterVariants(verifiedItems(response, "chapters"))) {
+  for (const item of mergeChapterVariants(rawItems)) {
     const id = item?.id == null ? "" : String(item.id);
     const number = Number(item?.number);
     if (!id || !Number.isFinite(number)) continue;
@@ -200,8 +201,19 @@ async function chapters(input) {
   }
 
   const meta = response?.meta ?? {};
-  const lastPage = Number(meta.lastPage ?? page);
-  const hasNext = meta.hasNext === true || (Number.isFinite(lastPage) && page < lastPage);
+  const lastPage = meta.lastPage == null ? null : Number(meta.lastPage);
+  const hasLastPage = Number.isInteger(lastPage) && lastPage >= page;
+  // Never treat absent/malformed pagination metadata as proof of completeness.
+  // In that case continue until the source returns an explicitly empty page.
+  // Host collection still bounds the total number of pages and elapsed time.
+  if (meta.hasNext === false && hasLastPage && page < lastPage) {
+    throw new Error("MangaFire chapters conflicting pagination metadata");
+  }
+  const hasNext = typeof meta.hasNext === "boolean"
+    ? meta.hasNext
+    : hasLastPage
+      ? page < lastPage
+      : rawItems.length > 0;
   return {
     items: result,
     nextCursor: hasNext ? String(page + 1) : null,
