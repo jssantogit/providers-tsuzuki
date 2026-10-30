@@ -58,6 +58,13 @@ async function verifiedLookupAliases(item, requestedTitle, remainingDetails) {
   }
 }
 
+// Only the exact MangaFire title route can authorize a direct source selection.
+// Never turn an arbitrary URL or a lookalike host into a Provider binding.
+function titleIdFromSourceUrl(value) {
+  const match = /^https:\/\/mangafire\.to\/title\/([a-z0-9]{2,64})(?:-[a-z0-9]+)*\/?$/i.exec(value);
+  return match ? match[1] : null;
+}
+
 function titleUrl(item) {
   const hid = cleanText(item.hid);
   const slug = cleanText(item.slug);
@@ -114,6 +121,26 @@ async function lookup(input) {
   for (const rawTitle of titles.slice(0, MAX_LOOKUP_TITLES)) {
     const title = cleanText(rawTitle);
     if (!title) continue;
+
+    if (/^https?:\/\//i.test(title)) {
+      const requestedId = titleIdFromSourceUrl(title);
+      if (!requestedId) throw new Error("MangaFire URL must be an exact HTTPS title link");
+      const details = await titleDetails(requestedId);
+      const record = details?.data;
+      if (!record || cleanText(record.hid) !== requestedId || !cleanText(record.title)) {
+        throw new Error("MangaFire identity could not be verified from the source");
+      }
+      return {
+        items: [{
+          externalWorkId: requestedId,
+          title: cleanText(record.title),
+          aliases: explicitAliases(record),
+          url: titleUrl(record),
+          language: LANGUAGE,
+        }],
+        nextCursor: null,
+      };
+    }
 
     const response = await searchTitles(title);
     for (const item of verifiedItems(response, "lookup")) {
