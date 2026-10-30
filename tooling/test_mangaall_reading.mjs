@@ -63,8 +63,12 @@ const dex = await modules.mangadex.pages({
 assert.deepEqual(dex, {
   type: "page_list",
   pages: [
-    { url: "https://uploads.mangadex.org/data/" + hashes + "/page-001.jpg", headers: {} },
-    { url: "https://uploads.mangadex.org/data/" + hashes + "/page-002.png", headers: {} },
+    { url: "https://uploads.mangadex.org/data/" + hashes + "/page-001.jpg", headers: {
+      "User-Agent": "Tsuzuki-MangaAll/0.1 (+https://github.com/jssantogit/providers-tsuzuki)",
+    } },
+    { url: "https://uploads.mangadex.org/data/" + hashes + "/page-002.png", headers: {
+      "User-Agent": "Tsuzuki-MangaAll/0.1 (+https://github.com/jssantogit/providers-tsuzuki)",
+    } },
   ],
 });
 assert.equal(new URL(requests.at(-1).url).pathname, "/at-home/server/" + chapterId);
