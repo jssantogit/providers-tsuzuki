@@ -35,9 +35,9 @@
     {
       "id": "mangaball",
       "name": "MangaBall",
-      "status": "prototype",
+      "status": "paused-awaiting-api-approval",
       "adapterProviderId": "app.tsuzuki.mangaall.mangaball",
-      "readingStatus": "unverified"
+      "readingStatus": "paused"
     },
     {
       "id": "mangadot",
@@ -63,7 +63,6 @@
   },
   "firstPhysicalSmokeSources": [
     "mangadex",
-    "mangaball",
     "mangadot"
   ]
 }
