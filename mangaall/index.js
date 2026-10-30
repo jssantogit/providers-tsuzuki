@@ -7,14 +7,20 @@
  * and real chapter/Reader calls. Do not publish this facade as a SCRIPT Provider.
  */
 const SOURCE_IDS = Object.freeze(["mangadex", "mangaball", "mangadot"]);
+// MangaBall remains a reviewed identity, but is paused pending API approval.
+// Do not invoke it from discovery, chapter inventory or Reader.
+const ACTIVE_SOURCE_IDS = Object.freeze(["mangadex", "mangadot"]);
 
 export function createMangaAll(adapters) {
   if (!adapters || typeof adapters !== "object") throw new Error("MangaAll adapters required");
-  const selected = SOURCE_IDS.filter((id) => adapters[id]);
+  const selected = ACTIVE_SOURCE_IDS.filter((id) => adapters[id]);
 
   function adapterFor(sourceId) {
     if (!SOURCE_IDS.includes(sourceId) || !adapters[sourceId]) {
       throw new Error("MangaAll unknown source");
+    }
+    if (!ACTIVE_SOURCE_IDS.includes(sourceId)) {
+      throw new Error("MangaAll source paused");
     }
     return adapters[sourceId];
   }
