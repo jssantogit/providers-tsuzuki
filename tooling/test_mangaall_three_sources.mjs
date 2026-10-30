@@ -40,6 +40,14 @@ globalThis.tsuzuki = {
       const headers = JSON.parse(headersJson);
       calls.push({ method, url, headers, body });
       assert.equal(headers.Accept, "application/json");
+      if (parsed.origin === "https://mangadot.net") {
+        // Standard same-origin metadata headers, with the caller's honest
+        // identity. Do not reuse Mihon or browser cookies and fingerprints.
+        assert.equal(headers.Origin, "https://mangadot.net");
+        assert.equal(headers.Referer, "https://mangadot.net/");
+        assert.equal(headers["User-Agent"],
+          "Tsuzuki-MangaAll/0.1 (+https://github.com/jssantogit/providers-tsuzuki)");
+      }
       if (parsed.origin === "https://mangaball.com") {
         assert.equal(headers["Content-Type"], method === "POST" ? "application/json" : undefined);
         // KeiSource sends its own actual origin, not a borrowed cookie, session,
