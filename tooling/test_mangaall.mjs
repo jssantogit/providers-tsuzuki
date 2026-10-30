@@ -68,7 +68,9 @@ assert.deepEqual(found, {
     externalWorkId: "mangadex:" + mangaId,
     title: "Haikyu!!",
     aliases: ["Haikyuu!!", "ハイキュー!!"],
-    url: "https://mangadex.org/title/" + mangaId,
+    // The Host validates even optional catalogue URLs against manifest grants.
+    // MangaDex browser origin is not granted yet; omit the link, retain identity.
+    url: null,
     language: null,
   }],
   nextCursor: null,
