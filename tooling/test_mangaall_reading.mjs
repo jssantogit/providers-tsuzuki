@@ -205,8 +205,16 @@ assert.equal(new URL(requests.at(-1).url).pathname, "/api/uploads/8001/images");
 assert.deepEqual(dot, {
   type: "page_list",
   pages: [
-    { url: "https://mangadot.net/pages/001.jpg", headers: { Referer: "https://mangadot.net/chapter/8001?source=user" } },
-    { url: "https://mangadot.net/pages/002.jpg", headers: { Referer: "https://mangadot.net/chapter/8001?source=user" } },
+    { url: "https://mangadot.net/pages/001.jpg", headers: {
+      Referer: "https://mangadot.net/chapter/8001?source=user",
+      Origin: "https://mangadot.net",
+      "User-Agent": "Tsuzuki-MangaAll/0.1 (+https://github.com/jssantogit/providers-tsuzuki)",
+    } },
+    { url: "https://mangadot.net/pages/002.jpg", headers: {
+      Referer: "https://mangadot.net/chapter/8001?source=user",
+      Origin: "https://mangadot.net",
+      "User-Agent": "Tsuzuki-MangaAll/0.1 (+https://github.com/jssantogit/providers-tsuzuki)",
+    } },
   ],
 });
 fixture = () => reply({ manga: { id: 317 }, images: [{ url: "//untrusted.example/x.jpg" }] });
