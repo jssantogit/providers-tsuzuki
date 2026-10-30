@@ -1,0 +1,70 @@
+name: MangaAll MangaDex single public API preflight
+
+# This is intentionally not a general CI probe: it runs on creation of this
+# workflow file (once in this branch), or by a manual dispatch. No scheduled
+# polling, retries, fallback IPs, or cookies.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/45-mangaall-multisource
+    paths:
+      - '.github/workflows/mangaall-mangadex-single-preflight.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  public-api:
+    name: MangaDex one-shot public lookup (no Reader/CDN request)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: One bounded MangaDex public metadata GET
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          // Exactly one public search, never a browser/Cloudflare impersonation.
+          // Do not log raw JSON, chapter identifiers, response headers or IPs.
+          const url = new URL("https://api.mangadex.org/manga");
+          url.searchParams.set("title", "Dandadan");
+          url.searchParams.set("limit", "1");
+          try {
+            const response = await fetch(url, {
+              redirect: "manual",
+              signal: AbortSignal.timeout(10000),
+              headers: {
+                Accept: "application/json",
+                "User-Agent": "Tsuzuki-MangaAll/0.1 (+https://github.com/jssantogit/providers-tsuzuki)",
+              },
+            });
+            if (response.status !== 200) {
+              console.error("MangaDex public API status " + response.status + " (no retry)");
+              process.exitCode = 1;
+            } else if (!response.headers.get("content-type")?.includes("application/json")) {
+              console.error("MangaDex returned a non-JSON response (no retry)");
+              process.exitCode = 1;
+            } else {
+              const body = await response.json();
+              const item = body?.data?.[0];
+              const validId = typeof item?.id === "string" &&
+                /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(item.id);
+              if (body?.result !== "ok" || !Array.isArray(body.data) ||
+                  body.data.length !== 1 || item.type !== "manga" ||
+                  !validId || !item.attributes?.title) {
+                console.error("MangaDex public API schema mismatch (no retry)");
+                process.exitCode = 1;
+              } else {
+                console.log("MangaDex public lookup: 200, validated manga record and title, 1 request");
+              }
+            }
+          } catch (error) {
+            console.error("MangaDex transport error: " +
+              (error?.name === "TimeoutError" ? "timeout" : "connection_failed"));
+            process.exitCode = 1;
+          }
+          NODE
