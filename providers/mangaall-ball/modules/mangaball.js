@@ -163,7 +163,7 @@ export async function pages(input) {
     type: "page_list",
     pages: imageList.map((url) => ({
       url: trustedImageUrl(url, "https://mangaball.com"),
-      headers: { Referer: "https://mangaball.com" },
+      headers: { Referer: "https://mangaball.com/", Origin: "https://mangaball.com" },
     })),
   };
 }
