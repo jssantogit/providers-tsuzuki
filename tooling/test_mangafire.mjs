@@ -255,4 +255,53 @@ const genuineEmpty = await provider.reading.chapters({
 });
 assert.deepEqual(genuineEmpty, { items: [], nextCursor: null });
 
+
+// A manually supplied MangaFire title URL must resolve to exactly that source-attested
+// work, even when its displayed title differs from the Tsuzuki canonical title.
+// This also distinguishes standard and colored editions sharing a title.
+const directTitles = [
+  ["7j6", "demon-slayer-kimetsu-no-yaiba", "Demon Slayer: Kimetsu no Yaiba", "Kimetsu no Yaiba"],
+  ["gry", "the-seven-deadly-sins", "The Seven Deadly Sins", "Nanatsu no Taizai"],
+  ["kkvk9", "boku-no-hero-academia", "Boku no Hero Academia", "My Hero Academia"],
+  ["np3ln", "boku-no-hero-academiaa", "Boku no Hero Academia (Colored)", "My Hero Academia"],
+];
+let directDetailCalls = 0;
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  const record = directTitles.find(([id]) => pathname === `/api/titles/${id}`);
+  assert.ok(record, `Direct title lookup must fetch a detail, not search: ${pathname}`);
+  directDetailCalls++;
+  const [hid, slug, title, alias] = record;
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify({ data: { hid, slug, title, alternativeTitles: [alias] } }),
+  });
+};
+for (const [hid, slug, title, alias] of directTitles) {
+  const found = await provider.reading.lookup({
+    titles: [`https://mangafire.to/title/${hid}-${slug}`],
+  });
+  assert.equal(found.items.length, 1);
+  assert.deepEqual(found.items[0], {
+    externalWorkId: hid,
+    title,
+    aliases: [alias],
+    url: `https://mangafire.to/title/${hid}-${slug}`,
+    language: "en",
+  });
+}
+assert.equal(directDetailCalls, directTitles.length);
+await assert.rejects(
+  provider.reading.lookup({ titles: ["https://mangafire.to.evil.example/title/gry-the-seven-deadly-sins"] }),
+  /MangaFire URL/i,
+);
+globalThis.tsuzuki.http.request = async () => JSON.stringify({
+  statusCode: 200,
+  body: JSON.stringify({ data: { hid: "wrong-id", title: "The Seven Deadly Sins" } }),
+});
+await assert.rejects(
+  provider.reading.lookup({ titles: ["https://mangafire.to/title/gry-the-seven-deadly-sins"] }),
+  /MangaFire (URL|identity)/i,
+);
+
 console.log("MangaFire Provider conformance fixtures: OK");
