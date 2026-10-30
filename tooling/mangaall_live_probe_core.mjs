@@ -82,6 +82,26 @@ function safeOutcome(error) {
   const message = typeof error?.message === "string" ? error.message : "";
   const http = /^MangaAll HTTP (\d{3})\b/.exec(message);
   if (http) return "upstream_http_" + http[1];
+
+  // Node fetch wraps TLS/DNS/socket failures in a generic "fetch failed"
+  // TypeError. Distinguish only known codes from a bounded cause chain,
+  // without serializing exception messages, URLs, addresses or certificates.
+  const seen = new Set();
+  let cause = error;
+  for (let depth = 0; depth < 5 && cause && typeof cause === "object" &&
+       !seen.has(cause); depth++, cause = cause.cause) {
+    seen.add(cause);
+    const code = typeof cause.code === "string" ? cause.code : "";
+    if (code === "ENOTFOUND" || code === "EAI_AGAIN") return "transport_dns";
+    if (code.startsWith("ERR_SSL_") || code.startsWith("ERR_TLS_") ||
+        ["CERT_HAS_EXPIRED", "DEPTH_ZERO_SELF_SIGNED_CERT",
+          "UNABLE_TO_VERIFY_LEAF_SIGNATURE"].includes(code)) return "transport_tls";
+    if (["ECONNRESET", "ECONNREFUSED", "ENETUNREACH", "EHOSTUNREACH"].includes(code)) {
+      return "transport_connect";
+    }
+    if (["ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT"].includes(code)) return "transport_timeout";
+  }
+  if (error?.name === "TimeoutError") return "transport_timeout";
   const known = [
     ["MangaAll invalid JSON", "invalid_json"],
     ["MangaAll invalid API response", "invalid_api_response"],
