@@ -46,6 +46,11 @@ globalThis.tsuzuki = {
         // browser fingerprint or external host origin.
         assert.equal(headers.Origin, "https://mangaball.com");
         assert.equal(headers.Referer, "https://mangaball.com/");
+        // Keiyoushi receives the app's UserAgentInterceptor; the isolated
+        // Tsuzuki Host must identify itself honestly instead of inheriting
+        // the opaque OkHttp/runner default or impersonating Mihon/Chrome.
+        assert.equal(headers["User-Agent"],
+          "Tsuzuki-MangaAll/0.1 (+https://github.com/jssantogit/providers-tsuzuki)");
       }
       return JSON.stringify(reply({ method, parsed, body }));
     },
