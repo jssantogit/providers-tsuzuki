@@ -304,4 +304,33 @@ await assert.rejects(
   /MangaFire (URL|identity)/i,
 );
 
+
+// Some API variants return chapter items but no pagination metadata. Those
+// results are not proof of completeness: probe the next page until an empty
+// terminal response rather than prematurely detaching older chapter support.
+let metadataFreePage = 0;
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const parsed = new URL(url);
+  assert.equal(parsed.pathname, "/api/titles/gry/chapters");
+  assert.ok(parsed.searchParams.get("vrf"));
+  metadataFreePage = Number(parsed.searchParams.get("page"));
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify(metadataFreePage === 1
+      ? { items: [{ id: 101, number: 1, name: "First" }] }
+      : { items: [] }),
+  });
+};
+const incompleteMeta = await provider.reading.chapters({
+  binding: { externalWorkId: "gry", facetId: "en" },
+  cursor: null,
+});
+assert.equal(incompleteMeta.nextCursor, "2", "A page without metadata is not a complete inventory");
+const emptyTerminal = await provider.reading.chapters({
+  binding: { externalWorkId: "gry", facetId: "en" },
+  cursor: incompleteMeta.nextCursor,
+});
+assert.deepEqual(emptyTerminal, { items: [], nextCursor: null });
+assert.equal(metadataFreePage, 2);
+
 console.log("MangaFire Provider conformance fixtures: OK");
