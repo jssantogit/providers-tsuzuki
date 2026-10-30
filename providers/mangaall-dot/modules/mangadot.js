@@ -1,4 +1,4 @@
-import { makeClient, safeText, sourceId, chapterNumber, dateMillis, facetLang, trustedImageUrl } from "./http.js";
+import { makeClient, safeText, sourceId, chapterNumber, dateMillis, facetLang, trustedImageUrl, MANGAALL_USER_AGENT } from "./http.js";
 
 const source = "mangadot";
 const api = makeClient("https://mangadot.net", [
@@ -108,7 +108,11 @@ export async function pages(input) {
     type: "page_list",
     pages: response.images.map((item) => ({
       url: trustedImageUrl(item?.url, "https://mangadot.net"),
-      headers: { Referer: referer },
+      headers: {
+        Referer: referer,
+        Origin: "https://mangadot.net",
+        "User-Agent": MANGAALL_USER_AGENT,
+      },
     })),
   };
 }
