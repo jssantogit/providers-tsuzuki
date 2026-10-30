@@ -38,8 +38,9 @@ for (const { source, dir, expectedOrigins } of sourceCases) {
     source + ": origin changes require separate evidence and review");
   assert.deepEqual(manifest.permissions.browser.origins, [],
     source + ": image access must not silently become a browser grant");
-  assert.equal(manifest.publication, "development",
-    source + ": do not publish the adapter before Reader and API acceptance");
+  const expectedPublication = source === "mangaball" ? "development" : "metadata-only";
+  assert.equal(manifest.publication, expectedPublication,
+    source + ": only source metadata may be signed; paused MangaBall stays unpublished");
   assert.deepEqual(manifest.capabilities.map(v => v.id), ["reading.lookup", "reading.chapters"],
     source + ": image-origin checks do not authorize reading.pages");
   const main = await import(pathToFileURL(path.join(dirPath, "main.js")).href);
