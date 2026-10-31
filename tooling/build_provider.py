@@ -50,7 +50,15 @@ def build(provider_dir: pathlib.Path, output: pathlib.Path):
             info = zipfile.ZipInfo(relative, date_time=(1980, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o100644 << 16
-            archive.writestr(info, path.read_bytes())
+            payload = path.read_bytes()
+            if relative == "manifest.json" and "publication" in manifest:
+                # Source repository publication control is NOT part of the Host
+                # ProviderScriptManifest V1 schema (unknown keys fail closed).
+                # Keep the flag in the source file for publication policy and
+                # strip it only from the signed runtime artifact.
+                runtime_manifest = {k: v for k, v in manifest.items() if k != "publication"}
+                payload = json.dumps(runtime_manifest, ensure_ascii=False, indent=2).encode("utf-8")
+            archive.writestr(info, payload)
 
     print(f"built {manifest['id']} {manifest['version']['name']} -> {output}")
 
