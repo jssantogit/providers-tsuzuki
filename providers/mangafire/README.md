@@ -18,12 +18,12 @@ HTTP is attempted first. A bounded Browser Host Service request is used only as 
 
 V1 exposes only the English content facet. Additional MangaFire languages can be enabled after the first physical Reader path is accepted.
 
-## 0.1.4 signed smoke acceptance (2026-10-31)
+## 0.1.5 signed smoke acceptance (2026-10-31)
 
-The signed repository index is at sequence **22** and publishes MangaFire
-`0.1.4` (version code **5**). The `reading.lookup` flow now accepts only
+The signed repository index is at sequence **23** and publishes MangaFire
+`0.1.5` (version code **6**). The `reading.lookup` flow now accepts only
 MangaFire-attested alternate titles; an explicit HTTPS `mangafire.to/title/{hid}-...`
-link must resolve to the matching source record. Chapter pagination does
+link must resolve to the matching source record. Explicit per-chapter languages are checked before variant selection to prevent importing Spanish records into the English facet. Chapter pagination does
 not report a complete inventory when the upstream omits its termination metadata.
 
 The automated conformance fixtures and signed publication are **not** physical
@@ -32,7 +32,7 @@ evidence of chapter availability. For issue
 in-place Android smoke must:
 
 1. Refresh the already-trusted Provider repository (no data reset), then
-   verify that MangaFire reports version code 5.
+   verify that MangaFire reports version code 6.
 2. Install the signed Release Host build from the
    [dedicated smoke workflow](https://github.com/jssantogit/tsuzuki/actions/runs/41192194353)
    over the existing app; do not substitute a Dev package.
