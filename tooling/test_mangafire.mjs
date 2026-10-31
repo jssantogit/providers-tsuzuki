@@ -40,6 +40,10 @@ globalThis.tsuzuki = {
         return JSON.stringify({ statusCode: 200, body: JSON.stringify(searchFixture) });
       }
       if (parsed.pathname === "/api/titles/one-piece-test/chapters") {
+        // Timeout-safe pagination must fetch early canonical chapters first.
+        assert.equal(parsed.searchParams.get("sort"), "number");
+        assert.equal(parsed.searchParams.get("order"), "asc");
+        assert.equal(parsed.searchParams.get("page"), "1");
         return JSON.stringify({ statusCode: 200, body: JSON.stringify(chaptersFixture) });
       }
       if (parsed.pathname === "/api/chapters/101") {
