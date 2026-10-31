@@ -26,7 +26,7 @@ Tsuzuki should display this SHA-256 fingerprint before trust is confirmed:
 
 `20875348d95649ff0009e329f0d43de1b84ccf8af7966c215d5e0f449e697159`
 
-Confirm trust only if the displayed fingerprint matches exactly. The verified signed repository **sequence `20`** contains the existing Direct P2P, MangaFire and Nyaa packages, plus **MangaAll / MangaDex** and **MangaAll / MangaDot** version `0.1.0` / code `1`. MangaBall remains paused and is **not** in the signed index. MangaAll adapters expose only `reading.lookup@1` and `reading.chapters@1`, **not** Reader pages.
+Confirm trust only if the displayed fingerprint matches exactly. The verified signed repository **sequence `21`** contains the existing Direct P2P, MangaFire and Nyaa packages, plus **MangaAll / MangaDex** and **MangaAll / MangaDot** version `0.1.1` / code `2`. This release removes repository-only `publication` fields from the Host V1 packaged manifests, fixing the on-device `Provider manifest is malformed` error found in sequence 20. MangaBall remains paused and is **not** in the signed index. MangaAll adapters expose only `reading.lookup@1` and `reading.chapters@1`, **not** Reader pages.
 
 **Already enrolled with this same key?** Refresh the existing repository in the app, preserving existing installed Providers, grants and library. The two MangaAll source adapters appear in **Discover**. In Host versions that contain the MangaAll family grouping (PR #167), the app can install both as one MangaAll set; older Hosts may list the two adapters separately. No app reinstall, data reset, repository re-enrollment or key rotation is needed for this publication.
 
@@ -34,7 +34,7 @@ Confirm trust only if the displayed fingerprint matches exactly. The verified si
 
 `tsuzuki-provider-root-2026-02` replaces the previous bootstrap root `tsuzuki-provider-root-2026-01`.
 
-This was a historical bootstrap replacement, not an in-band continuity-preserving rotation. Existing installations pinned to the old root must not be silently repinned. **Do not reset working app data or delete existing provider enrollments to consume sequence 20.** If a device remains pinned to the obsolete root, investigate its trust state and use the supported trust-rotation/recovery workflow separately; it is not equivalent to refreshing the current enrolled repository.
+This was a historical bootstrap replacement, not an in-band continuity-preserving rotation. Existing installations pinned to the old root must not be silently repinned. **Do not reset working app data or delete existing provider enrollments to consume sequence 21.** If a device remains pinned to the obsolete root, investigate its trust state and use the supported trust-rotation/recovery workflow separately; it is not equivalent to refreshing the current enrolled repository.
 
 For a deployed ecosystem where preserving existing enrollments matters, future signing-key rotation must be introduced through the repository trust-rotation protocol from a previously trusted signed index rather than replacing the bootstrap root in place.
 
