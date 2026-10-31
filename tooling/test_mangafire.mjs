@@ -75,6 +75,7 @@ assert.deepEqual(lookup, {
       aliases: [],
       url: "https://mangafire.to/title/one-piece-test-one-piece",
       language: "en",
+      detailOutcome: "NOT_NEEDED",
     },
   ],
   nextCursor: null,
@@ -362,6 +363,7 @@ for (const [hid, slug, title, alias] of directTitles) {
     aliases: [alias],
     url: `https://mangafire.to/title/${hid}-${slug}`,
     language: "en",
+    detailOutcome: "VERIFIED_WITH_ALIASES",
   });
 }
 assert.equal(directDetailCalls, directTitles.length);
@@ -498,6 +500,8 @@ globalThis.tsuzuki.http.request = async (_method, url) => {
 const qualifiedVagabond = await provider.reading.lookup({ titles: ["Vagabond"] });
 assert.deepEqual(ambiguousExactDetails, ["/api/titles/qnlvj", "/api/titles/4mx"]);
 assert.deepEqual(qualifiedVagabond.items[0].aliases, ["Vagabond (Official Colored)"]);
+assert.equal(qualifiedVagabond.items[0].detailOutcome, "VERIFIED_WITH_ALIASES");
+assert.equal(qualifiedVagabond.items[1].detailOutcome, "VERIFIED_NO_ALIASES");
 assert.deepEqual(qualifiedVagabond.items[1].aliases, []);
 assert.equal(qualifiedVagabond.items.length, 3);
 
@@ -525,6 +529,7 @@ globalThis.tsuzuki.http.request = async (_method, url) => {
 const homonyms = await provider.reading.lookup({ titles: ["Duplicated"] });
 assert.equal(homonymDetails, 5, "limit identity detail calls to the fixed provider budget");
 assert.equal(homonyms.items.length, 9);
+assert.equal(homonyms.items[5].detailOutcome, "BUDGET_EXHAUSTED");
 assert.ok(homonyms.items.every((item) => item.aliases.length === 0));
 
 // Detail responses which identify an unrelated HID cannot qualify the edition
@@ -551,5 +556,55 @@ globalThis.tsuzuki.http.request = async (_method, url) => {
 const conflictingDetails = await provider.reading.lookup({ titles: ["Duplicated"] });
 assert.deepEqual(conflictingDetails.items[0].aliases, []);
 assert.deepEqual(conflictingDetails.items[1].aliases, ["Duplicated (Colored)"]);
+
+// Detail failure must be classified without ever returning upstream error text.
+// The Host logs only a closed code and a bounded HTTP response status.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({ items: [
+        { hid: "real-a", title: "Vagabond" },
+        { hid: "real-b", title: "Vagabond" },
+      ] }),
+    });
+  }
+  if (pathname === "/api/titles/real-a") {
+    return JSON.stringify({ statusCode: 503, body: "temporary outage" });
+  }
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify({ data: { hid: "real-b", title: "Vagabond" } }),
+  });
+};
+const degradedDetail = await provider.reading.lookup({ titles: ["Vagabond"] });
+assert.equal(degradedDetail.items[0].detailOutcome, "DETAIL_FAILED");
+assert.equal(degradedDetail.items[0].detailHttpStatus, 503);
+assert.equal(degradedDetail.items[1].detailOutcome, "VERIFIED_NO_ALIASES");
+assert.equal("detailHttpStatus" in degradedDetail.items[1], false);
+
+// A protected challenge is a distinct operational cause from a metadata
+// mismatch or a quiet missing alternate edition; do not log body contents.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({ statusCode: 200, body: JSON.stringify({ items: [
+      { hid: "real-a", title: "Vagabond" },
+      { hid: "real-b", title: "Vagabond" },
+    ] }) });
+  }
+  if (pathname === "/api/titles/real-a") {
+    return JSON.stringify({ statusCode: 403, body: "challenge" });
+  }
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify({ data: { hid: "real-b", title: "Vagabond" } }),
+  });
+};
+globalThis.tsuzuki.browser.readText = async () => { throw new Error("Challenge requires user interaction"); };
+const blockedDetail = await provider.reading.lookup({ titles: ["Vagabond"] });
+assert.equal(blockedDetail.items[0].detailOutcome, "CHALLENGE_BLOCKED");
+assert.equal(blockedDetail.items[0].detailHttpStatus, 403);
 
 console.log("MangaFire Provider conformance fixtures: OK");
