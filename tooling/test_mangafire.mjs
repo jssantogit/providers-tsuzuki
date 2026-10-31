@@ -75,7 +75,6 @@ assert.deepEqual(lookup, {
       aliases: [],
       url: "https://mangafire.to/title/one-piece-test-one-piece",
       language: "en",
-      detailOutcome: "NOT_NEEDED",
     },
   ],
   nextCursor: null,
@@ -363,7 +362,6 @@ for (const [hid, slug, title, alias] of directTitles) {
     aliases: [alias],
     url: `https://mangafire.to/title/${hid}-${slug}`,
     language: "en",
-    detailOutcome: "VERIFIED_WITH_ALIASES",
   });
 }
 assert.equal(directDetailCalls, directTitles.length);
@@ -497,13 +495,17 @@ globalThis.tsuzuki.http.request = async (_method, url) => {
   }
   throw new Error("Details of irrelevant search results must not run");
 };
-const qualifiedVagabond = await provider.reading.lookup({ titles: ["Vagabond"] });
+const qualifiedVagabond = await provider.reading.lookup({ titles: ["Vagabond"], diagnosticsVersion: 1 });
 assert.deepEqual(ambiguousExactDetails, ["/api/titles/qnlvj", "/api/titles/4mx"]);
 assert.deepEqual(qualifiedVagabond.items[0].aliases, ["Vagabond (Official Colored)"]);
 assert.equal(qualifiedVagabond.items[0].detailOutcome, "VERIFIED_WITH_ALIASES");
 assert.equal(qualifiedVagabond.items[1].detailOutcome, "VERIFIED_NO_ALIASES");
 assert.deepEqual(qualifiedVagabond.items[1].aliases, []);
 assert.equal(qualifiedVagabond.items.length, 3);
+const legacyVagabond = await provider.reading.lookup({ titles: ["Vagabond"] });
+assert.deepEqual(legacyVagabond.items[0].aliases, ["Vagabond (Official Colored)"]);
+assert.equal("detailOutcome" in legacyVagabond.items[0], false, "old Host must not receive unknown response keys");
+assert.equal("detailHttpStatus" in legacyVagabond.items[0], false);
 
 // A source that reports many homonymous HIDs must not cause an unbounded
 // detail fan-out or gain an arbitrary selected ID by search position.
@@ -526,7 +528,7 @@ globalThis.tsuzuki.http.request = async (_method, url) => {
     }),
   });
 };
-const homonyms = await provider.reading.lookup({ titles: ["Duplicated"] });
+const homonyms = await provider.reading.lookup({ titles: ["Duplicated"], diagnosticsVersion: 1 });
 assert.equal(homonymDetails, 5, "limit identity detail calls to the fixed provider budget");
 assert.equal(homonyms.items.length, 9);
 assert.equal(homonyms.items[5].detailOutcome, "BUDGET_EXHAUSTED");
@@ -553,7 +555,7 @@ globalThis.tsuzuki.http.request = async (_method, url) => {
     }),
   });
 };
-const conflictingDetails = await provider.reading.lookup({ titles: ["Duplicated"] });
+const conflictingDetails = await provider.reading.lookup({ titles: ["Duplicated"], diagnosticsVersion: 1 });
 assert.deepEqual(conflictingDetails.items[0].aliases, []);
 assert.deepEqual(conflictingDetails.items[1].aliases, ["Duplicated (Colored)"]);
 
@@ -578,7 +580,7 @@ globalThis.tsuzuki.http.request = async (_method, url) => {
     body: JSON.stringify({ data: { hid: "real-b", title: "Vagabond" } }),
   });
 };
-const degradedDetail = await provider.reading.lookup({ titles: ["Vagabond"] });
+const degradedDetail = await provider.reading.lookup({ titles: ["Vagabond"], diagnosticsVersion: 1 });
 assert.equal(degradedDetail.items[0].detailOutcome, "DETAIL_FAILED");
 assert.equal(degradedDetail.items[0].detailHttpStatus, 503);
 assert.equal(degradedDetail.items[1].detailOutcome, "VERIFIED_NO_ALIASES");
@@ -603,7 +605,7 @@ globalThis.tsuzuki.http.request = async (_method, url) => {
   });
 };
 globalThis.tsuzuki.browser.readText = async () => { throw new Error("Challenge requires user interaction"); };
-const blockedDetail = await provider.reading.lookup({ titles: ["Vagabond"] });
+const blockedDetail = await provider.reading.lookup({ titles: ["Vagabond"], diagnosticsVersion: 1 });
 assert.equal(blockedDetail.items[0].detailOutcome, "CHALLENGE_BLOCKED");
 assert.equal(blockedDetail.items[0].detailHttpStatus, 403);
 
@@ -627,7 +629,7 @@ globalThis.tsuzuki.http.request = async (_method, url) => {
   });
 };
 globalThis.tsuzuki.browser.readText = async () => { throw new Error("Browser navigation blocked"); };
-const htmlBlocked = await provider.reading.lookup({ titles: ["Vagabond"] });
+const htmlBlocked = await provider.reading.lookup({ titles: ["Vagabond"], diagnosticsVersion: 1 });
 assert.equal(htmlBlocked.items[0].detailOutcome, "CHALLENGE_BLOCKED");
 assert.equal("detailHttpStatus" in htmlBlocked.items[0], false);
 
