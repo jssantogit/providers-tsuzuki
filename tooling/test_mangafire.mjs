@@ -452,12 +452,17 @@ globalThis.tsuzuki.http.request = async (_method, url) => {
   ambiguousDetailRequests++;
   throw new Error("Ambiguous lookup must not request unrelated detail metadata");
 };
-const realVagabondLookup = await provider.reading.lookup({ titles: ["Vagabond"] });
+const realVagabondLookup = await provider.reading.lookup({ titles: ["Vagabond"], diagnosticsVersion: 1 });
 assert.deepEqual(realVagabondLookup.items.slice(0, 2).map((item) => item.externalWorkId), ["qnlvj", "4mx"]);
 assert.equal(ambiguousDetailRequests, 0);
 assert.equal(realVagabondLookup.items.length, 4);
 assert.equal(realVagabondLookup.items[0].chapterCount, 327, "record source-reported count only");
 assert.equal("chapterCount" in realVagabondLookup.items[1], false, "unknown is not zero");
+const legacyCount = await provider.reading.lookup({ titles: ["Vagabond"] });
+assert.equal("chapterCount" in legacyCount.items[0], false,
+  "strict legacy clients must not receive new chapterCount metadata");
+assert.equal("detailOutcome" in legacyCount.items[0], false,
+  "strict legacy clients must not receive detail diagnostics");
 
 // Physical #176 smoke: v7 reported qnlvj and 4mx as identical "Vagabond"
 // entries with NO alternative titles. Their details must be queried (bounded)
