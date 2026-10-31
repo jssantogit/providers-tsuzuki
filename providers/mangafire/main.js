@@ -182,7 +182,14 @@ async function chapters(input) {
   const response = await chaptersForTitle(externalWorkId, language, page);
   const rawItems = verifiedItems(response, "chapters");
   const result = [];
-  for (const item of mergeChapterVariants(rawItems)) {
+  // Some MangaFire responses include multiple chapter languages even when the
+  // request asks for one facet. Never relabel a foreign chapter as English or
+  // prefer it while deduplicating official/fan versions of the same number.
+  const facetItems = rawItems.filter((item) => {
+    const sourceLanguage = cleanText(item?.language).toLowerCase();
+    return !sourceLanguage || sourceLanguage === language;
+  });
+  for (const item of mergeChapterVariants(facetItems)) {
     const id = item?.id == null ? "" : String(item.id);
     const number = Number(item?.number);
     if (!id || !Number.isFinite(number)) continue;
