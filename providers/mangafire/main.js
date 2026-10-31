@@ -160,7 +160,7 @@ function mergeChapterVariants(items) {
   return Array.from(selected.values());
 }
 
-async function lookup(input) {
+async function lookupUnchecked(input) {
   // Compatibility with strict older Host decoders: edition enrichment is
   // always active, but new response keys require an explicit capability opt-in.
   const includeDetailDiagnostics = input?.diagnosticsVersion === 1;
@@ -264,6 +264,42 @@ async function lookup(input) {
   }
 
   return { items, nextCursor: null };
+}
+
+// Optional lookup failure envelope for Host diagnosticsVersion 1. A failed
+// source lookup is NEVER a completed empty chapter inventory: upgraded Hosts
+// must convert lookupFailureCode into a failure before edition matching.
+// Older Hosts continue to receive a thrown error. No source error strings,
+// URLs, page content or headers cross this boundary.
+function sourceLookupFailure(error) {
+  const value = cleanText(error?.message);
+  const httpStatusMatch = /^MangaFire API request failed with HTTP ([1-5][0-9]{2})$/.exec(value);
+  const status = Number.isInteger(error?.httpStatus)
+    ? error.httpStatus
+    : httpStatusMatch ? Number(httpStatusMatch[1]) : null;
+  const code = error?.challengeRequired === true || status === 403
+    ? "CHALLENGE_BLOCKED"
+    : status != null
+      ? "HTTP_ERROR"
+      : error instanceof SyntaxError ||
+          /^MangaFire (lookup invalid items array|identity could not be verified from the source)$/.test(value)
+        ? "INVALID_RESPONSE"
+        : "UNCLASSIFIED_ERROR";
+  return {
+    items: [],
+    nextCursor: null,
+    lookupFailureCode: code,
+    ...(Number.isInteger(status) && status >= 100 && status <= 599 ? { lookupHttpStatus: status } : {}),
+  };
+}
+
+async function lookup(input) {
+  try {
+    return await lookupUnchecked(input);
+  } catch (error) {
+    if (input?.diagnosticsVersion !== 1) throw error;
+    return sourceLookupFailure(error);
+  }
 }
 
 async function chapters(input) {
