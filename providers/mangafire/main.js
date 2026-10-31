@@ -36,25 +36,66 @@ function normalizedTitle(value) {
   return cleanText(value).toLowerCase().replace(/\s+/g, " ");
 }
 
-async function verifiedLookupAliases(item, requestedTitle, remainingDetails) {
+// Used only to decide whether optional identity detail enrichment is needed.
+// The Host remains the sole authority for accepting an editorial edition.
+const EDITION_HINTS = ["colored", "coloured", "full color", "full colour", "omnibus", "one shot", "oneshot", "special edition"];
+function hasSourceEditionQualifier(item) {
+  const base = normalizedTitle(item?.title);
+  if (!base) return false;
+  return explicitAliases(item).some((alias) => {
+    const normalized = normalizedTitle(alias);
+    const suffix = normalized.slice(base.length);
+    return normalized.startsWith(base) &&
+      (suffix.startsWith(" ") || suffix.startsWith("(") || suffix.startsWith("[")) &&
+      EDITION_HINTS.some((hint) => suffix.includes(hint));
+  });
+}
+
+async function verifiedLookupAliases(item, requestedTitle, remainingDetails, forcePrimaryDetail = false) {
   const direct = explicitAliases(item);
-  if (direct.length > 0 || normalizedTitle(item?.title) === normalizedTitle(requestedTitle) || remainingDetails <= 0) {
-    return { aliases: direct, detailsUsed: 0 };
+  if (!forcePrimaryDetail &&
+      (direct.length > 0 || normalizedTitle(item?.title) === normalizedTitle(requestedTitle))) {
+    return { aliases: direct, detailsUsed: 0, detailOutcome: "NOT_NEEDED" };
+  }
+  if (remainingDetails <= 0) {
+    return { aliases: direct, detailsUsed: 0, detailOutcome: "BUDGET_EXHAUSTED" };
   }
   const hid = cleanText(item?.hid);
-  if (!hid) return { aliases: direct, detailsUsed: 0 };
+  if (!hid) return { aliases: direct, detailsUsed: 0, detailOutcome: "IDENTITY_MISMATCH" };
   try {
     const response = await titleDetails(hid);
     // A detail response is accepted only when its primary title corroborates
     // the search hit. If it disagrees, do not attach potentially foreign aliases.
     const record = response?.data;
-    if (!record || normalizedTitle(record.title) !== normalizedTitle(item.title)) {
-      return { aliases: direct, detailsUsed: 1 };
+    if (!record || !cleanText(record.title)) {
+      return { aliases: direct, detailsUsed: 1, detailOutcome: "INVALID_RESPONSE" };
     }
-    return { aliases: explicitAliases(record), detailsUsed: 1 };
-  } catch {
+    if ((cleanText(record.hid) && cleanText(record.hid) !== hid) ||
+      normalizedTitle(record.title) !== normalizedTitle(item.title)) {
+      return { aliases: direct, detailsUsed: 1, detailOutcome: "IDENTITY_MISMATCH" };
+    }
+    const aliases = [...new Set([...direct, ...explicitAliases(record)])].slice(0, MAX_ALIASES);
+    return {
+      aliases,
+      detailsUsed: 1,
+      detailOutcome: aliases.length > 0 ? "VERIFIED_WITH_ALIASES" : "VERIFIED_NO_ALIASES",
+    };
+  } catch (error) {
     // A failing optional detail lookup cannot create a false work binding.
-    return { aliases: direct, detailsUsed: 1 };
+    // Only closed reasons and a verified HTTP status are allowed to cross the
+    // Provider boundary. Never return upstream error messages or response bodies.
+    const statusMatch = /^MangaFire API request failed with HTTP ([1-5][0-9]{2})$/.exec(cleanText(error?.message));
+    const httpStatus = Number.isInteger(error?.httpStatus)
+      ? error.httpStatus
+      : statusMatch ? Number(statusMatch[1]) : null;
+    const challenge = error?.challengeRequired === true || httpStatus === 403;
+    return {
+      aliases: direct,
+      detailsUsed: 1,
+      detailOutcome: challenge ? "CHALLENGE_BLOCKED" : "DETAIL_FAILED",
+      ...(Number.isInteger(httpStatus) && httpStatus >= 100 && httpStatus <= 599
+        ? { detailHttpStatus: httpStatus } : {}),
+    };
   }
 }
 
@@ -63,6 +104,13 @@ async function verifiedLookupAliases(item, requestedTitle, remainingDetails) {
 function titleIdFromSourceUrl(value) {
   const match = /^https:\/\/mangafire\.to\/title\/([a-z0-9]{2,64})(?:-[a-z0-9]+)*\/?$/i.exec(value);
   return match ? match[1] : null;
+}
+
+// Counts must be literal source metadata, not inferred from a search page,
+// last chapter number, chapter IDs or the number of visible candidates.
+function sourceReportedChapterCount(item) {
+  const value = item?.chapterCount ?? item?.chaptersCount;
+  return Number.isInteger(value) && value >= 0 && value <= 1_000_000 ? value : null;
 }
 
 function titleUrl(item) {
@@ -112,7 +160,10 @@ function mergeChapterVariants(items) {
   return Array.from(selected.values());
 }
 
-async function lookup(input) {
+async function lookupUnchecked(input) {
+  // Compatibility with strict older Host decoders: edition enrichment is
+  // always active, but new response keys require an explicit capability opt-in.
+  const includeDetailDiagnostics = input?.diagnosticsVersion === 1;
   const titles = Array.isArray(input?.titles) ? input.titles : [];
   const seen = new Set();
   const items = [];
@@ -137,25 +188,74 @@ async function lookup(input) {
           aliases: explicitAliases(record),
           url: titleUrl(record),
           language: LANGUAGE,
+          ...(includeDetailDiagnostics
+            ? { detailOutcome: explicitAliases(record).length > 0
+              ? "VERIFIED_WITH_ALIASES" : "VERIFIED_NO_ALIASES" }
+            : {}),
+          ...(!includeDetailDiagnostics || sourceReportedChapterCount(record) == null
+            ? {}
+            : { chapterCount: sourceReportedChapterCount(record) }),
         }],
         nextCursor: null,
       };
     }
 
     const response = await searchTitles(title);
-    for (const item of verifiedItems(response, "lookup")) {
+    const sourceHits = verifiedItems(response, "lookup");
+    const query = normalizedTitle(title);
+    const attestedMatches = new Set(
+      sourceHits
+        .filter((item) => cleanText(item?.hid) && cleanText(item?.title))
+        .filter((item) =>
+          normalizedTitle(item.title) === query ||
+          explicitAliases(item).some((alias) => normalizedTitle(alias) === query),
+        )
+        .map((item) => cleanText(item.hid)),
+    );
+    // Two or more distinct source-attested exact identities already make
+    // automatic edition binding ambiguous. Hydrating unrelated results cannot
+    // prove which edition is canonical; save the limited detail budget for a
+    // future lookup that might actually disambiguate.
+    const ambiguousAttested = attestedMatches.size > 1;
+    // Search listings often omit edition aliases even on duplicate primary
+    // HIDs. Enrich the exact contenders, not irrelevant search hits, with a
+    // strict per-lookup budget. An absent detail response proves no edition.
+    const unknownEditionPrimaries = sourceHits
+      .filter((item) =>
+        cleanText(item?.hid) &&
+        normalizedTitle(item?.title) === query &&
+        !hasSourceEditionQualifier(item),
+      );
+    const needsPrimaryDetails = unknownEditionPrimaries.length > 1;
+    for (const item of sourceHits) {
       const externalWorkId = cleanText(item?.hid);
       const candidateTitle = cleanText(item?.title);
       if (!externalWorkId || !candidateTitle || seen.has(externalWorkId)) continue;
       seen.add(externalWorkId);
-      const detail = await verifiedLookupAliases(item, title, MAX_ALIAS_DETAIL_LOOKUPS - detailLookups);
+      const detail = ambiguousAttested && !attestedMatches.has(externalWorkId)
+        ? { aliases: explicitAliases(item), detailsUsed: 0, detailOutcome: "SKIPPED_IRRELEVANT" }
+        : await verifiedLookupAliases(
+          item,
+          title,
+          MAX_ALIAS_DETAIL_LOOKUPS - detailLookups,
+          needsPrimaryDetails && normalizedTitle(candidateTitle) === query && !hasSourceEditionQualifier(item),
+        );
       detailLookups += detail.detailsUsed;
       items.push({
         externalWorkId,
         title: candidateTitle,
         aliases: detail.aliases,
+        ...(includeDetailDiagnostics
+          ? {
+            detailOutcome: detail.detailOutcome,
+            ...(detail.detailHttpStatus == null ? {} : { detailHttpStatus: detail.detailHttpStatus }),
+          }
+          : {}),
         url: titleUrl(item),
         language: LANGUAGE,
+        ...(!includeDetailDiagnostics || sourceReportedChapterCount(item) == null
+          ? {}
+          : { chapterCount: sourceReportedChapterCount(item) }),
       });
       if (items.length >= MAX_LOOKUP_RESULTS) break;
     }
@@ -164,6 +264,42 @@ async function lookup(input) {
   }
 
   return { items, nextCursor: null };
+}
+
+// Optional lookup failure envelope for Host diagnosticsVersion 1. A failed
+// source lookup is NEVER a completed empty chapter inventory: upgraded Hosts
+// must convert lookupFailureCode into a failure before edition matching.
+// Older Hosts continue to receive a thrown error. No source error strings,
+// URLs, page content or headers cross this boundary.
+function sourceLookupFailure(error) {
+  const value = cleanText(error?.message);
+  const httpStatusMatch = /^MangaFire API request failed with HTTP ([1-5][0-9]{2})$/.exec(value);
+  const status = Number.isInteger(error?.httpStatus)
+    ? error.httpStatus
+    : httpStatusMatch ? Number(httpStatusMatch[1]) : null;
+  const code = error?.challengeRequired === true || status === 403
+    ? "CHALLENGE_BLOCKED"
+    : status != null
+      ? "HTTP_ERROR"
+      : error instanceof SyntaxError ||
+          /^MangaFire (lookup invalid items array|identity could not be verified from the source)$/.test(value)
+        ? "INVALID_RESPONSE"
+        : "UNCLASSIFIED_ERROR";
+  return {
+    items: [],
+    nextCursor: null,
+    lookupFailureCode: code,
+    ...(Number.isInteger(status) && status >= 100 && status <= 599 ? { lookupHttpStatus: status } : {}),
+  };
+}
+
+async function lookup(input) {
+  try {
+    return await lookupUnchecked(input);
+  } catch (error) {
+    if (input?.diagnosticsVersion !== 1) throw error;
+    return sourceLookupFailure(error);
+  }
 }
 
 async function chapters(input) {

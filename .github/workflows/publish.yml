@@ -8,6 +8,10 @@ on:
     paths:
       - repository/publish.request
 
+concurrency:
+  group: providers-publish-main
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -29,9 +33,11 @@ jobs:
         run: |
           node tooling/test_mangafire.mjs
           python3 tooling/check_repository.py
+      - name: Verify existing signed repository snapshot
+        run: node tooling/verify_index.mjs
       - name: Build Provider artifacts
         run: |
-          rm -rf dist/providers
+          # Keep immutable archives referenced by previous signed indexes.
           mkdir -p dist/providers
           python3 - <<'PY'
           import json
@@ -45,7 +51,11 @@ jobs:
               output = pathlib.Path('dist/providers') / f"{manifest['id']}-{manifest['version']['code']}.tsz"
               subprocess.run(['python3', 'tooling/build_provider.py', str(manifest_path.parent), str(output)], check=True)
           PY
+      - name: Plan atomic signed publication
+        id: publication
+        run: python3 tooling/prepare_publication.py
       - name: Build signed repository index
+        if: steps.publication.outputs.changed == 'true'
         env:
           TSUZUKI_PROVIDER_SIGNING_KEY_PEM: ${{ secrets.TSUZUKI_PROVIDER_SIGNING_KEY_PEM }}
         run: |
@@ -53,10 +63,12 @@ jobs:
           node tooling/sign_index.mjs
           node tooling/verify_index.mjs
       - name: Commit publication output
+        if: steps.publication.outputs.changed == 'true'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add dist
+          # Sequence and new signed payload become visible in the same commit.
+          git add repository/config.json dist
           if git diff --cached --quiet; then
             echo 'No publication changes.'
             exit 0

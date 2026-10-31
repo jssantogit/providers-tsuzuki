@@ -50,6 +50,37 @@ jobs:
         run: python3 -m unittest discover -s tooling -p test_build_provider_manifest.py -v
       - name: Repository and package conformance
         run: python3 tooling/check_repository.py
+      - name: Signed publication planner regression tests
+        run: python3 -m unittest discover -s tooling -p 'test_prepare_publication.py' -v
       - name: Verify signed publication
         if: ${{ hashFiles('dist/index.json', 'repository/public-key.pem') != '' }}
         run: node tooling/verify_index.mjs
+
+      - name: Signed publication dry-run (no signing or upload)
+        run: |
+          # Exercise the real packaging and promotion path on the PR while
+          # keeping the public index at its currently verified sequence.
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import subprocess
+          for manifest_path in sorted(pathlib.Path('providers').glob('*/manifest.json')):
+              manifest = json.loads(manifest_path.read_text())
+              if manifest.get('publication') == 'development':
+                  continue
+              output = pathlib.Path('dist/providers') / f"{manifest['id']}-{manifest['version']['code']}.tsz"
+              subprocess.run(['python3', 'tooling/build_provider.py', str(manifest_path.parent), str(output)], check=True)
+          PY
+          python3 tooling/prepare_publication.py
+          node tooling/build_index.mjs
+          python3 - <<'PY'
+          import json
+          import pathlib
+          config = json.loads(pathlib.Path('repository/config.json').read_text())
+          payload = json.loads(pathlib.Path('dist/index.payload.json').read_text())
+          assert payload['sequence'] == config['sequence']
+          manifest = json.loads(pathlib.Path('providers/mangafire/manifest.json').read_text())
+          manga = next(p for p in payload['providers'] if p['providerId'] == 'app.tsuzuki.mangafire')
+          assert manga['versionCode'] == manifest['version']['code']
+          print('signed publication dry-run: expected sequence', config['sequence'], 'MangaFire code', manga['versionCode'])
+          PY

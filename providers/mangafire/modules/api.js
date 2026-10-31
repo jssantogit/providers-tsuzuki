@@ -55,12 +55,31 @@ export async function apiJson(path, params = {}) {
       const htmlChallenge = typeof response.body === "string" &&
         /^\s*(?:<!doctype\s+html|<html(?:\s|>))/i.test(response.body);
       if (!error.challengeRequired && !htmlChallenge) throw error;
-      return browserJson(url);
+      try {
+        return await browserJson(url);
+      } catch {
+        // HTML or JSON challenge was observed in a successful HTTP wrapper.
+        // The fallback did not clear it; do not report an ordinary empty
+        // source result or leak Browser Host error text across the boundary.
+        const challenge = new Error("MangaFire challenge required");
+        challenge.challengeRequired = true;
+        challenge.httpStatus = response.statusCode;
+        throw challenge;
+      }
     }
   }
 
   if (response.statusCode === 403) {
-    return browserJson(url);
+    try {
+      return await browserJson(url);
+    } catch {
+      // The source explicitly returned 403. Preserve only that status and a
+      // closed challenge cause; do not leak Browser Host text, URLs or cookies.
+      const challenge = new Error("MangaFire challenge required");
+      challenge.challengeRequired = true;
+      challenge.httpStatus = 403;
+      throw challenge;
+    }
   }
 
   throw new Error(`MangaFire API request failed with HTTP ${response.statusCode}`);
