@@ -4,14 +4,65 @@
  * See assets/THIRD_PARTY_NOTICES.txt.
  */
 
-import { BASE_URL, chaptersForTitle, pagesForChapter, searchTitles } from "./modules/api.js";
+import { BASE_URL, chaptersForTitle, pagesForChapter, searchTitles, titleDetails } from "./modules/api.js";
 
 const LANGUAGE = "en";
 const MAX_LOOKUP_TITLES = 3;
 const MAX_LOOKUP_RESULTS = 20;
+const MAX_ALIAS_DETAIL_LOOKUPS = 5;
+const MAX_ALIASES = 32;
 
 function cleanText(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+// Never synthesize an alias from similar spelling. Only the source's own
+// explicitly supplied title metadata can attest a different canonical name.
+function explicitAliases(item) {
+  const values = [item?.aliases, item?.alternativeTitles, item?.altTitles, item?.otherNames, item?.synonyms];
+  const names = [];
+  for (const value of values) {
+    const entries = Array.isArray(value) ? value : [];
+    for (const entry of entries) {
+      const name = cleanText(typeof entry === "string" ? entry : entry?.title ?? entry?.name);
+      if (name && name.length <= 1024 && !names.includes(name)) names.push(name);
+      if (names.length >= MAX_ALIASES) return names;
+    }
+  }
+  return names;
+}
+
+function normalizedTitle(value) {
+  return cleanText(value).toLowerCase().replace(/\s+/g, " ");
+}
+
+async function verifiedLookupAliases(item, requestedTitle, remainingDetails) {
+  const direct = explicitAliases(item);
+  if (direct.length > 0 || normalizedTitle(item?.title) === normalizedTitle(requestedTitle) || remainingDetails <= 0) {
+    return { aliases: direct, detailsUsed: 0 };
+  }
+  const hid = cleanText(item?.hid);
+  if (!hid) return { aliases: direct, detailsUsed: 0 };
+  try {
+    const response = await titleDetails(hid);
+    // A detail response is accepted only when its primary title corroborates
+    // the search hit. If it disagrees, do not attach potentially foreign aliases.
+    const record = response?.data;
+    if (!record || normalizedTitle(record.title) !== normalizedTitle(item.title)) {
+      return { aliases: direct, detailsUsed: 1 };
+    }
+    return { aliases: explicitAliases(record), detailsUsed: 1 };
+  } catch {
+    // A failing optional detail lookup cannot create a false work binding.
+    return { aliases: direct, detailsUsed: 1 };
+  }
+}
+
+// Only the exact MangaFire title route can authorize a direct source selection.
+// Never turn an arbitrary URL or a lookalike host into a Provider binding.
+function titleIdFromSourceUrl(value) {
+  const match = /^https:\/\/mangafire\.to\/title\/([a-z0-9]{2,64})(?:-[a-z0-9]+)*\/?$/i.exec(value);
+  return match ? match[1] : null;
 }
 
 function titleUrl(item) {
@@ -34,11 +85,24 @@ function preferChapterVariant(candidate, current) {
   return Number(candidate?.id) < Number(current?.id);
 }
 
+function verifiedItems(response, capability) {
+  if (!response || !Array.isArray(response.items)) {
+    throw new Error(`MangaFire ${capability} invalid items array`);
+  }
+  return response.items;
+}
+
 function mergeChapterVariants(items) {
   const selected = new Map();
   for (const item of items) {
-    const number = Number(item?.number);
-    if (!Number.isFinite(number)) continue;
+    const rawNumber = item?.number;
+    const number = Number(rawNumber);
+    if (rawNumber == null || rawNumber === "" || !Number.isFinite(number)) {
+      throw new Error("MangaFire chapters invalid items number");
+    }
+    if (item?.id == null || String(item.id).trim() === "") {
+      throw new Error("MangaFire chapters invalid items id");
+    }
     const key = String(number);
     const current = selected.get(key);
     if (current == null || preferChapterVariant(item, current)) {
@@ -52,21 +116,44 @@ async function lookup(input) {
   const titles = Array.isArray(input?.titles) ? input.titles : [];
   const seen = new Set();
   const items = [];
+  let detailLookups = 0;
 
   for (const rawTitle of titles.slice(0, MAX_LOOKUP_TITLES)) {
     const title = cleanText(rawTitle);
     if (!title) continue;
 
+    if (/^https?:\/\//i.test(title)) {
+      const requestedId = titleIdFromSourceUrl(title);
+      if (!requestedId) throw new Error("MangaFire URL must be an exact HTTPS title link");
+      const details = await titleDetails(requestedId);
+      const record = details?.data;
+      if (!record || cleanText(record.hid) !== requestedId || !cleanText(record.title)) {
+        throw new Error("MangaFire identity could not be verified from the source");
+      }
+      return {
+        items: [{
+          externalWorkId: requestedId,
+          title: cleanText(record.title),
+          aliases: explicitAliases(record),
+          url: titleUrl(record),
+          language: LANGUAGE,
+        }],
+        nextCursor: null,
+      };
+    }
+
     const response = await searchTitles(title);
-    for (const item of response?.items ?? []) {
+    for (const item of verifiedItems(response, "lookup")) {
       const externalWorkId = cleanText(item?.hid);
       const candidateTitle = cleanText(item?.title);
       if (!externalWorkId || !candidateTitle || seen.has(externalWorkId)) continue;
       seen.add(externalWorkId);
+      const detail = await verifiedLookupAliases(item, title, MAX_ALIAS_DETAIL_LOOKUPS - detailLookups);
+      detailLookups += detail.detailsUsed;
       items.push({
         externalWorkId,
         title: candidateTitle,
-        aliases: [],
+        aliases: detail.aliases,
         url: titleUrl(item),
         language: LANGUAGE,
       });
@@ -93,8 +180,9 @@ async function chapters(input) {
   }
 
   const response = await chaptersForTitle(externalWorkId, language, page);
+  const rawItems = verifiedItems(response, "chapters");
   const result = [];
-  for (const item of mergeChapterVariants(response?.items ?? [])) {
+  for (const item of mergeChapterVariants(rawItems)) {
     const id = item?.id == null ? "" : String(item.id);
     const number = Number(item?.number);
     if (!id || !Number.isFinite(number)) continue;
@@ -113,8 +201,19 @@ async function chapters(input) {
   }
 
   const meta = response?.meta ?? {};
-  const lastPage = Number(meta.lastPage ?? page);
-  const hasNext = meta.hasNext === true || (Number.isFinite(lastPage) && page < lastPage);
+  const lastPage = meta.lastPage == null ? null : Number(meta.lastPage);
+  const hasLastPage = Number.isInteger(lastPage) && lastPage >= page;
+  // Never treat absent/malformed pagination metadata as proof of completeness.
+  // In that case continue until the source returns an explicitly empty page.
+  // Host collection still bounds the total number of pages and elapsed time.
+  if (meta.hasNext === false && hasLastPage && page < lastPage) {
+    throw new Error("MangaFire chapters conflicting pagination metadata");
+  }
+  const hasNext = typeof meta.hasNext === "boolean"
+    ? meta.hasNext
+    : hasLastPage
+      ? page < lastPage
+      : rawItems.length > 0;
   return {
     items: result,
     nextCursor: hasNext ? String(page + 1) : null,

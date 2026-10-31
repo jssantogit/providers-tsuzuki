@@ -125,4 +125,212 @@ const browserLookup = await provider.reading.lookup({ titles: ["One Piece"] });
 assert.equal(browserUsed, true);
 assert.equal(browserLookup.items[0].externalWorkId, "one-piece-test");
 
+// A differently spelled search hit must not be silently discarded when MangaFire's
+// own detail endpoint attests an exact alternative title.
+let detailCalls = 0;
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        items: [{ hid: "haikyuu-work", slug: "haikyu", title: "Haikyu!!" }],
+      }),
+    });
+  }
+  if (pathname === "/api/titles/haikyuu-work") {
+    detailCalls++;
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        data: { title: "Haikyu!!", alternativeTitles: ["Haikyuu!!", "ハイキュー!!"] },
+      }),
+    });
+  }
+  throw new Error("Unexpected detail lookup request");
+};
+const aliasLookup = await provider.reading.lookup({ titles: ["Haikyuu!!"] });
+assert.equal(aliasLookup.items.length, 1);
+assert.deepEqual(aliasLookup.items[0].aliases, ["Haikyuu!!", "ハイキュー!!"]);
+assert.equal(detailCalls, 1);
+
+// Whitespace variation in the provider's own title must not discard a
+// genuinely attested alias. This is not fuzzy title matching.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({ items: [{ hid: "haikyuu-work", title: "Haikyu   !!" }] }),
+    });
+  }
+  if (pathname === "/api/titles/haikyuu-work") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        data: { title: "Haikyu !!", alternativeTitles: ["Haikyuu!!"] },
+      }),
+    });
+  }
+  throw new Error("Unexpected normalized-title fixture request");
+};
+const whitespaceAliasLookup = await provider.reading.lookup({ titles: ["Haikyuu!!"] });
+assert.deepEqual(whitespaceAliasLookup.items[0].aliases, ["Haikyuu!!"]);
+
+// A stale/foreign detail response may never authorize an alias binding.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        items: [{ hid: "haikyuu-work", slug: "haikyu", title: "Haikyu!!" }],
+      }),
+    });
+  }
+  if (pathname === "/api/titles/haikyuu-work") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        data: { title: "Different Work", alternativeTitles: ["Haikyuu!!"] },
+      }),
+    });
+  }
+  throw new Error("Unexpected lookup fixture request");
+};
+const mismatchedDetailLookup = await provider.reading.lookup({ titles: ["Haikyuu!!"] });
+assert.equal(mismatchedDetailLookup.items.length, 1);
+assert.deepEqual(mismatchedDetailLookup.items[0].aliases, []);
+
+// An HTTP 200 containing a human-facing challenge is not a successful JSON page.
+let challenged200Fallbacks = 0;
+globalThis.tsuzuki.http.request = async () => JSON.stringify({
+  statusCode: 200,
+  body: "<!doctype html><html><title>Just a moment</title></html>",
+});
+globalThis.tsuzuki.browser.readText = async (_url, selector) => {
+  assert.equal(selector, "body");
+  challenged200Fallbacks++;
+  return JSON.stringify(searchFixture);
+};
+const htmlChallengeLookup = await provider.reading.lookup({ titles: ["One Piece"] });
+assert.equal(htmlChallengeLookup.items[0].externalWorkId, "one-piece-test");
+assert.equal(challenged200Fallbacks, 1);
+
+// A genuine malformed JSON body must fail instead of masquerading as empty chapters.
+globalThis.tsuzuki.http.request = async () => JSON.stringify({
+  statusCode: 200,
+  body: "{not valid json",
+});
+await assert.rejects(
+  provider.reading.lookup({ titles: ["One Piece"] }),
+  /JSON|Unexpected token|Expected property/i,
+);
+
+// Missing item arrays are malformed successful HTTP payloads, not empty results.
+globalThis.tsuzuki.http.request = async () => JSON.stringify({
+  statusCode: 200,
+  body: JSON.stringify({ data: { captcha: true }, meta: { lastPage: 1 } }),
+});
+await assert.rejects(
+  provider.reading.lookup({ titles: ["One Piece"] }),
+  /invalid.*items|missing.*items|malformed.*items/i,
+);
+await assert.rejects(
+  provider.reading.chapters({
+    binding: { externalWorkId: "one-piece-test", facetId: "en" },
+    cursor: null,
+  }),
+  /invalid.*items|missing.*items|malformed.*items/i,
+);
+
+// Real empty inventories must remain distinguishable from schema failures.
+globalThis.tsuzuki.http.request = async () => JSON.stringify({
+  statusCode: 200,
+  body: JSON.stringify({ items: [], meta: { lastPage: 1, hasNext: false } }),
+});
+const genuineEmpty = await provider.reading.chapters({
+  binding: { externalWorkId: "one-piece-test", facetId: "en" },
+  cursor: null,
+});
+assert.deepEqual(genuineEmpty, { items: [], nextCursor: null });
+
+
+// A manually supplied MangaFire title URL must resolve to exactly that source-attested
+// work, even when its displayed title differs from the Tsuzuki canonical title.
+// This also distinguishes standard and colored editions sharing a title.
+const directTitles = [
+  ["7j6", "demon-slayer-kimetsu-no-yaiba", "Demon Slayer: Kimetsu no Yaiba", "Kimetsu no Yaiba"],
+  ["gry", "the-seven-deadly-sins", "The Seven Deadly Sins", "Nanatsu no Taizai"],
+  ["kkvk9", "boku-no-hero-academia", "Boku no Hero Academia", "My Hero Academia"],
+  ["np3ln", "boku-no-hero-academiaa", "Boku no Hero Academia (Colored)", "My Hero Academia"],
+];
+let directDetailCalls = 0;
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  const record = directTitles.find(([id]) => pathname === `/api/titles/${id}`);
+  assert.ok(record, `Direct title lookup must fetch a detail, not search: ${pathname}`);
+  directDetailCalls++;
+  const [hid, slug, title, alias] = record;
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify({ data: { hid, slug, title, alternativeTitles: [alias] } }),
+  });
+};
+for (const [hid, slug, title, alias] of directTitles) {
+  const found = await provider.reading.lookup({
+    titles: [`https://mangafire.to/title/${hid}-${slug}`],
+  });
+  assert.equal(found.items.length, 1);
+  assert.deepEqual(found.items[0], {
+    externalWorkId: hid,
+    title,
+    aliases: [alias],
+    url: `https://mangafire.to/title/${hid}-${slug}`,
+    language: "en",
+  });
+}
+assert.equal(directDetailCalls, directTitles.length);
+await assert.rejects(
+  provider.reading.lookup({ titles: ["https://mangafire.to.evil.example/title/gry-the-seven-deadly-sins"] }),
+  /MangaFire URL/i,
+);
+globalThis.tsuzuki.http.request = async () => JSON.stringify({
+  statusCode: 200,
+  body: JSON.stringify({ data: { hid: "wrong-id", title: "The Seven Deadly Sins" } }),
+});
+await assert.rejects(
+  provider.reading.lookup({ titles: ["https://mangafire.to/title/gry-the-seven-deadly-sins"] }),
+  /MangaFire (URL|identity)/i,
+);
+
+
+// Some API variants return chapter items but no pagination metadata. Those
+// results are not proof of completeness: probe the next page until an empty
+// terminal response rather than prematurely detaching older chapter support.
+let metadataFreePage = 0;
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const parsed = new URL(url);
+  assert.equal(parsed.pathname, "/api/titles/gry/chapters");
+  assert.ok(parsed.searchParams.get("vrf"));
+  metadataFreePage = Number(parsed.searchParams.get("page"));
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify(metadataFreePage === 1
+      ? { items: [{ id: 101, number: 1, name: "First" }] }
+      : { items: [] }),
+  });
+};
+const incompleteMeta = await provider.reading.chapters({
+  binding: { externalWorkId: "gry", facetId: "en" },
+  cursor: null,
+});
+assert.equal(incompleteMeta.nextCursor, "2", "A page without metadata is not a complete inventory");
+const emptyTerminal = await provider.reading.chapters({
+  binding: { externalWorkId: "gry", facetId: "en" },
+  cursor: incompleteMeta.nextCursor,
+});
+assert.deepEqual(emptyTerminal, { items: [], nextCursor: null });
+assert.equal(metadataFreePage, 2);
+
 console.log("MangaFire Provider conformance fixtures: OK");
