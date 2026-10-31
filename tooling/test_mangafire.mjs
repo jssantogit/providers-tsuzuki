@@ -115,6 +115,39 @@ for (const page of pages.pages) {
 }
 assert.equal(requests.length, 3);
 
+ // Provider chapter IDs are opaque and must not be trusted as the identity of a
+ // different upstream payload. Reject an explicitly contradictory chapter
+ // identity/language/work instead of handing its pages to the Reader.
+ const requestedPagesBinding = {
+   providerId: "app.tsuzuki.mangafire",
+   facetId: "en",
+   externalWorkId: "one-piece-test",
+ };
+ for (const wrongData of [
+   { id: 999, number: 1, language: "en", pages: [{ url: "https://s.mfcdn.cc/assets/foreign.jpg" }] },
+   { id: 101, number: 1, language: "es", pages: [{ url: "https://s.mfcdn.cc/assets/spanish.jpg" }] },
+   { id: 101, number: 1, language: "en", manga: { hid: "foreign-work" }, pages: [{ url: "https://s.mfcdn.cc/assets/foreign.jpg" }] },
+ ]) {
+   globalThis.tsuzuki.http.request = async () => JSON.stringify({
+     statusCode: 200,
+     body: JSON.stringify({ data: wrongData }),
+   });
+   await assert.rejects(
+     provider.reading.pages({ binding: requestedPagesBinding, providerChapterId: "101" }),
+     /mismatch|identity|language|work/i,
+     "Contradictory upstream chapter metadata must never reach the Reader",
+   );
+ }
+ // A chapter response with no optional identity fields remains supported.
+ globalThis.tsuzuki.http.request = async () => JSON.stringify({
+   statusCode: 200,
+   body: JSON.stringify(pagesFixture),
+ });
+ assert.equal(
+   (await provider.reading.pages({ binding: requestedPagesBinding, providerChapterId: "101" })).pages.length,
+   2,
+ );
+
 let browserUsed = false;
 globalThis.tsuzuki.http.request = async () => JSON.stringify({
   statusCode: 403,
