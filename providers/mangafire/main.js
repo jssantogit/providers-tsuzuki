@@ -192,7 +192,7 @@ async function lookup(input) {
             ? { detailOutcome: explicitAliases(record).length > 0
               ? "VERIFIED_WITH_ALIASES" : "VERIFIED_NO_ALIASES" }
             : {}),
-          ...(sourceReportedChapterCount(record) == null
+          ...(!includeDetailDiagnostics || sourceReportedChapterCount(record) == null
             ? {}
             : { chapterCount: sourceReportedChapterCount(record) }),
         }],
@@ -253,7 +253,7 @@ async function lookup(input) {
           : {}),
         url: titleUrl(item),
         language: LANGUAGE,
-        ...(sourceReportedChapterCount(item) == null
+        ...(!includeDetailDiagnostics || sourceReportedChapterCount(item) == null
           ? {}
           : { chapterCount: sourceReportedChapterCount(item) }),
       });
