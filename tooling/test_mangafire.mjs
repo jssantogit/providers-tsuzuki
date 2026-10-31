@@ -407,4 +407,31 @@ const englishFacet = await provider.reading.chapters({
 assert.deepEqual(englishFacet.items.map((item) => item.providerChapterId), ["202", "203"]);
 assert.ok(englishFacet.items.every((item) => item.language === "en"));
 
+// When several primary HIDs already match the same title, optional detail
+// enrichment on unrelated works cannot break the tie and wastes the Host's
+// 20-second inventory deadline. Do not fetch unrelated details in this case.
+let ambiguousDetailRequests = 0;
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const parsed = new URL(url);
+  if (parsed.pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        items: [
+          { hid: "qnlvj", slug: "vagabond22", title: "Vagabond", aliases: ["Vagabond (Official Colored)"] },
+          { hid: "4mx", slug: "vagabondd", title: "Vagabond" },
+          { hid: "unrelated-1", title: "Vagabond: Son of Darkness" },
+          { hid: "unrelated-2", title: "A Different Work" },
+        ],
+      }),
+    });
+  }
+  ambiguousDetailRequests++;
+  throw new Error("Ambiguous lookup must not request unrelated detail metadata");
+};
+const realVagabondLookup = await provider.reading.lookup({ titles: ["Vagabond"] });
+assert.deepEqual(realVagabondLookup.items.slice(0, 2).map((item) => item.externalWorkId), ["qnlvj", "4mx"]);
+assert.equal(ambiguousDetailRequests, 0);
+assert.equal(realVagabondLookup.items.length, 4);
+
 console.log("MangaFire Provider conformance fixtures: OK");
