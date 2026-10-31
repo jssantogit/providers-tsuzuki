@@ -57,7 +57,7 @@ def build(provider_dir: pathlib.Path, output: pathlib.Path):
                 # Keep the flag in the source file for publication policy and
                 # strip it only from the signed runtime artifact.
                 runtime_manifest = {k: v for k, v in manifest.items() if k != "publication"}
-                payload = (json.dumps(runtime_manifest, ensure_ascii=False, indent=2) + "\\n").encode("utf-8")
+                payload = json.dumps(runtime_manifest, ensure_ascii=False, indent=2).encode("utf-8")
             archive.writestr(info, payload)
 
     print(f"built {manifest['id']} {manifest['version']['name']} -> {output}")
