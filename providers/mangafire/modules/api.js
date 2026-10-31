@@ -55,7 +55,16 @@ export async function apiJson(path, params = {}) {
       const htmlChallenge = typeof response.body === "string" &&
         /^\s*(?:<!doctype\s+html|<html(?:\s|>))/i.test(response.body);
       if (!error.challengeRequired && !htmlChallenge) throw error;
-      return browserJson(url);
+      try {
+        return await browserJson(url);
+      } catch {
+        // HTML or JSON challenge was observed in a successful HTTP wrapper.
+        // The fallback did not clear it; do not report an ordinary empty
+        // source result or leak Browser Host error text across the boundary.
+        const challenge = new Error("MangaFire challenge required");
+        challenge.challengeRequired = true;
+        throw challenge;
+      }
     }
   }
 
