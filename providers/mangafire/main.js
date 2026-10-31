@@ -48,7 +48,9 @@ async function verifiedLookupAliases(item, requestedTitle, remainingDetails) {
     // A detail response is accepted only when its primary title corroborates
     // the search hit. If it disagrees, do not attach potentially foreign aliases.
     const record = response?.data;
-    if (!record || normalizedTitle(record.title) !== normalizedTitle(item.title)) {
+    if (!record ||
+      (cleanText(record.hid) && cleanText(record.hid) !== hid) ||
+      normalizedTitle(record.title) !== normalizedTitle(item.title)) {
       return { aliases: direct, detailsUsed: 1 };
     }
     return { aliases: explicitAliases(record), detailsUsed: 1 };
