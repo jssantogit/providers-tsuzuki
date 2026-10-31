@@ -333,4 +333,27 @@ const emptyTerminal = await provider.reading.chapters({
 assert.deepEqual(emptyTerminal, { items: [], nextCursor: null });
 assert.equal(metadataFreePage, 2);
 
+// MangaFire supplies per-chapter language. Do not silently mark Spanish chapters
+// as English or prefer a foreign-language official variant over the en entry.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  assert.equal(new URL(url).pathname, "/api/titles/gry/chapters");
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify({
+      items: [
+        { id: 201, number: 1, language: "es", type: "official", name: "Spanish" },
+        { id: 202, number: 1, language: "en", type: "fan", name: "English" },
+        { id: 203, number: 2, language: "en", type: "official", name: "Next chapter" },
+      ],
+      meta: { hasNext: false, lastPage: 1 },
+    }),
+  });
+};
+const englishFacet = await provider.reading.chapters({
+  binding: { externalWorkId: "gry", facetId: "en" },
+  cursor: null,
+});
+assert.deepEqual(englishFacet.items.map((item) => item.providerChapterId), ["202", "203"]);
+assert.ok(englishFacet.items.every((item) => item.language === "en"));
+
 console.log("MangaFire Provider conformance fixtures: OK");
