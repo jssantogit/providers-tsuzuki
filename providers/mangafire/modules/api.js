@@ -63,6 +63,7 @@ export async function apiJson(path, params = {}) {
         // source result or leak Browser Host error text across the boundary.
         const challenge = new Error("MangaFire challenge required");
         challenge.challengeRequired = true;
+        challenge.httpStatus = response.statusCode;
         throw challenge;
       }
     }
