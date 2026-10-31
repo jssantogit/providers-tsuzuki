@@ -252,8 +252,11 @@ async function pages(input) {
   if (cleanText(data.language) && cleanText(data.language).toLowerCase() !== language) {
     throw new Error("MangaFire pages chapter language mismatch");
   }
+  // The upstream may also expose numeric database IDs (mangaId/titleId)
+  // that are not in the same namespace as the public MangaFire HID.
+  // Compare only explicit HID fields against our externally verified work.
   const reportedWorkIds = [
-    data.mangaId, data.titleId, data.workId,
+    data.mangaHid, data.titleHid, data.workHid,
     data.manga?.hid, data.title?.hid, data.work?.hid,
   ].filter((value) => value != null && String(value).trim());
   if (reportedWorkIds.some((id) => String(id) !== externalWorkId)) {
