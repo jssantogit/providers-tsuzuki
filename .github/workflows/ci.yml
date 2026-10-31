@@ -46,6 +46,8 @@ jobs:
         run: node tooling/test_nyaa_detail_enrichment_pagination.mjs
       - name: Direct P2P acquisition contract fixtures
         run: node tooling/test_direct_p2p.mjs
+      - name: Host V1 signed-manifest compatibility regression
+        run: python3 -m unittest discover -s tooling -p test_build_provider_manifest.py -v
       - name: Repository and package conformance
         run: python3 tooling/check_repository.py
       - name: Verify signed publication
