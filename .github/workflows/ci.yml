@@ -50,6 +50,8 @@ jobs:
         run: python3 -m unittest discover -s tooling -p test_build_provider_manifest.py -v
       - name: Repository and package conformance
         run: python3 tooling/check_repository.py
+      - name: Signed publication planner regression tests
+        run: python3 -m unittest discover -s tooling -p 'test_prepare_publication.py' -v
       - name: Verify signed publication
         if: ${{ hashFiles('dist/index.json', 'repository/public-key.pem') != '' }}
         run: node tooling/verify_index.mjs
