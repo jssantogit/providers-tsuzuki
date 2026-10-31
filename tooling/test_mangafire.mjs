@@ -607,4 +607,28 @@ const blockedDetail = await provider.reading.lookup({ titles: ["Vagabond"] });
 assert.equal(blockedDetail.items[0].detailOutcome, "CHALLENGE_BLOCKED");
 assert.equal(blockedDetail.items[0].detailHttpStatus, 403);
 
+// HTTP 200 containing an interactive HTML challenge is not a successful
+// detail lookup. If the Browser Host cannot resolve it, report CHALLENGE_BLOCKED
+// rather than a generic network failure or an empty edition.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({ statusCode: 200, body: JSON.stringify({ items: [
+      { hid: "real-a", title: "Vagabond" },
+      { hid: "real-b", title: "Vagabond" },
+    ] }) });
+  }
+  if (pathname === "/api/titles/real-a") {
+    return JSON.stringify({ statusCode: 200, body: "<!doctype html><html>Just a moment</html>" });
+  }
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify({ data: { hid: "real-b", title: "Vagabond" } }),
+  });
+};
+globalThis.tsuzuki.browser.readText = async () => { throw new Error("Browser navigation blocked"); };
+const htmlBlocked = await provider.reading.lookup({ titles: ["Vagabond"] });
+assert.equal(htmlBlocked.items[0].detailOutcome, "CHALLENGE_BLOCKED");
+assert.equal("detailHttpStatus" in htmlBlocked.items[0], false);
+
 console.log("MangaFire Provider conformance fixtures: OK");
