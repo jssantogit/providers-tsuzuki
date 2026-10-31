@@ -60,7 +60,16 @@ export async function apiJson(path, params = {}) {
   }
 
   if (response.statusCode === 403) {
-    return browserJson(url);
+    try {
+      return await browserJson(url);
+    } catch {
+      // The source explicitly returned 403. Preserve only that status and a
+      // closed challenge cause; do not leak Browser Host text, URLs or cookies.
+      const challenge = new Error("MangaFire challenge required");
+      challenge.challengeRequired = true;
+      challenge.httpStatus = 403;
+      throw challenge;
+    }
   }
 
   throw new Error(`MangaFire API request failed with HTTP ${response.statusCode}`);
