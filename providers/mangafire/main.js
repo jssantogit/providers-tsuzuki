@@ -65,6 +65,13 @@ function titleIdFromSourceUrl(value) {
   return match ? match[1] : null;
 }
 
+// Counts must be literal source metadata, not inferred from a search page,
+// last chapter number, chapter IDs or the number of visible candidates.
+function sourceReportedChapterCount(item) {
+  const value = item?.chapterCount ?? item?.chaptersCount;
+  return Number.isInteger(value) && value >= 0 && value <= 1_000_000 ? value : null;
+}
+
 function titleUrl(item) {
   const hid = cleanText(item.hid);
   const slug = cleanText(item.slug);
@@ -137,6 +144,9 @@ async function lookup(input) {
           aliases: explicitAliases(record),
           url: titleUrl(record),
           language: LANGUAGE,
+          ...(sourceReportedChapterCount(record) == null
+            ? {}
+            : { chapterCount: sourceReportedChapterCount(record) }),
         }],
         nextCursor: null,
       };
@@ -174,6 +184,9 @@ async function lookup(input) {
         aliases: detail.aliases,
         url: titleUrl(item),
         language: LANGUAGE,
+        ...(sourceReportedChapterCount(item) == null
+          ? {}
+          : { chapterCount: sourceReportedChapterCount(item) }),
       });
       if (items.length >= MAX_LOOKUP_RESULTS) break;
     }
