@@ -53,27 +53,49 @@ function hasSourceEditionQualifier(item) {
 
 async function verifiedLookupAliases(item, requestedTitle, remainingDetails, forcePrimaryDetail = false) {
   const direct = explicitAliases(item);
-  if ((!forcePrimaryDetail &&
-      (direct.length > 0 || normalizedTitle(item?.title) === normalizedTitle(requestedTitle))) ||
-      remainingDetails <= 0) {
-    return { aliases: direct, detailsUsed: 0 };
+  if (!forcePrimaryDetail &&
+      (direct.length > 0 || normalizedTitle(item?.title) === normalizedTitle(requestedTitle))) {
+    return { aliases: direct, detailsUsed: 0, detailOutcome: "NOT_NEEDED" };
+  }
+  if (remainingDetails <= 0) {
+    return { aliases: direct, detailsUsed: 0, detailOutcome: "BUDGET_EXHAUSTED" };
   }
   const hid = cleanText(item?.hid);
-  if (!hid) return { aliases: direct, detailsUsed: 0 };
+  if (!hid) return { aliases: direct, detailsUsed: 0, detailOutcome: "IDENTITY_MISMATCH" };
   try {
     const response = await titleDetails(hid);
     // A detail response is accepted only when its primary title corroborates
     // the search hit. If it disagrees, do not attach potentially foreign aliases.
     const record = response?.data;
-    if (!record ||
-      (cleanText(record.hid) && cleanText(record.hid) !== hid) ||
-      normalizedTitle(record.title) !== normalizedTitle(item.title)) {
-      return { aliases: direct, detailsUsed: 1 };
+    if (!record || !cleanText(record.title)) {
+      return { aliases: direct, detailsUsed: 1, detailOutcome: "INVALID_RESPONSE" };
     }
-    return { aliases: [...new Set([...direct, ...explicitAliases(record)])].slice(0, MAX_ALIASES), detailsUsed: 1 };
-  } catch {
+    if ((cleanText(record.hid) && cleanText(record.hid) !== hid) ||
+      normalizedTitle(record.title) !== normalizedTitle(item.title)) {
+      return { aliases: direct, detailsUsed: 1, detailOutcome: "IDENTITY_MISMATCH" };
+    }
+    const aliases = [...new Set([...direct, ...explicitAliases(record)])].slice(0, MAX_ALIASES);
+    return {
+      aliases,
+      detailsUsed: 1,
+      detailOutcome: aliases.length > 0 ? "VERIFIED_WITH_ALIASES" : "VERIFIED_NO_ALIASES",
+    };
+  } catch (error) {
     // A failing optional detail lookup cannot create a false work binding.
-    return { aliases: direct, detailsUsed: 1 };
+    // Only closed reasons and a verified HTTP status are allowed to cross the
+    // Provider boundary. Never return upstream error messages or response bodies.
+    const statusMatch = /^MangaFire API request failed with HTTP ([1-5][0-9]{2})$/.exec(cleanText(error?.message));
+    const httpStatus = Number.isInteger(error?.httpStatus)
+      ? error.httpStatus
+      : statusMatch ? Number(statusMatch[1]) : null;
+    const challenge = error?.challengeRequired === true || httpStatus === 403;
+    return {
+      aliases: direct,
+      detailsUsed: 1,
+      detailOutcome: challenge ? "CHALLENGE_BLOCKED" : "DETAIL_FAILED",
+      ...(Number.isInteger(httpStatus) && httpStatus >= 100 && httpStatus <= 599
+        ? { detailHttpStatus: httpStatus } : {}),
+    };
   }
 }
 
@@ -163,6 +185,7 @@ async function lookup(input) {
           aliases: explicitAliases(record),
           url: titleUrl(record),
           language: LANGUAGE,
+          detailOutcome: explicitAliases(record).length > 0 ? "VERIFIED_WITH_ALIASES" : "VERIFIED_NO_ALIASES",
           ...(sourceReportedChapterCount(record) == null
             ? {}
             : { chapterCount: sourceReportedChapterCount(record) }),
@@ -204,7 +227,7 @@ async function lookup(input) {
       if (!externalWorkId || !candidateTitle || seen.has(externalWorkId)) continue;
       seen.add(externalWorkId);
       const detail = ambiguousAttested && !attestedMatches.has(externalWorkId)
-        ? { aliases: explicitAliases(item), detailsUsed: 0 }
+        ? { aliases: explicitAliases(item), detailsUsed: 0, detailOutcome: "SKIPPED_IRRELEVANT" }
         : await verifiedLookupAliases(
           item,
           title,
@@ -216,6 +239,8 @@ async function lookup(input) {
         externalWorkId,
         title: candidateTitle,
         aliases: detail.aliases,
+        detailOutcome: detail.detailOutcome,
+        ...(detail.detailHttpStatus == null ? {} : { detailHttpStatus: detail.detailHttpStatus }),
         url: titleUrl(item),
         language: LANGUAGE,
         ...(sourceReportedChapterCount(item) == null
