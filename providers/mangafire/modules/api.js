@@ -82,7 +82,9 @@ export async function chaptersForTitle(externalWorkId, language, page) {
   return apiJson(`/api/titles/${encodeURIComponent(externalWorkId)}/chapters`, {
     language,
     sort: "number",
-    order: "desc",
+    // The Host can hit its bounded collection deadline after one page. Fetch
+    // earliest chapters first so a valid partial result does not start at 150+.
+    order: "asc",
     page,
     limit: 200,
   });
