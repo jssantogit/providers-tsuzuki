@@ -463,6 +463,15 @@ assert.equal("chapterCount" in legacyCount.items[0], false,
   "strict legacy clients must not receive new chapterCount metadata");
 assert.equal("detailOutcome" in legacyCount.items[0], false,
   "strict legacy clients must not receive detail diagnostics");
+assert.deepEqual(Object.keys(legacyCount.items[0]).sort(),
+  ["externalWorkId", "title", "aliases", "url", "language"].sort(),
+  "legacy candidate wire shape must be identical even when source has additional metadata");
+const unknownDiagnosticsVersion = await provider.reading.lookup({
+  titles: ["Vagabond"], diagnosticsVersion: 2,
+});
+assert.deepEqual(Object.keys(unknownDiagnosticsVersion.items[0]).sort(),
+  ["externalWorkId", "title", "aliases", "url", "language"].sort(),
+  "future versions must not accidentally expose unnegotiated response keys");
 
 // Physical #176 smoke: v7 reported qnlvj and 4mx as identical "Vagabond"
 // entries with NO alternative titles. Their details must be queried (bounded)
