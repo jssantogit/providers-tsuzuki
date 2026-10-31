@@ -645,7 +645,19 @@ globalThis.tsuzuki.http.request = async (_method, url) => {
 globalThis.tsuzuki.browser.readText = async () => { throw new Error("Browser navigation blocked"); };
 const htmlBlocked = await provider.reading.lookup({ titles: ["Vagabond"], diagnosticsVersion: 1 });
 assert.equal(htmlBlocked.items[0].detailOutcome, "CHALLENGE_BLOCKED");
-assert.equal("detailHttpStatus" in htmlBlocked.items[0], false);
+assert.equal(htmlBlocked.items[0].detailHttpStatus, 200, "record challenge HTTP 200, not generic missing status");
+
+// A challenge disguised as HTTP 200 at the search endpoint must also
+// preserve that HTTP status, not become a generic source error.
+globalThis.tsuzuki.http.request = async () => JSON.stringify({
+  statusCode: 200,
+  body: "<!doctype html><html>Just a moment</html>",
+});
+globalThis.tsuzuki.browser.readText = async () => { throw new Error("Unavailable challenge"); };
+const htmlSearchBlocked = await provider.reading.lookup({ titles: ["Vagabond"], diagnosticsVersion: 1 });
+assert.deepEqual(htmlSearchBlocked, {
+  items: [], nextCursor: null, lookupFailureCode: "CHALLENGE_BLOCKED", lookupHttpStatus: 200,
+});
 
 // A source lookup failure occurs before any candidate can report detailOutcome.
 // New Hosts request closed error provenance; older Hosts still receive errors.
