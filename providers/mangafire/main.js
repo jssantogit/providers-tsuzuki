@@ -161,6 +161,9 @@ function mergeChapterVariants(items) {
 }
 
 async function lookup(input) {
+  // Compatibility with strict older Host decoders: edition enrichment is
+  // always active, but new response keys require an explicit capability opt-in.
+  const includeDetailDiagnostics = input?.diagnosticsVersion === 1;
   const titles = Array.isArray(input?.titles) ? input.titles : [];
   const seen = new Set();
   const items = [];
@@ -185,7 +188,10 @@ async function lookup(input) {
           aliases: explicitAliases(record),
           url: titleUrl(record),
           language: LANGUAGE,
-          detailOutcome: explicitAliases(record).length > 0 ? "VERIFIED_WITH_ALIASES" : "VERIFIED_NO_ALIASES",
+          ...(includeDetailDiagnostics
+            ? { detailOutcome: explicitAliases(record).length > 0
+              ? "VERIFIED_WITH_ALIASES" : "VERIFIED_NO_ALIASES" }
+            : {}),
           ...(sourceReportedChapterCount(record) == null
             ? {}
             : { chapterCount: sourceReportedChapterCount(record) }),
@@ -239,8 +245,12 @@ async function lookup(input) {
         externalWorkId,
         title: candidateTitle,
         aliases: detail.aliases,
-        detailOutcome: detail.detailOutcome,
-        ...(detail.detailHttpStatus == null ? {} : { detailHttpStatus: detail.detailHttpStatus }),
+        ...(includeDetailDiagnostics
+          ? {
+            detailOutcome: detail.detailOutcome,
+            ...(detail.detailHttpStatus == null ? {} : { detailHttpStatus: detail.detailHttpStatus }),
+          }
+          : {}),
         url: titleUrl(item),
         language: LANGUAGE,
         ...(sourceReportedChapterCount(item) == null
