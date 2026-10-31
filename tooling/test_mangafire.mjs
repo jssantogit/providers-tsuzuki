@@ -418,7 +418,7 @@ globalThis.tsuzuki.http.request = async (_method, url) => {
       statusCode: 200,
       body: JSON.stringify({
         items: [
-          { hid: "qnlvj", slug: "vagabond22", title: "Vagabond", aliases: ["Vagabond (Official Colored)"] },
+          { hid: "qnlvj", slug: "vagabond22", title: "Vagabond", aliases: ["Vagabond (Official Colored)"], chapterCount: 327 },
           { hid: "4mx", slug: "vagabondd", title: "Vagabond" },
           { hid: "unrelated-1", title: "Vagabond: Son of Darkness" },
           { hid: "unrelated-2", title: "A Different Work" },
@@ -433,5 +433,7 @@ const realVagabondLookup = await provider.reading.lookup({ titles: ["Vagabond"] 
 assert.deepEqual(realVagabondLookup.items.slice(0, 2).map((item) => item.externalWorkId), ["qnlvj", "4mx"]);
 assert.equal(ambiguousDetailRequests, 0);
 assert.equal(realVagabondLookup.items.length, 4);
+assert.equal(realVagabondLookup.items[0].chapterCount, 327, "record source-reported count only");
+assert.equal("chapterCount" in realVagabondLookup.items[1], false, "unknown is not zero");
 
 console.log("MangaFire Provider conformance fixtures: OK");
