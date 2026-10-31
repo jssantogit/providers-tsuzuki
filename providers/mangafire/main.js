@@ -143,12 +143,30 @@ async function lookup(input) {
     }
 
     const response = await searchTitles(title);
-    for (const item of verifiedItems(response, "lookup")) {
+    const sourceHits = verifiedItems(response, "lookup");
+    const query = normalizedTitle(title);
+    const attestedMatches = new Set(
+      sourceHits
+        .filter((item) => cleanText(item?.hid) && cleanText(item?.title))
+        .filter((item) =>
+          normalizedTitle(item.title) === query ||
+          explicitAliases(item).some((alias) => normalizedTitle(alias) === query),
+        )
+        .map((item) => cleanText(item.hid)),
+    );
+    // Two or more distinct source-attested exact identities already make
+    // automatic edition binding ambiguous. Hydrating unrelated results cannot
+    // prove which edition is canonical; save the limited detail budget for a
+    // future lookup that might actually disambiguate.
+    const ambiguousAttested = attestedMatches.size > 1;
+    for (const item of sourceHits) {
       const externalWorkId = cleanText(item?.hid);
       const candidateTitle = cleanText(item?.title);
       if (!externalWorkId || !candidateTitle || seen.has(externalWorkId)) continue;
       seen.add(externalWorkId);
-      const detail = await verifiedLookupAliases(item, title, MAX_ALIAS_DETAIL_LOOKUPS - detailLookups);
+      const detail = ambiguousAttested && !attestedMatches.has(externalWorkId)
+        ? { aliases: explicitAliases(item), detailsUsed: 0 }
+        : await verifiedLookupAliases(item, title, MAX_ALIAS_DETAIL_LOOKUPS - detailLookups);
       detailLookups += detail.detailsUsed;
       items.push({
         externalWorkId,
