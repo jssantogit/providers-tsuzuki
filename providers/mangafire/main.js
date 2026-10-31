@@ -36,9 +36,26 @@ function normalizedTitle(value) {
   return cleanText(value).toLowerCase().replace(/\s+/g, " ");
 }
 
-async function verifiedLookupAliases(item, requestedTitle, remainingDetails) {
+// Used only to decide whether optional identity detail enrichment is needed.
+// The Host remains the sole authority for accepting an editorial edition.
+const EDITION_HINTS = ["colored", "coloured", "full color", "full colour", "omnibus", "one shot", "oneshot", "special edition"];
+function hasSourceEditionQualifier(item) {
+  const base = normalizedTitle(item?.title);
+  if (!base) return false;
+  return explicitAliases(item).some((alias) => {
+    const normalized = normalizedTitle(alias);
+    const suffix = normalized.slice(base.length);
+    return normalized.startsWith(base) &&
+      (suffix.startsWith(" ") || suffix.startsWith("(") || suffix.startsWith("[")) &&
+      EDITION_HINTS.some((hint) => suffix.includes(hint));
+  });
+}
+
+async function verifiedLookupAliases(item, requestedTitle, remainingDetails, forcePrimaryDetail = false) {
   const direct = explicitAliases(item);
-  if (direct.length > 0 || normalizedTitle(item?.title) === normalizedTitle(requestedTitle) || remainingDetails <= 0) {
+  if ((!forcePrimaryDetail &&
+      (direct.length > 0 || normalizedTitle(item?.title) === normalizedTitle(requestedTitle))) ||
+      remainingDetails <= 0) {
     return { aliases: direct, detailsUsed: 0 };
   }
   const hid = cleanText(item?.hid);
@@ -53,7 +70,7 @@ async function verifiedLookupAliases(item, requestedTitle, remainingDetails) {
       normalizedTitle(record.title) !== normalizedTitle(item.title)) {
       return { aliases: direct, detailsUsed: 1 };
     }
-    return { aliases: explicitAliases(record), detailsUsed: 1 };
+    return { aliases: [...new Set([...direct, ...explicitAliases(record)])].slice(0, MAX_ALIASES), detailsUsed: 1 };
   } catch {
     // A failing optional detail lookup cannot create a false work binding.
     return { aliases: direct, detailsUsed: 1 };
@@ -171,6 +188,16 @@ async function lookup(input) {
     // prove which edition is canonical; save the limited detail budget for a
     // future lookup that might actually disambiguate.
     const ambiguousAttested = attestedMatches.size > 1;
+    // Search listings often omit edition aliases even on duplicate primary
+    // HIDs. Enrich the exact contenders, not irrelevant search hits, with a
+    // strict per-lookup budget. An absent detail response proves no edition.
+    const unknownEditionPrimaries = sourceHits
+      .filter((item) =>
+        cleanText(item?.hid) &&
+        normalizedTitle(item?.title) === query &&
+        !hasSourceEditionQualifier(item),
+      );
+    const needsPrimaryDetails = unknownEditionPrimaries.length > 1;
     for (const item of sourceHits) {
       const externalWorkId = cleanText(item?.hid);
       const candidateTitle = cleanText(item?.title);
@@ -178,7 +205,12 @@ async function lookup(input) {
       seen.add(externalWorkId);
       const detail = ambiguousAttested && !attestedMatches.has(externalWorkId)
         ? { aliases: explicitAliases(item), detailsUsed: 0 }
-        : await verifiedLookupAliases(item, title, MAX_ALIAS_DETAIL_LOOKUPS - detailLookups);
+        : await verifiedLookupAliases(
+          item,
+          title,
+          MAX_ALIAS_DETAIL_LOOKUPS - detailLookups,
+          needsPrimaryDetails && normalizedTitle(candidateTitle) === query && !hasSourceEditionQualifier(item),
+        );
       detailLookups += detail.detailsUsed;
       items.push({
         externalWorkId,
