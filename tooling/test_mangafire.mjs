@@ -647,4 +647,55 @@ const htmlBlocked = await provider.reading.lookup({ titles: ["Vagabond"], diagno
 assert.equal(htmlBlocked.items[0].detailOutcome, "CHALLENGE_BLOCKED");
 assert.equal("detailHttpStatus" in htmlBlocked.items[0], false);
 
+// A source lookup failure occurs before any candidate can report detailOutcome.
+// New Hosts request closed error provenance; older Hosts still receive errors.
+// Never return an apparently successful empty inventory after an upstream 403.
+globalThis.tsuzuki.http.request = async () => JSON.stringify({
+  statusCode: 403,
+  body: JSON.stringify({ challenge: true }),
+});
+globalThis.tsuzuki.browser.readText = async () => {
+  throw new Error("Interactive MangaFire challenge not available");
+};
+const challengedSearch = await provider.reading.lookup({
+  titles: ["Vagabond"],
+  diagnosticsVersion: 1,
+});
+assert.deepEqual(challengedSearch, {
+  items: [],
+  nextCursor: null,
+  lookupFailureCode: "CHALLENGE_BLOCKED",
+  lookupHttpStatus: 403,
+});
+await assert.rejects(
+  provider.reading.lookup({ titles: ["Vagabond"] }),
+  /challenge/i,
+  "legacy Host must receive a real source error, not an empty inventory",
+);
+globalThis.tsuzuki.http.request = async () => JSON.stringify({
+  statusCode: 503,
+  body: "{}",
+});
+const unavailableSearch = await provider.reading.lookup({
+  titles: ["Vagabond"],
+  diagnosticsVersion: 1,
+});
+assert.deepEqual(unavailableSearch, {
+  items: [],
+  nextCursor: null,
+  lookupFailureCode: "HTTP_ERROR",
+  lookupHttpStatus: 503,
+});
+globalThis.tsuzuki.http.request = async () => JSON.stringify({
+  statusCode: 200,
+  body: JSON.stringify({ notItems: true }),
+});
+const malformedSearch = await provider.reading.lookup({
+  titles: ["Vagabond"],
+  diagnosticsVersion: 1,
+});
+assert.equal(malformedSearch.lookupFailureCode, "INVALID_RESPONSE");
+assert.equal("lookupHttpStatus" in malformedSearch, false);
+assert.deepEqual(malformedSearch.items, []);
+
 console.log("MangaFire Provider conformance fixtures: OK");
