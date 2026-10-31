@@ -501,4 +501,55 @@ assert.deepEqual(qualifiedVagabond.items[0].aliases, ["Vagabond (Official Colore
 assert.deepEqual(qualifiedVagabond.items[1].aliases, []);
 assert.equal(qualifiedVagabond.items.length, 3);
 
+// A source that reports many homonymous HIDs must not cause an unbounded
+// detail fan-out or gain an arbitrary selected ID by search position.
+let homonymDetails = 0;
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const parsed = new URL(url);
+  if (parsed.pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        items: Array.from({ length: 9 }, (_, i) => ({ hid: `id-${i}`, title: "Duplicated" })),
+      }),
+    });
+  }
+  homonymDetails++;
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify({
+      data: { hid: parsed.pathname.split("/").at(-1), title: "Duplicated", alternativeTitles: [] },
+    }),
+  });
+};
+const homonyms = await provider.reading.lookup({ titles: ["Duplicated"] });
+assert.equal(homonymDetails, 5, "limit identity detail calls to the fixed provider budget");
+assert.equal(homonyms.items.length, 9);
+assert.ok(homonyms.items.every((item) => item.aliases.length === 0));
+
+// Detail responses which identify an unrelated HID cannot qualify the edition
+// even if their titles match a duplicated primary search result.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({ items: [
+        { hid: "actual", title: "Duplicated" },
+        { hid: "other", title: "Duplicated" },
+      ] }),
+    });
+  }
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify({
+      data: { hid: pathname === "/api/titles/actual" ? "wrong" : "other",
+        title: "Duplicated", alternativeTitles: ["Duplicated (Colored)"] },
+    }),
+  });
+};
+const conflictingDetails = await provider.reading.lookup({ titles: ["Duplicated"] });
+assert.deepEqual(conflictingDetails.items[0].aliases, []);
+assert.deepEqual(conflictingDetails.items[1].aliases, ["Duplicated (Colored)"]);
+
 console.log("MangaFire Provider conformance fixtures: OK");
