@@ -1,2 +1,4 @@
-sequence=24
-reason=mangafire-v0.1.6-oldest-chapters-first
+sequence=25
+reason=mangafire-v0.1.7-code8-edition-diagnostics-physical-smoke
+source_prs=53,54
+guard=atomic-signed-publication-and-immutable-artifacts
