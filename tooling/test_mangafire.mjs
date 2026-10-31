@@ -253,6 +253,29 @@ const mismatchedDetailLookup = await provider.reading.lookup({ titles: ["Haikyuu
 assert.equal(mismatchedDetailLookup.items.length, 1);
 assert.deepEqual(mismatchedDetailLookup.items[0].aliases, []);
 
+// An explicitly foreign HID in a detail response must never attach aliases
+// to a lookalike title returned in the search result.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({ items: [{ hid: "real-work", title: "Haikyu!!" }] }),
+    });
+  }
+  if (pathname === "/api/titles/real-work") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        data: { hid: "foreign-work", title: "Haikyu!!", alternativeTitles: ["Haikyuu!!"] },
+      }),
+    });
+  }
+  throw new Error("Unexpected mismatched HID fixture path");
+};
+const foreignHidLookup = await provider.reading.lookup({ titles: ["Haikyuu!!"] });
+assert.deepEqual(foreignHidLookup.items[0].aliases, []);
+
 // An HTTP 200 containing a human-facing challenge is not a successful JSON page.
 let challenged200Fallbacks = 0;
 globalThis.tsuzuki.http.request = async () => JSON.stringify({
@@ -406,5 +429,285 @@ const englishFacet = await provider.reading.chapters({
 });
 assert.deepEqual(englishFacet.items.map((item) => item.providerChapterId), ["202", "203"]);
 assert.ok(englishFacet.items.every((item) => item.language === "en"));
+
+// When several primary HIDs already match the same title, optional detail
+// enrichment on unrelated works cannot break the tie and wastes the Host's
+// 20-second inventory deadline. Do not fetch unrelated details in this case.
+let ambiguousDetailRequests = 0;
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const parsed = new URL(url);
+  if (parsed.pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        items: [
+          { hid: "qnlvj", slug: "vagabond22", title: "Vagabond", aliases: ["Vagabond (Official Colored)"], chapterCount: 327 },
+          { hid: "4mx", slug: "vagabondd", title: "Vagabond" },
+          { hid: "unrelated-1", title: "Vagabond: Son of Darkness" },
+          { hid: "unrelated-2", title: "A Different Work" },
+        ],
+      }),
+    });
+  }
+  ambiguousDetailRequests++;
+  throw new Error("Ambiguous lookup must not request unrelated detail metadata");
+};
+const realVagabondLookup = await provider.reading.lookup({ titles: ["Vagabond"], diagnosticsVersion: 1 });
+assert.deepEqual(realVagabondLookup.items.slice(0, 2).map((item) => item.externalWorkId), ["qnlvj", "4mx"]);
+assert.equal(ambiguousDetailRequests, 0);
+assert.equal(realVagabondLookup.items.length, 4);
+assert.equal(realVagabondLookup.items[0].chapterCount, 327, "record source-reported count only");
+assert.equal("chapterCount" in realVagabondLookup.items[1], false, "unknown is not zero");
+const legacyCount = await provider.reading.lookup({ titles: ["Vagabond"] });
+assert.equal("chapterCount" in legacyCount.items[0], false,
+  "strict legacy clients must not receive new chapterCount metadata");
+assert.equal("detailOutcome" in legacyCount.items[0], false,
+  "strict legacy clients must not receive detail diagnostics");
+assert.deepEqual(Object.keys(legacyCount.items[0]).sort(),
+  ["externalWorkId", "title", "aliases", "url", "language"].sort(),
+  "legacy candidate wire shape must be identical even when source has additional metadata");
+const unknownDiagnosticsVersion = await provider.reading.lookup({
+  titles: ["Vagabond"], diagnosticsVersion: 2,
+});
+assert.deepEqual(Object.keys(unknownDiagnosticsVersion.items[0]).sort(),
+  ["externalWorkId", "title", "aliases", "url", "language"].sort(),
+  "future versions must not accidentally expose unnegotiated response keys");
+
+// Physical #176 smoke: v7 reported qnlvj and 4mx as identical "Vagabond"
+// entries with NO alternative titles. Their details must be queried (bounded)
+// to recover any source-attested edition qualifier; unrelated results must NOT
+// burn the budget. Never choose the first HID without corroboration.
+const ambiguousExactDetails = [];
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const parsed = new URL(url);
+  if (parsed.pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        items: [
+          { hid: "qnlvj", title: "Vagabond", slug: "vagabond22" },
+          { hid: "4mx", title: "Vagabond", slug: "vagabondd" },
+          { hid: "unrelated", title: "Vagabond: unrelated title" },
+        ],
+      }),
+    });
+  }
+  ambiguousExactDetails.push(parsed.pathname);
+  if (parsed.pathname === "/api/titles/qnlvj") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        data: { hid: "qnlvj", title: "Vagabond", alternativeTitles: ["Vagabond (Official Colored)"] },
+      }),
+    });
+  }
+  if (parsed.pathname === "/api/titles/4mx") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({ data: { hid: "4mx", title: "Vagabond", alternativeTitles: [] } }),
+    });
+  }
+  throw new Error("Details of irrelevant search results must not run");
+};
+const qualifiedVagabond = await provider.reading.lookup({ titles: ["Vagabond"], diagnosticsVersion: 1 });
+assert.deepEqual(ambiguousExactDetails, ["/api/titles/qnlvj", "/api/titles/4mx"]);
+assert.deepEqual(qualifiedVagabond.items[0].aliases, ["Vagabond (Official Colored)"]);
+assert.equal(qualifiedVagabond.items[0].detailOutcome, "VERIFIED_WITH_ALIASES");
+assert.equal(qualifiedVagabond.items[1].detailOutcome, "VERIFIED_NO_ALIASES");
+assert.deepEqual(qualifiedVagabond.items[1].aliases, []);
+assert.equal(qualifiedVagabond.items.length, 3);
+const legacyVagabond = await provider.reading.lookup({ titles: ["Vagabond"] });
+assert.deepEqual(legacyVagabond.items[0].aliases, ["Vagabond (Official Colored)"]);
+assert.equal("detailOutcome" in legacyVagabond.items[0], false, "old Host must not receive unknown response keys");
+assert.equal("detailHttpStatus" in legacyVagabond.items[0], false);
+
+// A source that reports many homonymous HIDs must not cause an unbounded
+// detail fan-out or gain an arbitrary selected ID by search position.
+let homonymDetails = 0;
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const parsed = new URL(url);
+  if (parsed.pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        items: Array.from({ length: 9 }, (_, i) => ({ hid: `id-${i}`, title: "Duplicated" })),
+      }),
+    });
+  }
+  homonymDetails++;
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify({
+      data: { hid: parsed.pathname.split("/").at(-1), title: "Duplicated", alternativeTitles: [] },
+    }),
+  });
+};
+const homonyms = await provider.reading.lookup({ titles: ["Duplicated"], diagnosticsVersion: 1 });
+assert.equal(homonymDetails, 5, "limit identity detail calls to the fixed provider budget");
+assert.equal(homonyms.items.length, 9);
+assert.equal(homonyms.items[5].detailOutcome, "BUDGET_EXHAUSTED");
+assert.ok(homonyms.items.every((item) => item.aliases.length === 0));
+
+// Detail responses which identify an unrelated HID cannot qualify the edition
+// even if their titles match a duplicated primary search result.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({ items: [
+        { hid: "actual", title: "Duplicated" },
+        { hid: "other", title: "Duplicated" },
+      ] }),
+    });
+  }
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify({
+      data: { hid: pathname === "/api/titles/actual" ? "wrong" : "other",
+        title: "Duplicated", alternativeTitles: ["Duplicated (Colored)"] },
+    }),
+  });
+};
+const conflictingDetails = await provider.reading.lookup({ titles: ["Duplicated"], diagnosticsVersion: 1 });
+assert.deepEqual(conflictingDetails.items[0].aliases, []);
+assert.deepEqual(conflictingDetails.items[1].aliases, ["Duplicated (Colored)"]);
+
+// Detail failure must be classified without ever returning upstream error text.
+// The Host logs only a closed code and a bounded HTTP response status.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({ items: [
+        { hid: "real-a", title: "Vagabond" },
+        { hid: "real-b", title: "Vagabond" },
+      ] }),
+    });
+  }
+  if (pathname === "/api/titles/real-a") {
+    return JSON.stringify({ statusCode: 503, body: "temporary outage" });
+  }
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify({ data: { hid: "real-b", title: "Vagabond" } }),
+  });
+};
+const degradedDetail = await provider.reading.lookup({ titles: ["Vagabond"], diagnosticsVersion: 1 });
+assert.equal(degradedDetail.items[0].detailOutcome, "DETAIL_FAILED");
+assert.equal(degradedDetail.items[0].detailHttpStatus, 503);
+assert.equal(degradedDetail.items[1].detailOutcome, "VERIFIED_NO_ALIASES");
+assert.equal("detailHttpStatus" in degradedDetail.items[1], false);
+
+// A protected challenge is a distinct operational cause from a metadata
+// mismatch or a quiet missing alternate edition; do not log body contents.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({ statusCode: 200, body: JSON.stringify({ items: [
+      { hid: "real-a", title: "Vagabond" },
+      { hid: "real-b", title: "Vagabond" },
+    ] }) });
+  }
+  if (pathname === "/api/titles/real-a") {
+    return JSON.stringify({ statusCode: 403, body: "challenge" });
+  }
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify({ data: { hid: "real-b", title: "Vagabond" } }),
+  });
+};
+globalThis.tsuzuki.browser.readText = async () => { throw new Error("Challenge requires user interaction"); };
+const blockedDetail = await provider.reading.lookup({ titles: ["Vagabond"], diagnosticsVersion: 1 });
+assert.equal(blockedDetail.items[0].detailOutcome, "CHALLENGE_BLOCKED");
+assert.equal(blockedDetail.items[0].detailHttpStatus, 403);
+
+// HTTP 200 containing an interactive HTML challenge is not a successful
+// detail lookup. If the Browser Host cannot resolve it, report CHALLENGE_BLOCKED
+// rather than a generic network failure or an empty edition.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({ statusCode: 200, body: JSON.stringify({ items: [
+      { hid: "real-a", title: "Vagabond" },
+      { hid: "real-b", title: "Vagabond" },
+    ] }) });
+  }
+  if (pathname === "/api/titles/real-a") {
+    return JSON.stringify({ statusCode: 200, body: "<!doctype html><html>Just a moment</html>" });
+  }
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify({ data: { hid: "real-b", title: "Vagabond" } }),
+  });
+};
+globalThis.tsuzuki.browser.readText = async () => { throw new Error("Browser navigation blocked"); };
+const htmlBlocked = await provider.reading.lookup({ titles: ["Vagabond"], diagnosticsVersion: 1 });
+assert.equal(htmlBlocked.items[0].detailOutcome, "CHALLENGE_BLOCKED");
+assert.equal(htmlBlocked.items[0].detailHttpStatus, 200, "record challenge HTTP 200, not generic missing status");
+
+// A challenge disguised as HTTP 200 at the search endpoint must also
+// preserve that HTTP status, not become a generic source error.
+globalThis.tsuzuki.http.request = async () => JSON.stringify({
+  statusCode: 200,
+  body: "<!doctype html><html>Just a moment</html>",
+});
+globalThis.tsuzuki.browser.readText = async () => { throw new Error("Unavailable challenge"); };
+const htmlSearchBlocked = await provider.reading.lookup({ titles: ["Vagabond"], diagnosticsVersion: 1 });
+assert.deepEqual(htmlSearchBlocked, {
+  items: [], nextCursor: null, lookupFailureCode: "CHALLENGE_BLOCKED", lookupHttpStatus: 200,
+});
+
+// A source lookup failure occurs before any candidate can report detailOutcome.
+// New Hosts request closed error provenance; older Hosts still receive errors.
+// Never return an apparently successful empty inventory after an upstream 403.
+globalThis.tsuzuki.http.request = async () => JSON.stringify({
+  statusCode: 403,
+  body: JSON.stringify({ challenge: true }),
+});
+globalThis.tsuzuki.browser.readText = async () => {
+  throw new Error("Interactive MangaFire challenge not available");
+};
+const challengedSearch = await provider.reading.lookup({
+  titles: ["Vagabond"],
+  diagnosticsVersion: 1,
+});
+assert.deepEqual(challengedSearch, {
+  items: [],
+  nextCursor: null,
+  lookupFailureCode: "CHALLENGE_BLOCKED",
+  lookupHttpStatus: 403,
+});
+await assert.rejects(
+  provider.reading.lookup({ titles: ["Vagabond"] }),
+  /challenge/i,
+  "legacy Host must receive a real source error, not an empty inventory",
+);
+globalThis.tsuzuki.http.request = async () => JSON.stringify({
+  statusCode: 503,
+  body: "{}",
+});
+const unavailableSearch = await provider.reading.lookup({
+  titles: ["Vagabond"],
+  diagnosticsVersion: 1,
+});
+assert.deepEqual(unavailableSearch, {
+  items: [],
+  nextCursor: null,
+  lookupFailureCode: "HTTP_ERROR",
+  lookupHttpStatus: 503,
+});
+globalThis.tsuzuki.http.request = async () => JSON.stringify({
+  statusCode: 200,
+  body: JSON.stringify({ notItems: true }),
+});
+const malformedSearch = await provider.reading.lookup({
+  titles: ["Vagabond"],
+  diagnosticsVersion: 1,
+});
+assert.equal(malformedSearch.lookupFailureCode, "INVALID_RESPONSE");
+assert.equal("lookupHttpStatus" in malformedSearch, false);
+assert.deepEqual(malformedSearch.items, []);
 
 console.log("MangaFire Provider conformance fixtures: OK");
