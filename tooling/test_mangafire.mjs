@@ -253,6 +253,29 @@ const mismatchedDetailLookup = await provider.reading.lookup({ titles: ["Haikyuu
 assert.equal(mismatchedDetailLookup.items.length, 1);
 assert.deepEqual(mismatchedDetailLookup.items[0].aliases, []);
 
+// An explicitly foreign HID in a detail response must never attach aliases
+// to a lookalike title returned in the search result.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({ items: [{ hid: "real-work", title: "Haikyu!!" }] }),
+    });
+  }
+  if (pathname === "/api/titles/real-work") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        data: { hid: "foreign-work", title: "Haikyu!!", alternativeTitles: ["Haikyuu!!"] },
+      }),
+    });
+  }
+  throw new Error("Unexpected mismatched HID fixture path");
+};
+const foreignHidLookup = await provider.reading.lookup({ titles: ["Haikyuu!!"] });
+assert.deepEqual(foreignHidLookup.items[0].aliases, []);
+
 // An HTTP 200 containing a human-facing challenge is not a successful JSON page.
 let challenged200Fallbacks = 0;
 globalThis.tsuzuki.http.request = async () => JSON.stringify({
