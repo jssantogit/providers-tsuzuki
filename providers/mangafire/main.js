@@ -231,8 +231,38 @@ async function pages(input) {
   const providerChapterId = cleanText(input?.providerChapterId);
   if (!providerChapterId) throw new Error("MangaFire page request is missing providerChapterId");
 
+  const binding = input?.binding ?? {};
+  const externalWorkId = cleanText(binding.externalWorkId);
+  const language = cleanText(binding.facetId) || LANGUAGE;
+  if (!externalWorkId || language !== LANGUAGE) {
+    throw new Error("MangaFire chapter page request has no valid English work binding");
+  }
+
   const response = await pagesForChapter(providerChapterId);
-  const pageItems = response?.data?.pages ?? [];
+  const data = response?.data;
+  if (!data || typeof data !== "object") {
+    throw new Error("MangaFire pages response is missing chapter data");
+  }
+  // The API may omit optional chapter fields. Whenever it does provide work,
+  // chapter or language identity, contradictory fields must fail closed
+  // rather than supply an unrelated page sequence to the canonical Reader.
+  if (data.id != null && String(data.id) !== providerChapterId) {
+    throw new Error("MangaFire pages chapter identity mismatch");
+  }
+  if (cleanText(data.language) && cleanText(data.language).toLowerCase() !== language) {
+    throw new Error("MangaFire pages chapter language mismatch");
+  }
+  // The upstream may also expose numeric database IDs (mangaId/titleId)
+  // that are not in the same namespace as the public MangaFire HID.
+  // Compare only explicit HID fields against our externally verified work.
+  const reportedWorkIds = [
+    data.mangaHid, data.titleHid, data.workHid,
+    data.manga?.hid, data.title?.hid, data.work?.hid,
+  ].filter((value) => value != null && String(value).trim());
+  if (reportedWorkIds.some((id) => String(id) !== externalWorkId)) {
+    throw new Error("MangaFire pages work identity mismatch");
+  }
+  const pageItems = data.pages ?? [];
   const result = pageItems
     .map((item) => cleanText(item?.url))
     .filter(Boolean)
