@@ -459,4 +459,46 @@ assert.equal(realVagabondLookup.items.length, 4);
 assert.equal(realVagabondLookup.items[0].chapterCount, 327, "record source-reported count only");
 assert.equal("chapterCount" in realVagabondLookup.items[1], false, "unknown is not zero");
 
+// Physical #176 smoke: v7 reported qnlvj and 4mx as identical "Vagabond"
+// entries with NO alternative titles. Their details must be queried (bounded)
+// to recover any source-attested edition qualifier; unrelated results must NOT
+// burn the budget. Never choose the first HID without corroboration.
+const ambiguousExactDetails = [];
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const parsed = new URL(url);
+  if (parsed.pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        items: [
+          { hid: "qnlvj", title: "Vagabond", slug: "vagabond22" },
+          { hid: "4mx", title: "Vagabond", slug: "vagabondd" },
+          { hid: "unrelated", title: "Vagabond: unrelated title" },
+        ],
+      }),
+    });
+  }
+  ambiguousExactDetails.push(parsed.pathname);
+  if (parsed.pathname === "/api/titles/qnlvj") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({
+        data: { hid: "qnlvj", title: "Vagabond", alternativeTitles: ["Vagabond (Official Colored)"] },
+      }),
+    });
+  }
+  if (parsed.pathname === "/api/titles/4mx") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({ data: { hid: "4mx", title: "Vagabond", alternativeTitles: [] } }),
+    });
+  }
+  throw new Error("Details of irrelevant search results must not run");
+};
+const qualifiedVagabond = await provider.reading.lookup({ titles: ["Vagabond"] });
+assert.deepEqual(ambiguousExactDetails, ["/api/titles/qnlvj", "/api/titles/4mx"]);
+assert.deepEqual(qualifiedVagabond.items[0].aliases, ["Vagabond (Official Colored)"]);
+assert.deepEqual(qualifiedVagabond.items[1].aliases, []);
+assert.equal(qualifiedVagabond.items.length, 3);
+
 console.log("MangaFire Provider conformance fixtures: OK");
