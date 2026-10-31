@@ -138,6 +138,20 @@ assert.equal(requests.length, 3);
      "Contradictory upstream chapter metadata must never reach the Reader",
    );
  }
+ // A numeric database parent ID cannot be equated to a public work HID.
+ // Rejecting it would break valid MangaFire pages if the site exposes both
+ // identifiers in different namespaces.
+ globalThis.tsuzuki.http.request = async () => JSON.stringify({
+   statusCode: 200,
+   body: JSON.stringify({
+     data: { id: 101, mangaId: 42, language: "en", pages: pagesFixture.data.pages },
+   }),
+ });
+ assert.equal(
+   (await provider.reading.pages({ binding: requestedPagesBinding, providerChapterId: "101" })).pages.length,
+   2,
+ );
+
  // A chapter response with no optional identity fields remains supported.
  globalThis.tsuzuki.http.request = async () => JSON.stringify({
    statusCode: 200,
