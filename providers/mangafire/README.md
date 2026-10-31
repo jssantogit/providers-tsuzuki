@@ -18,13 +18,16 @@ HTTP is attempted first. A bounded Browser Host Service request is used only as 
 
 V1 exposes only the English content facet. Additional MangaFire languages can be enabled after the first physical Reader path is accepted.
 
-## 0.1.5 signed smoke acceptance (2026-10-31)
+## 0.1.6 signed smoke acceptance (2026-10-31)
 
-The signed repository index is at sequence **23** and publishes MangaFire
-`0.1.5` (version code **6**). The `reading.lookup` flow now accepts only
+The signed repository index is at sequence **24** and publishes MangaFire
+`0.1.6` (version code **7**). The `reading.lookup` flow now accepts only
 MangaFire-attested alternate titles; an explicit HTTPS `mangafire.to/title/{hid}-...`
 link must resolve to the matching source record. Explicit per-chapter languages are checked before variant selection to prevent importing Spanish records into the English facet. Chapter pagination does
-not report a complete inventory when the upstream omits its termination metadata.
+not report a complete inventory when the upstream omits its termination metadata. The
+source is now requested with `sort=number&order=asc` so a timeout after early
+pages favors chapters 0–5 rather than the most recent 150+. This ordering
+request must still be verified against live upstream behavior on-device.
 
 The automated conformance fixtures and signed publication are **not** physical
 evidence of chapter availability. For issue
@@ -32,9 +35,9 @@ evidence of chapter availability. For issue
 in-place Android smoke must:
 
 1. Refresh the already-trusted Provider repository (no data reset), then
-   verify that MangaFire reports version code 6.
+   verify that MangaFire reports version code 7.
 2. Install the signed Release Host build from the
-   [dedicated smoke workflow](https://github.com/jssantogit/tsuzuki/actions/runs/41192194353)
+   [dedicated smoke workflow](https://github.com/jssantogit/tsuzuki/actions/runs/41195392665)
    over the existing app; do not substitute a Dev package.
 3. Verify explicit edition URLs for Boku normal (`kkvk9`) and colored
    (`np3ln`) remain distinct, and verify Kimetsu (`7j6`) and
