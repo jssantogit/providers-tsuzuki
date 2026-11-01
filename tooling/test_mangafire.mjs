@@ -761,4 +761,43 @@ const legacyBoundedJapaneseSearch = await provider.reading.lookup({
 assert.equal("chapterCount" in legacyBoundedJapaneseSearch.items[0], false);
 assert.equal("detailOutcome" in legacyBoundedJapaneseSearch.items[0], false);
 
+
+// An exact source title can coexist with a competing HID whose matching alias
+// is exposed only in details at rank 4. Pruning after rank 3 would hide that
+// ambiguity from the Host, which could then bind the wrong edition.
+const hiddenEditionDetails = [];
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({ statusCode: 200, body: JSON.stringify({ items: [
+      { hid: "main", title: "Vagabond" },
+      { hid: "other-one", title: "Other One" },
+      { hid: "other-two", title: "Other Two" },
+      { hid: "hidden-edition", title: "Shin Vagabond" },
+      { hid: "other-three", title: "Other Three" },
+      { hid: "other-four", title: "Other Four" },
+    ] }) });
+  }
+  hiddenEditionDetails.push(pathname);
+  const id = pathname.split("/").at(-1);
+  const titles = {
+    "other-one": "Other One",
+    "other-two": "Other Two",
+    "hidden-edition": "Shin Vagabond",
+    "other-three": "Other Three",
+    "other-four": "Other Four",
+  };
+  return JSON.stringify({ statusCode: 200, body: JSON.stringify({ data: {
+    hid: id, title: titles[id],
+    alternativeTitles: id === "hidden-edition" ? ["Vagabond"] : [],
+  } }) });
+};
+const lateAliasLookup = await provider.reading.lookup({
+  titles: ["Vagabond"], diagnosticsVersion: 1,
+});
+assert.ok(hiddenEditionDetails.includes("/api/titles/hidden-edition"),
+  "rank 4 editorial contender must not be silently discarded");
+assert.ok(lateAliasLookup.items[3].aliases.includes("Vagabond"),
+  "Host must see the second source-attested exact identity to reject automatic binding");
+
 console.log("MangaFire Provider conformance fixtures: OK");
