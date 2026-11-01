@@ -265,7 +265,8 @@ async function lookupUnchecked(input) {
           item,
           title,
           MAX_ALIAS_DETAIL_LOOKUPS - detailLookups,
-          needsPrimaryDetails && normalizedTitle(candidateTitle) === query && !hasSourceEditionQualifier(item),
+          (needsPrimaryDetails && normalizedTitle(candidateTitle) === query && !hasSourceEditionQualifier(item)) ||
+            (includeEditorialDiagnostics && attestedMatches.has(externalWorkId)),
         );
       detailLookups += detail.detailsUsed;
       items.push({
