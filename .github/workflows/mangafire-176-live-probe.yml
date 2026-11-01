@@ -1,0 +1,25 @@
+name: MangaFire #176 bounded live probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/mangafire-issue-176-bounded-relevance-20261031
+    paths:
+      - tooling/probe_mangafire_176.mjs
+      - .github/workflows/mangafire-176-live-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Probe MangaFire public chapter API, bounded and sanitized
+        run: node tooling/probe_mangafire_176.mjs
