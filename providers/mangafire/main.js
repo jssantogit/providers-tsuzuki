@@ -32,6 +32,15 @@ function explicitAliases(item) {
   return names;
 }
 
+// Only a verified detail response can attest author names for editorial corroboration.
+// They cannot be inferred from a title, URL, or candidate rank.
+function sourceAttestedAuthors(item) {
+  if (!Array.isArray(item?.authors)) return [];
+  return [...new Set(item.authors
+    .map((entry) => cleanText(typeof entry === "string" ? entry : entry?.title ?? entry?.name))
+    .filter((name) => name.length > 0 && name.length <= 128))].slice(0, 8);
+}
+
 function normalizedTitle(value) {
   return cleanText(value).toLowerCase().replace(/\s+/g, " ");
 }
@@ -82,6 +91,9 @@ async function verifiedLookupAliases(item, requestedTitle, remainingDetails, for
       // Chapter count is source-attested only when returned by this exact HID's
       // verified detail record, never inferred from a search result's rank.
       chapterCount: sourceReportedChapterCount(record),
+      // Require a positive matching HID before crossing the richer V2
+      // identity boundary; a missing HID is not corroboration.
+      authors: cleanText(record.hid) === hid ? sourceAttestedAuthors(record) : [],
     };
   } catch (error) {
     // A failing optional detail lookup cannot create a false work binding.
@@ -166,7 +178,8 @@ function mergeChapterVariants(items) {
 async function lookupUnchecked(input) {
   // Compatibility with strict older Host decoders: edition enrichment is
   // always active, but new response keys require an explicit capability opt-in.
-  const includeDetailDiagnostics = input?.diagnosticsVersion === 1;
+  const includeDetailDiagnostics = input?.diagnosticsVersion === 1 || input?.diagnosticsVersion === 2;
+  const includeEditorialDiagnostics = input?.diagnosticsVersion === 2;
   const titles = Array.isArray(input?.titles) ? input.titles : [];
   const seen = new Set();
   const items = [];
@@ -198,6 +211,7 @@ async function lookupUnchecked(input) {
           ...(!includeDetailDiagnostics || sourceReportedChapterCount(record) == null
             ? {}
             : { chapterCount: sourceReportedChapterCount(record) }),
+          ...(includeEditorialDiagnostics ? { authors: sourceAttestedAuthors(record) } : {}),
         }],
         nextCursor: null,
       };
@@ -266,6 +280,9 @@ async function lookupUnchecked(input) {
           : {}),
         url: titleUrl(item),
         language: LANGUAGE,
+        ...(includeEditorialDiagnostics && detail.authors?.length > 0
+          ? { authors: detail.authors }
+          : {}),
         ...(!includeDetailDiagnostics ||
           (detail.chapterCount ?? sourceReportedChapterCount(item)) == null
           ? {}
