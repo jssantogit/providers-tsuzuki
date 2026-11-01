@@ -740,6 +740,7 @@ globalThis.tsuzuki.http.request = async (_method, url) => {
       title: id === "ln6lz" ? "Fullmetal Alchemist" : `Unrelated ${id.slice(-1)}`,
       alternativeTitles: id === "ln6lz" ? ["Hagane no Renkinjutsushi"] : [],
       chapterCount: id === "ln6lz" ? 116 : 0,
+      authors: id === "ln6lz" ? [{ title: "Hiromu Arakawa" }] : [{ title: "Different Author" }],
     } }),
   });
 };
@@ -760,6 +761,14 @@ const legacyBoundedJapaneseSearch = await provider.reading.lookup({
 });
 assert.equal("chapterCount" in legacyBoundedJapaneseSearch.items[0], false);
 assert.equal("detailOutcome" in legacyBoundedJapaneseSearch.items[0], false);
+const editorialJapaneseSearch = await provider.reading.lookup({
+  titles: ["Hagane no Renkinjutsushi"], diagnosticsVersion: 2,
+});
+assert.deepEqual(editorialJapaneseSearch.items[0].authors, ["Hiromu Arakawa"],
+  "only source-verified author names from a matching HID can corroborate editorial identity");
+assert.equal("authors" in boundedJapaneseSearch.items[0], false,
+  "diagnosticsVersion 1 must preserve the existing strict Host response contract");
+assert.equal("authors" in legacyBoundedJapaneseSearch.items[0], false);
 
 
 // An exact source title can coexist with a competing HID whose matching alias
