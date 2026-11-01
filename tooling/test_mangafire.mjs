@@ -817,4 +817,55 @@ assert.ok(hiddenEditionDetails.includes("/api/titles/hidden-edition"),
 assert.ok(lateAliasLookup.items[3].aliases.includes("Vagabond"),
   "Host must see the second source-attested exact identity to reject automatic binding");
 
+
+// #176: work identity and source coverage are separate facts. A same-author,
+// same-title HID may have no English chapters, just 97, or additional pages.
+// Probe only the exact contested HIDs when the upgraded Host explicitly asks.
+const coverageCalls = [];
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const path = new URL(url).pathname;
+  if (path === "/api/titles") {
+    return JSON.stringify({ statusCode: 200, body: JSON.stringify({ items: [
+      { hid: "kx1p6", title: "Chainsaw Man" },
+      { hid: "kkyzv", title: "Chainsaw Man" },
+      { hid: "0w5k", title: "Chainsaw Man" },
+      { hid: "unrelated", title: "Chainsaw Person" },
+    ] }) });
+  }
+  if (/^\/api\/titles\/[^/]+\/chapters$/.test(path)) {
+    coverageCalls.push(path);
+    const id = path.split("/")[3];
+    const count = id === "0w5k" ? 101 : id === "kx1p6" ? 97 : 0;
+    return JSON.stringify({ statusCode: 200, body: JSON.stringify({
+      items: Array.from({ length: count }, (_, n) => ({ number: n + 1, id: String(5000 + n), language: "en" })),
+      meta: { hasNext: id === "0w5k" },
+    }) });
+  }
+  if (/^\/api\/titles\/[^/]+$/.test(path)) {
+    const id = path.split("/").at(-1);
+    return JSON.stringify({ statusCode: 200, body: JSON.stringify({
+      data: { hid: id, title: "Chainsaw Man", authors: ["Fujimoto Tatsuki"] },
+    }) });
+  }
+  throw new Error("Unexpected test URL");
+};
+const coverage = await provider.reading.lookup({
+  titles: ["Chainsaw Man"], diagnosticsVersion: 1,
+  editorialEvidenceVersion: 1, coverageEvidenceVersion: 1,
+});
+assert.deepEqual(coverage.items.slice(0, 3).map(item => item.coverageOutcome),
+  ["OBSERVED", "EMPTY", "OBSERVED"]);
+assert.deepEqual(coverage.items.slice(0, 3).map(item => item.coverageObservedCount),
+  [97, 0, 101]);
+assert.deepEqual(coverage.items.slice(0, 3).map(item => item.coverageHasMore),
+  [false, false, true]);
+assert.equal("coverageOutcome" in coverage.items[3], false);
+assert.deepEqual(coverageCalls.sort(), [
+  "/api/titles/0w5k/chapters", "/api/titles/kkyzv/chapters", "/api/titles/kx1p6/chapters",
+].sort());
+coverageCalls.length = 0;
+const noProbe = await provider.reading.lookup({ titles: ["Chainsaw Man"], diagnosticsVersion: 1 });
+assert.equal(coverageCalls.length, 0, "legacy lookup must never trigger extra network probes");
+assert.equal("coverageOutcome" in noProbe.items[0], false);
+
 console.log("MangaFire Provider conformance fixtures: OK");
