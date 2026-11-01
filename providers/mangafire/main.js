@@ -10,6 +10,7 @@ const LANGUAGE = "en";
 const MAX_LOOKUP_TITLES = 3;
 const MAX_LOOKUP_RESULTS = 20;
 const MAX_ALIAS_DETAIL_LOOKUPS = 5;
+const MAX_COVERAGE_PROBES = 3;
 const MAX_ALIASES = 32;
 
 function cleanText(value) {
@@ -175,11 +176,59 @@ function mergeChapterVariants(items) {
   return Array.from(selected.values());
 }
 
+// An opt-in, read-only preview of the first English chapter page for one
+// source HID. The count and number range describe ONLY observed items on that
+// page. They are not the canonical chapter total or proof of an edition.
+// No Provider binding, Reader page, or chapter evidence is ever persisted here.
+async function sourceCoveragePreview(externalWorkId) {
+  try {
+    const page = await chaptersForTitle(externalWorkId, LANGUAGE, 1);
+    const rows = verifiedItems(page, "coverage").filter((entry) => {
+      const facet = cleanText(entry?.language).toLowerCase();
+      return !facet || facet === LANGUAGE;
+    });
+    if (rows.length > 200) throw new Error("MangaFire coverage exceeded page limit");
+    const numbers = rows.map((entry) => Number(entry?.number));
+    if (numbers.some((n) => !Number.isFinite(n) || n < 0 ||
+      !Number.isSafeInteger(Math.round(n * 1000)) ||
+      Math.abs(n * 1000 - Math.round(n * 1000)) > 0.000001)) {
+      return { coverageOutcome: "INVALID_RESPONSE" };
+    }
+    const meta = page?.meta ?? {};
+    const lastPage = meta.lastPage == null ? null : Number(meta.lastPage);
+    const hasMore = typeof meta.hasNext === "boolean" ? meta.hasNext
+      : Number.isInteger(lastPage) && lastPage >= 1 ? lastPage > 1 : null;
+    // An empty page is not a definitive empty source unless pagination
+    // expressly attests that there is no next page. Do not infer completeness.
+    const outcome = rows.length > 0 ? "OBSERVED" :
+      hasMore === false ? "EMPTY" : "UNKNOWN";
+    return {
+      coverageOutcome: outcome,
+      coverageObservedCount: rows.length,
+      ...(hasMore == null ? {} : { coverageHasMore: hasMore }),
+      ...(numbers.length === 0 ? {} : {
+        coverageMinMilli: Math.round(Math.min(...numbers) * 1000),
+        coverageMaxMilli: Math.round(Math.max(...numbers) * 1000),
+      }),
+    };
+  } catch (error) {
+    // The chapter API may fail or challenge; never treat that as zero chapters,
+    // and never emit an upstream URL, response body or exception message.
+    const status = Number(error?.httpStatus);
+    return {
+      coverageOutcome: error?.challengeRequired === true || status === 403
+        ? "CHALLENGE_BLOCKED" : "FAILED",
+    };
+  }
+}
+
 async function lookupUnchecked(input) {
   // Compatibility with strict older Host decoders: edition enrichment is
   // always active, but new response keys require an explicit capability opt-in.
   const includeDetailDiagnostics = input?.diagnosticsVersion === 1 || input?.diagnosticsVersion === 2;
   const includeEditorialDiagnostics = input?.diagnosticsVersion === 2 || input?.editorialEvidenceVersion === 1;
+  const includeCoveragePreview = input?.coverageEvidenceVersion === 1;
+  let coverageProbes = 0;
   const titles = Array.isArray(input?.titles) ? input.titles : [];
   const seen = new Set();
   const items = [];
@@ -269,9 +318,19 @@ async function lookupUnchecked(input) {
             (includeEditorialDiagnostics && attestedMatches.has(externalWorkId)),
         );
       detailLookups += detail.detailsUsed;
+      const sourceVerifiedExact = normalizedTitle(candidateTitle) === query ||
+        detail.aliases.some((alias) => normalizedTitle(alias) === query);
+      // Never spend probe budget on unrelated search hits. Three is a HARD
+      // per-lookup maximum, not a claim that omitted candidates are absent.
+      const coverage = includeCoveragePreview && sourceVerifiedExact &&
+        coverageProbes < MAX_COVERAGE_PROBES
+        ? await sourceCoveragePreview(externalWorkId)
+        : null;
+      if (coverage != null) coverageProbes++;
       items.push({
         externalWorkId,
         title: candidateTitle,
+        ...(coverage ?? {}),
         aliases: detail.aliases,
         ...(includeDetailDiagnostics
           ? {
