@@ -230,12 +230,13 @@ async function lookupUnchecked(input) {
         !hasSourceEditionQualifier(item),
       );
     const needsPrimaryDetails = unknownEditionPrimaries.length > 1;
-    // Real #176: a Japanese search may return 20 hits, one exact primary and
-    // a relevant English-title candidate whose translated alias is revealed by
-    // its detail response. Preserve the top source-ranked candidates, but do
-    // not spend the entire enrichment budget on the unrelated tail once at
-    // least one direct identity has already been attested by the search.
-    const rankedUnattestedLimit = attestedMatches.size > 0 ? 3 : sourceHits.length;
+    // A search hit with an exact title does NOT prove another hit lacks a
+    // matching alias: the alias may appear only in title details at rank 4/5.
+    // Keep the full existing five-detail budget when there is one exact hit.
+    // Prune only the unverified tail beyond that budget; never convert a
+    // skipped candidate into a positive editorial identity assertion.
+    const rankedUnattestedLimit = attestedMatches.size > 0
+      ? MAX_ALIAS_DETAIL_LOOKUPS : sourceHits.length;
     for (const [rank, item] of sourceHits.entries()) {
       const externalWorkId = cleanText(item?.hid);
       const candidateTitle = cleanText(item?.title);

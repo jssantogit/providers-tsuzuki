@@ -713,8 +713,8 @@ assert.deepEqual(malformedSearch.items, []);
 
 // Issue #176 / physical code8: source search contains one primary Japanese hit,
 // but the first ranked English hit has the Japanese alias only in its details.
-// Do not sacrifice that alias; also do not spend all five detail requests on
-// unrelated works after the exact match. The versioned Host can log an attested
+// Do not sacrifice this alias, or a competing alias at rank 4/5. Keep the
+// existing five-detail safety budget. The versioned Host can log an attested
 // count from a verified detail, not a guessed count from the search ranking.
 const physicalIssue176DetailCalls = [];
 globalThis.tsuzuki.http.request = async (_method, url) => {
@@ -749,12 +749,12 @@ const boundedJapaneseSearch = await provider.reading.lookup({
 });
 assert.ok(physicalIssue176DetailCalls.includes("/api/titles/ln6lz"),
   "ranked source aliases must remain discoverable");
-assert.ok(physicalIssue176DetailCalls.length <= 3,
-  "a known exact hit must not cause five unrelated detail requests");
+assert.ok(physicalIssue176DetailCalls.length <= 5,
+  "source detail enrichment must remain bounded at five requests");
 assert.equal(boundedJapaneseSearch.items[0].aliases[0], "Hagane no Renkinjutsushi");
 assert.equal(boundedJapaneseSearch.items[0].chapterCount, 116,
   "only the verified detail record may attest this chapter count");
-assert.equal(boundedJapaneseSearch.items[4].detailOutcome, "SKIPPED_IRRELEVANT");
+assert.equal(boundedJapaneseSearch.items[5].detailOutcome, "SKIPPED_IRRELEVANT");
 const legacyBoundedJapaneseSearch = await provider.reading.lookup({
   titles: ["Hagane no Renkinjutsushi"],
 });
