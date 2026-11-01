@@ -868,4 +868,21 @@ const noProbe = await provider.reading.lookup({ titles: ["Chainsaw Man"], diagno
 assert.equal(coverageCalls.length, 0, "legacy lookup must never trigger extra network probes");
 assert.equal("coverageOutcome" in noProbe.items[0], false);
 
+// Coverage probing is expensive; a unique exact HID requires no comparison.
+coverageCalls.length = 0;
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const path = new URL(url).pathname;
+  if (path === "/api/titles") return JSON.stringify({
+    statusCode: 200, body: JSON.stringify({ items: [{ hid: "solo", title: "Unique Work" }] }),
+  });
+  if (path.endsWith("/chapters")) coverageCalls.push(path);
+  throw new Error("Unique source must not issue detail or coverage probes");
+};
+const uniqueCoverage = await provider.reading.lookup({
+  titles: ["Unique Work"], coverageEvidenceVersion: 1,
+});
+assert.equal(coverageCalls.length, 0);
+assert.equal("coverageOutcome" in uniqueCoverage.items[0], false);
+
+
 console.log("MangaFire Provider conformance fixtures: OK");
