@@ -885,4 +885,40 @@ assert.equal(coverageCalls.length, 0);
 assert.equal("coverageOutcome" in uniqueCoverage.items[0], false);
 
 
+// #176 RED: a coverage preview must validate exact chapter identities before
+// saying a competing HID has readable chapters. Bad payloads are not an
+// editorial EMPTY, a valid OBSERVED, or an opaque network failure.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const path = new URL(url).pathname;
+  if (path === "/api/titles") return JSON.stringify({
+    statusCode: 200, body: JSON.stringify({ items: [
+      { hid: "bad-chapter-id", title: "Ambiguous Work" },
+      { hid: "bad-chapter-array", title: "Ambiguous Work" },
+    ] }),
+  });
+  if (path.startsWith("/api/titles/") && !path.endsWith("/chapters")) {
+    const id = path.split("/").at(-1);
+    return JSON.stringify({ statusCode: 200, body: JSON.stringify({
+      data: { hid: id, title: "Ambiguous Work" },
+    }) });
+  }
+  if (path.endsWith("/bad-chapter-id/chapters")) return JSON.stringify({
+    statusCode: 200, body: JSON.stringify({
+      items: [{ number: 1, language: "en" }], meta: { hasNext: false },
+    }),
+  });
+  if (path.endsWith("/bad-chapter-array/chapters")) return JSON.stringify({
+    statusCode: 200, body: JSON.stringify({ items: null, meta: { hasNext: false } }),
+  });
+  throw new Error("Unexpected coverage test URL");
+};
+const invalidCoverage = await provider.reading.lookup({
+  titles: ["Ambiguous Work"], diagnosticsVersion: 1, coverageEvidenceVersion: 1,
+});
+assert.deepEqual(invalidCoverage.items.map(item => item.coverageOutcome),
+  ["INVALID_RESPONSE", "INVALID_RESPONSE"],
+  "missing chapter ID and malformed page array cannot corroborate readable or empty HID");
+assert.ok(invalidCoverage.items.every(item => !("coverageObservedCount" in item)),
+  "malformed source data must never leak apparently valid chapter counts");
+
 console.log("MangaFire Provider conformance fixtures: OK");
