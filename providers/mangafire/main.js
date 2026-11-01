@@ -183,13 +183,21 @@ function mergeChapterVariants(items) {
 async function sourceCoveragePreview(externalWorkId) {
   try {
     const page = await chaptersForTitle(externalWorkId, LANGUAGE, 1);
-    const rows = verifiedItems(page, "coverage").filter((entry) => {
+    // A read-only profile can influence automatic source selection. Require the
+    // same minimum chapter identity contract as a real chapter inventory:
+    // malformed pages or missing chapter IDs are not observable coverage.
+    if (!page || !Array.isArray(page.items) || page.items.length > 200) {
+      return { coverageOutcome: "INVALID_RESPONSE" };
+    }
+    const rows = page.items.filter((entry) => {
       const facet = cleanText(entry?.language).toLowerCase();
       return !facet || facet === LANGUAGE;
     });
-    if (rows.length > 200) throw new Error("MangaFire coverage exceeded page limit");
     const numbers = rows.map((entry) => Number(entry?.number));
-    if (numbers.some((n) => !Number.isFinite(n) || n < 0 ||
+    if (rows.some((entry) => entry == null || entry.id == null ||
+      String(entry.id).trim() === "" || entry.number == null ||
+      entry.number === "") ||
+      numbers.some((n) => !Number.isFinite(n) || n < 0 ||
       !Number.isSafeInteger(Math.round(n * 1000)) ||
       Math.abs(n * 1000 - Math.round(n * 1000)) > 0.000001)) {
       return { coverageOutcome: "INVALID_RESPONSE" };
