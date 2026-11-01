@@ -228,7 +228,6 @@ async function lookupUnchecked(input) {
   const includeDetailDiagnostics = input?.diagnosticsVersion === 1 || input?.diagnosticsVersion === 2;
   const includeEditorialDiagnostics = input?.diagnosticsVersion === 2 || input?.editorialEvidenceVersion === 1;
   const includeCoveragePreview = input?.coverageEvidenceVersion === 1;
-  let coverageProbes = 0;
   const titles = Array.isArray(input?.titles) ? input.titles : [];
   const seen = new Set();
   const items = [];
@@ -318,19 +317,9 @@ async function lookupUnchecked(input) {
             (includeEditorialDiagnostics && attestedMatches.has(externalWorkId)),
         );
       detailLookups += detail.detailsUsed;
-      const sourceVerifiedExact = normalizedTitle(candidateTitle) === query ||
-        detail.aliases.some((alias) => normalizedTitle(alias) === query);
-      // Never spend probe budget on unrelated search hits. Three is a HARD
-      // per-lookup maximum, not a claim that omitted candidates are absent.
-      const coverage = includeCoveragePreview && sourceVerifiedExact &&
-        coverageProbes < MAX_COVERAGE_PROBES
-        ? await sourceCoveragePreview(externalWorkId)
-        : null;
-      if (coverage != null) coverageProbes++;
       items.push({
         externalWorkId,
         title: candidateTitle,
-        ...(coverage ?? {}),
         aliases: detail.aliases,
         ...(includeDetailDiagnostics
           ? {
@@ -349,6 +338,20 @@ async function lookupUnchecked(input) {
           : { chapterCount: detail.chapterCount ?? sourceReportedChapterCount(item) }),
       });
       if (items.length >= MAX_LOOKUP_RESULTS) break;
+    }
+
+    // One verified exact identity does not require any chapter network probes.
+    // Only a set of competing source-attested title/alias HIDs justifies the
+    // extra read-only work. A failed probe never eliminates an identity.
+    if (includeCoveragePreview) {
+      const contenders = items.filter((item) =>
+        normalizedTitle(item.title) === query ||
+        item.aliases.some((alias) => normalizedTitle(alias) === query));
+      if (contenders.length > 1) {
+        await Promise.all(contenders.slice(0, MAX_COVERAGE_PROBES).map(async (item) => {
+          Object.assign(item, await sourceCoveragePreview(item.externalWorkId));
+        }));
+      }
     }
 
     if (items.length > 0) break;
