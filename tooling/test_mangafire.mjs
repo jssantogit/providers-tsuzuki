@@ -467,7 +467,7 @@ assert.deepEqual(Object.keys(legacyCount.items[0]).sort(),
   ["externalWorkId", "title", "aliases", "url", "language"].sort(),
   "legacy candidate wire shape must be identical even when source has additional metadata");
 const unknownDiagnosticsVersion = await provider.reading.lookup({
-  titles: ["Vagabond"], diagnosticsVersion: 2,
+  titles: ["Vagabond"], diagnosticsVersion: 3,
 });
 assert.deepEqual(Object.keys(unknownDiagnosticsVersion.items[0]).sort(),
   ["externalWorkId", "title", "aliases", "url", "language"].sort(),
@@ -709,5 +709,216 @@ const malformedSearch = await provider.reading.lookup({
 assert.equal(malformedSearch.lookupFailureCode, "INVALID_RESPONSE");
 assert.equal("lookupHttpStatus" in malformedSearch, false);
 assert.deepEqual(malformedSearch.items, []);
+
+
+// Issue #176 / physical code8: source search contains one primary Japanese hit,
+// but the first ranked English hit has the Japanese alias only in its details.
+// Do not sacrifice this alias, or a competing alias at rank 4/5. Keep the
+// existing five-detail safety budget. The versioned Host can log an attested
+// count from a verified detail, not a guessed count from the search ranking.
+const physicalIssue176DetailCalls = [];
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({ items: [
+        { hid: "ln6lz", title: "Fullmetal Alchemist" },
+        { hid: "7028y", title: "Hagane no Renkinjutsushi" },
+        ...Array.from({ length: 18 }, (_, n) => ({
+          hid: `unrelated-${n}`, title: `Unrelated ${n}`,
+        })),
+      ] }),
+    });
+  }
+  physicalIssue176DetailCalls.push(pathname);
+  const id = pathname.split("/").at(-1);
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify({ data: {
+      hid: id,
+      title: id === "ln6lz" ? "Fullmetal Alchemist" :
+        id === "7028y" ? "Hagane no Renkinjutsushi" : `Unrelated ${id.slice(-1)}`,
+      alternativeTitles: id === "ln6lz" ? ["Hagane no Renkinjutsushi"] : [],
+      chapterCount: id === "ln6lz" ? 116 : 0,
+      authors: id === "ln6lz" ? [{ title: "Hiromu Arakawa" }] : [{ title: "Different Author" }],
+    } }),
+  });
+};
+const boundedJapaneseSearch = await provider.reading.lookup({
+  titles: ["Hagane no Renkinjutsushi"],
+  diagnosticsVersion: 1,
+});
+assert.ok(physicalIssue176DetailCalls.includes("/api/titles/ln6lz"),
+  "ranked source aliases must remain discoverable");
+assert.ok(physicalIssue176DetailCalls.length <= 5,
+  "source detail enrichment must remain bounded at five requests");
+assert.equal(boundedJapaneseSearch.items[0].aliases[0], "Hagane no Renkinjutsushi");
+assert.equal(boundedJapaneseSearch.items[0].chapterCount, 116,
+  "only the verified detail record may attest this chapter count");
+assert.equal(boundedJapaneseSearch.items[5].detailOutcome, "SKIPPED_IRRELEVANT");
+const legacyBoundedJapaneseSearch = await provider.reading.lookup({
+  titles: ["Hagane no Renkinjutsushi"],
+});
+assert.equal("chapterCount" in legacyBoundedJapaneseSearch.items[0], false);
+assert.equal("detailOutcome" in legacyBoundedJapaneseSearch.items[0], false);
+const editorialJapaneseSearch = await provider.reading.lookup({
+  titles: ["Hagane no Renkinjutsushi"], diagnosticsVersion: 2,
+});
+assert.deepEqual(editorialJapaneseSearch.items[0].authors, ["Hiromu Arakawa"],
+  "only source-verified author names from a matching HID can corroborate editorial identity");
+const requestedEditorialEvidence = await provider.reading.lookup({
+  titles: ["Hagane no Renkinjutsushi"], diagnosticsVersion: 1, editorialEvidenceVersion: 1,
+});
+assert.deepEqual(requestedEditorialEvidence.items[0].authors, ["Hiromu Arakawa"],
+  "V1 HTTP/status diagnostics remain present when the independent editorial protocol is opted into");
+assert.deepEqual(requestedEditorialEvidence.items[1].authors, ["Different Author"],
+  "the exact primary HID also requires verified details before authors may be trusted");
+assert.equal("authors" in boundedJapaneseSearch.items[0], false,
+  "diagnosticsVersion 1 must preserve the existing strict Host response contract");
+assert.equal("authors" in legacyBoundedJapaneseSearch.items[0], false);
+
+
+// An exact source title can coexist with a competing HID whose matching alias
+// is exposed only in details at rank 4. Pruning after rank 3 would hide that
+// ambiguity from the Host, which could then bind the wrong edition.
+const hiddenEditionDetails = [];
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({ statusCode: 200, body: JSON.stringify({ items: [
+      { hid: "main", title: "Vagabond" },
+      { hid: "other-one", title: "Other One" },
+      { hid: "other-two", title: "Other Two" },
+      { hid: "hidden-edition", title: "Shin Vagabond" },
+      { hid: "other-three", title: "Other Three" },
+      { hid: "other-four", title: "Other Four" },
+    ] }) });
+  }
+  hiddenEditionDetails.push(pathname);
+  const id = pathname.split("/").at(-1);
+  const titles = {
+    "other-one": "Other One",
+    "other-two": "Other Two",
+    "hidden-edition": "Shin Vagabond",
+    "other-three": "Other Three",
+    "other-four": "Other Four",
+  };
+  return JSON.stringify({ statusCode: 200, body: JSON.stringify({ data: {
+    hid: id, title: titles[id],
+    alternativeTitles: id === "hidden-edition" ? ["Vagabond"] : [],
+  } }) });
+};
+const lateAliasLookup = await provider.reading.lookup({
+  titles: ["Vagabond"], diagnosticsVersion: 1,
+});
+assert.ok(hiddenEditionDetails.includes("/api/titles/hidden-edition"),
+  "rank 4 editorial contender must not be silently discarded");
+assert.ok(lateAliasLookup.items[3].aliases.includes("Vagabond"),
+  "Host must see the second source-attested exact identity to reject automatic binding");
+
+
+// #176: work identity and source coverage are separate facts. A same-author,
+// same-title HID may have no English chapters, just 97, or additional pages.
+// Probe only the exact contested HIDs when the upgraded Host explicitly asks.
+const coverageCalls = [];
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const path = new URL(url).pathname;
+  if (path === "/api/titles") {
+    return JSON.stringify({ statusCode: 200, body: JSON.stringify({ items: [
+      { hid: "kx1p6", title: "Chainsaw Man" },
+      { hid: "kkyzv", title: "Chainsaw Man" },
+      { hid: "0w5k", title: "Chainsaw Man" },
+      { hid: "unrelated", title: "Chainsaw Person" },
+    ] }) });
+  }
+  if (/^\/api\/titles\/[^/]+\/chapters$/.test(path)) {
+    coverageCalls.push(path);
+    const id = path.split("/")[3];
+    const count = id === "0w5k" ? 101 : id === "kx1p6" ? 97 : 0;
+    return JSON.stringify({ statusCode: 200, body: JSON.stringify({
+      items: Array.from({ length: count }, (_, n) => ({ number: n + 1, id: String(5000 + n), language: "en" })),
+      meta: { hasNext: id === "0w5k" },
+    }) });
+  }
+  if (/^\/api\/titles\/[^/]+$/.test(path)) {
+    const id = path.split("/").at(-1);
+    return JSON.stringify({ statusCode: 200, body: JSON.stringify({
+      data: { hid: id, title: "Chainsaw Man", authors: ["Fujimoto Tatsuki"] },
+    }) });
+  }
+  throw new Error("Unexpected test URL");
+};
+const coverage = await provider.reading.lookup({
+  titles: ["Chainsaw Man"], diagnosticsVersion: 1,
+  editorialEvidenceVersion: 1, coverageEvidenceVersion: 1,
+});
+assert.deepEqual(coverage.items.slice(0, 3).map(item => item.coverageOutcome),
+  ["OBSERVED", "EMPTY", "OBSERVED"]);
+assert.deepEqual(coverage.items.slice(0, 3).map(item => item.coverageObservedCount),
+  [97, 0, 101]);
+assert.deepEqual(coverage.items.slice(0, 3).map(item => item.coverageHasMore),
+  [false, false, true]);
+assert.equal("coverageOutcome" in coverage.items[3], false);
+assert.deepEqual(coverageCalls.sort(), [
+  "/api/titles/0w5k/chapters", "/api/titles/kkyzv/chapters", "/api/titles/kx1p6/chapters",
+].sort());
+coverageCalls.length = 0;
+const noProbe = await provider.reading.lookup({ titles: ["Chainsaw Man"], diagnosticsVersion: 1 });
+assert.equal(coverageCalls.length, 0, "legacy lookup must never trigger extra network probes");
+assert.equal("coverageOutcome" in noProbe.items[0], false);
+
+// Coverage probing is expensive; a unique exact HID requires no comparison.
+coverageCalls.length = 0;
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const path = new URL(url).pathname;
+  if (path === "/api/titles") return JSON.stringify({
+    statusCode: 200, body: JSON.stringify({ items: [{ hid: "solo", title: "Unique Work" }] }),
+  });
+  if (path.endsWith("/chapters")) coverageCalls.push(path);
+  throw new Error("Unique source must not issue detail or coverage probes");
+};
+const uniqueCoverage = await provider.reading.lookup({
+  titles: ["Unique Work"], coverageEvidenceVersion: 1,
+});
+assert.equal(coverageCalls.length, 0);
+assert.equal("coverageOutcome" in uniqueCoverage.items[0], false);
+
+
+// #176 RED: a coverage preview must validate exact chapter identities before
+// saying a competing HID has readable chapters. Bad payloads are not an
+// editorial EMPTY, a valid OBSERVED, or an opaque network failure.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const path = new URL(url).pathname;
+  if (path === "/api/titles") return JSON.stringify({
+    statusCode: 200, body: JSON.stringify({ items: [
+      { hid: "bad-chapter-id", title: "Ambiguous Work" },
+      { hid: "bad-chapter-array", title: "Ambiguous Work" },
+    ] }),
+  });
+  if (path.startsWith("/api/titles/") && !path.endsWith("/chapters")) {
+    const id = path.split("/").at(-1);
+    return JSON.stringify({ statusCode: 200, body: JSON.stringify({
+      data: { hid: id, title: "Ambiguous Work" },
+    }) });
+  }
+  if (path.endsWith("/bad-chapter-id/chapters")) return JSON.stringify({
+    statusCode: 200, body: JSON.stringify({
+      items: [{ number: 1, language: "en" }], meta: { hasNext: false },
+    }),
+  });
+  if (path.endsWith("/bad-chapter-array/chapters")) return JSON.stringify({
+    statusCode: 200, body: JSON.stringify({ items: null, meta: { hasNext: false } }),
+  });
+  throw new Error("Unexpected coverage test URL");
+};
+const invalidCoverage = await provider.reading.lookup({
+  titles: ["Ambiguous Work"], diagnosticsVersion: 1, coverageEvidenceVersion: 1,
+});
+assert.deepEqual(invalidCoverage.items.map(item => item.coverageOutcome),
+  ["INVALID_RESPONSE", "INVALID_RESPONSE"],
+  "missing chapter ID and malformed page array cannot corroborate readable or empty HID");
+assert.ok(invalidCoverage.items.every(item => !("coverageObservedCount" in item)),
+  "malformed source data must never leak apparently valid chapter counts");
 
 console.log("MangaFire Provider conformance fixtures: OK");

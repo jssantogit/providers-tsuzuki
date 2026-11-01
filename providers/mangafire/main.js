@@ -10,6 +10,7 @@ const LANGUAGE = "en";
 const MAX_LOOKUP_TITLES = 3;
 const MAX_LOOKUP_RESULTS = 20;
 const MAX_ALIAS_DETAIL_LOOKUPS = 5;
+const MAX_COVERAGE_PROBES = 3;
 const MAX_ALIASES = 32;
 
 function cleanText(value) {
@@ -30,6 +31,15 @@ function explicitAliases(item) {
     }
   }
   return names;
+}
+
+// Only a verified detail response can attest author names for editorial corroboration.
+// They cannot be inferred from a title, URL, or candidate rank.
+function sourceAttestedAuthors(item) {
+  if (!Array.isArray(item?.authors)) return [];
+  return [...new Set(item.authors
+    .map((entry) => cleanText(typeof entry === "string" ? entry : entry?.title ?? entry?.name))
+    .filter((name) => name.length > 0 && name.length <= 128))].slice(0, 8);
 }
 
 function normalizedTitle(value) {
@@ -79,6 +89,12 @@ async function verifiedLookupAliases(item, requestedTitle, remainingDetails, for
       aliases,
       detailsUsed: 1,
       detailOutcome: aliases.length > 0 ? "VERIFIED_WITH_ALIASES" : "VERIFIED_NO_ALIASES",
+      // Chapter count is source-attested only when returned by this exact HID's
+      // verified detail record, never inferred from a search result's rank.
+      chapterCount: sourceReportedChapterCount(record),
+      // Require a positive matching HID before crossing the richer V2
+      // identity boundary; a missing HID is not corroboration.
+      authors: cleanText(record.hid) === hid ? sourceAttestedAuthors(record) : [],
     };
   } catch (error) {
     // A failing optional detail lookup cannot create a false work binding.
@@ -160,10 +176,66 @@ function mergeChapterVariants(items) {
   return Array.from(selected.values());
 }
 
+// An opt-in, read-only preview of the first English chapter page for one
+// source HID. The count and number range describe ONLY observed items on that
+// page. They are not the canonical chapter total or proof of an edition.
+// No Provider binding, Reader page, or chapter evidence is ever persisted here.
+async function sourceCoveragePreview(externalWorkId) {
+  try {
+    const page = await chaptersForTitle(externalWorkId, LANGUAGE, 1);
+    // A read-only profile can influence automatic source selection. Require the
+    // same minimum chapter identity contract as a real chapter inventory:
+    // malformed pages or missing chapter IDs are not observable coverage.
+    if (!page || !Array.isArray(page.items) || page.items.length > 200) {
+      return { coverageOutcome: "INVALID_RESPONSE" };
+    }
+    const rows = page.items.filter((entry) => {
+      const facet = cleanText(entry?.language).toLowerCase();
+      return !facet || facet === LANGUAGE;
+    });
+    const numbers = rows.map((entry) => Number(entry?.number));
+    if (rows.some((entry) => entry == null || entry.id == null ||
+      String(entry.id).trim() === "" || entry.number == null ||
+      entry.number === "") ||
+      numbers.some((n) => !Number.isFinite(n) || n < 0 ||
+      !Number.isSafeInteger(Math.round(n * 1000)) ||
+      Math.abs(n * 1000 - Math.round(n * 1000)) > 0.000001)) {
+      return { coverageOutcome: "INVALID_RESPONSE" };
+    }
+    const meta = page?.meta ?? {};
+    const lastPage = meta.lastPage == null ? null : Number(meta.lastPage);
+    const hasMore = typeof meta.hasNext === "boolean" ? meta.hasNext
+      : Number.isInteger(lastPage) && lastPage >= 1 ? lastPage > 1 : null;
+    // An empty page is not a definitive empty source unless pagination
+    // expressly attests that there is no next page. Do not infer completeness.
+    const outcome = rows.length > 0 ? "OBSERVED" :
+      hasMore === false ? "EMPTY" : "UNKNOWN";
+    return {
+      coverageOutcome: outcome,
+      coverageObservedCount: rows.length,
+      ...(hasMore == null ? {} : { coverageHasMore: hasMore }),
+      ...(numbers.length === 0 ? {} : {
+        coverageMinMilli: Math.round(Math.min(...numbers) * 1000),
+        coverageMaxMilli: Math.round(Math.max(...numbers) * 1000),
+      }),
+    };
+  } catch (error) {
+    // The chapter API may fail or challenge; never treat that as zero chapters,
+    // and never emit an upstream URL, response body or exception message.
+    const status = Number(error?.httpStatus);
+    return {
+      coverageOutcome: error?.challengeRequired === true || status === 403
+        ? "CHALLENGE_BLOCKED" : "FAILED",
+    };
+  }
+}
+
 async function lookupUnchecked(input) {
   // Compatibility with strict older Host decoders: edition enrichment is
   // always active, but new response keys require an explicit capability opt-in.
-  const includeDetailDiagnostics = input?.diagnosticsVersion === 1;
+  const includeDetailDiagnostics = input?.diagnosticsVersion === 1 || input?.diagnosticsVersion === 2;
+  const includeEditorialDiagnostics = input?.diagnosticsVersion === 2 || input?.editorialEvidenceVersion === 1;
+  const includeCoveragePreview = input?.coverageEvidenceVersion === 1;
   const titles = Array.isArray(input?.titles) ? input.titles : [];
   const seen = new Set();
   const items = [];
@@ -195,6 +267,7 @@ async function lookupUnchecked(input) {
           ...(!includeDetailDiagnostics || sourceReportedChapterCount(record) == null
             ? {}
             : { chapterCount: sourceReportedChapterCount(record) }),
+          ...(includeEditorialDiagnostics ? { authors: sourceAttestedAuthors(record) } : {}),
         }],
         nextCursor: null,
       };
@@ -227,18 +300,29 @@ async function lookupUnchecked(input) {
         !hasSourceEditionQualifier(item),
       );
     const needsPrimaryDetails = unknownEditionPrimaries.length > 1;
-    for (const item of sourceHits) {
+    // A search hit with an exact title does NOT prove another hit lacks a
+    // matching alias: the alias may appear only in title details at rank 4/5.
+    // Keep the full existing five-detail budget when there is one exact hit.
+    // Prune only the unverified tail beyond that budget; never convert a
+    // skipped candidate into a positive editorial identity assertion.
+    const rankedUnattestedLimit = attestedMatches.size > 0
+      ? MAX_ALIAS_DETAIL_LOOKUPS : sourceHits.length;
+    for (const [rank, item] of sourceHits.entries()) {
       const externalWorkId = cleanText(item?.hid);
       const candidateTitle = cleanText(item?.title);
       if (!externalWorkId || !candidateTitle || seen.has(externalWorkId)) continue;
       seen.add(externalWorkId);
-      const detail = ambiguousAttested && !attestedMatches.has(externalWorkId)
+      const skipUnrelatedDetail =
+        (ambiguousAttested || rank >= rankedUnattestedLimit) &&
+        !attestedMatches.has(externalWorkId);
+      const detail = skipUnrelatedDetail
         ? { aliases: explicitAliases(item), detailsUsed: 0, detailOutcome: "SKIPPED_IRRELEVANT" }
         : await verifiedLookupAliases(
           item,
           title,
           MAX_ALIAS_DETAIL_LOOKUPS - detailLookups,
-          needsPrimaryDetails && normalizedTitle(candidateTitle) === query && !hasSourceEditionQualifier(item),
+          (needsPrimaryDetails && normalizedTitle(candidateTitle) === query && !hasSourceEditionQualifier(item)) ||
+            (includeEditorialDiagnostics && attestedMatches.has(externalWorkId)),
         );
       detailLookups += detail.detailsUsed;
       items.push({
@@ -253,11 +337,29 @@ async function lookupUnchecked(input) {
           : {}),
         url: titleUrl(item),
         language: LANGUAGE,
-        ...(!includeDetailDiagnostics || sourceReportedChapterCount(item) == null
+        ...(includeEditorialDiagnostics && detail.authors?.length > 0
+          ? { authors: detail.authors }
+          : {}),
+        ...(!includeDetailDiagnostics ||
+          (detail.chapterCount ?? sourceReportedChapterCount(item)) == null
           ? {}
-          : { chapterCount: sourceReportedChapterCount(item) }),
+          : { chapterCount: detail.chapterCount ?? sourceReportedChapterCount(item) }),
       });
       if (items.length >= MAX_LOOKUP_RESULTS) break;
+    }
+
+    // One verified exact identity does not require any chapter network probes.
+    // Only a set of competing source-attested title/alias HIDs justifies the
+    // extra read-only work. A failed probe never eliminates an identity.
+    if (includeCoveragePreview) {
+      const contenders = items.filter((item) =>
+        normalizedTitle(item.title) === query ||
+        item.aliases.some((alias) => normalizedTitle(alias) === query));
+      if (contenders.length > 1) {
+        await Promise.all(contenders.slice(0, MAX_COVERAGE_PROBES).map(async (item) => {
+          Object.assign(item, await sourceCoveragePreview(item.externalWorkId));
+        }));
+      }
     }
 
     if (items.length > 0) break;
