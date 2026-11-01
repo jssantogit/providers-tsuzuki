@@ -737,7 +737,8 @@ globalThis.tsuzuki.http.request = async (_method, url) => {
     statusCode: 200,
     body: JSON.stringify({ data: {
       hid: id,
-      title: id === "ln6lz" ? "Fullmetal Alchemist" : `Unrelated ${id.slice(-1)}`,
+      title: id === "ln6lz" ? "Fullmetal Alchemist" :
+        id === "7028y" ? "Hagane no Renkinjutsushi" : `Unrelated ${id.slice(-1)}`,
       alternativeTitles: id === "ln6lz" ? ["Hagane no Renkinjutsushi"] : [],
       chapterCount: id === "ln6lz" ? 116 : 0,
       authors: id === "ln6lz" ? [{ title: "Hiromu Arakawa" }] : [{ title: "Different Author" }],
@@ -771,6 +772,8 @@ const requestedEditorialEvidence = await provider.reading.lookup({
 });
 assert.deepEqual(requestedEditorialEvidence.items[0].authors, ["Hiromu Arakawa"],
   "V1 HTTP/status diagnostics remain present when the independent editorial protocol is opted into");
+assert.deepEqual(requestedEditorialEvidence.items[1].authors, ["Different Author"],
+  "the exact primary HID also requires verified details before authors may be trusted");
 assert.equal("authors" in boundedJapaneseSearch.items[0], false,
   "diagnosticsVersion 1 must preserve the existing strict Host response contract");
 assert.equal("authors" in legacyBoundedJapaneseSearch.items[0], false);
