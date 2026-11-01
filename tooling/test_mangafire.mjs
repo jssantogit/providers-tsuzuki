@@ -766,6 +766,11 @@ const editorialJapaneseSearch = await provider.reading.lookup({
 });
 assert.deepEqual(editorialJapaneseSearch.items[0].authors, ["Hiromu Arakawa"],
   "only source-verified author names from a matching HID can corroborate editorial identity");
+const requestedEditorialEvidence = await provider.reading.lookup({
+  titles: ["Hagane no Renkinjutsushi"], diagnosticsVersion: 1, editorialEvidenceVersion: 1,
+});
+assert.deepEqual(requestedEditorialEvidence.items[0].authors, ["Hiromu Arakawa"],
+  "V1 HTTP/status diagnostics remain present when the independent editorial protocol is opted into");
 assert.equal("authors" in boundedJapaneseSearch.items[0], false,
   "diagnosticsVersion 1 must preserve the existing strict Host response contract");
 assert.equal("authors" in legacyBoundedJapaneseSearch.items[0], false);

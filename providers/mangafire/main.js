@@ -179,7 +179,7 @@ async function lookupUnchecked(input) {
   // Compatibility with strict older Host decoders: edition enrichment is
   // always active, but new response keys require an explicit capability opt-in.
   const includeDetailDiagnostics = input?.diagnosticsVersion === 1 || input?.diagnosticsVersion === 2;
-  const includeEditorialDiagnostics = input?.diagnosticsVersion === 2;
+  const includeEditorialDiagnostics = input?.diagnosticsVersion === 2 || input?.editorialEvidenceVersion === 1;
   const titles = Array.isArray(input?.titles) ? input.titles : [];
   const seen = new Set();
   const items = [];
