@@ -710,4 +710,55 @@ assert.equal(malformedSearch.lookupFailureCode, "INVALID_RESPONSE");
 assert.equal("lookupHttpStatus" in malformedSearch, false);
 assert.deepEqual(malformedSearch.items, []);
 
+
+// Issue #176 / physical code8: source search contains one primary Japanese hit,
+// but the first ranked English hit has the Japanese alias only in its details.
+// Do not sacrifice that alias; also do not spend all five detail requests on
+// unrelated works after the exact match. The versioned Host can log an attested
+// count from a verified detail, not a guessed count from the search ranking.
+const physicalIssue176DetailCalls = [];
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  if (pathname === "/api/titles") {
+    return JSON.stringify({
+      statusCode: 200,
+      body: JSON.stringify({ items: [
+        { hid: "ln6lz", title: "Fullmetal Alchemist" },
+        { hid: "7028y", title: "Hagane no Renkinjutsushi" },
+        ...Array.from({ length: 18 }, (_, n) => ({
+          hid: `unrelated-${n}`, title: `Unrelated ${n}`,
+        })),
+      ] }),
+    });
+  }
+  physicalIssue176DetailCalls.push(pathname);
+  const id = pathname.split("/").at(-1);
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify({ data: {
+      hid: id,
+      title: id === "ln6lz" ? "Fullmetal Alchemist" : `Unrelated ${id.slice(-1)}`,
+      alternativeTitles: id === "ln6lz" ? ["Hagane no Renkinjutsushi"] : [],
+      chapterCount: id === "ln6lz" ? 116 : 0,
+    } }),
+  });
+};
+const boundedJapaneseSearch = await provider.reading.lookup({
+  titles: ["Hagane no Renkinjutsushi"],
+  diagnosticsVersion: 1,
+});
+assert.ok(physicalIssue176DetailCalls.includes("/api/titles/ln6lz"),
+  "ranked source aliases must remain discoverable");
+assert.ok(physicalIssue176DetailCalls.length <= 3,
+  "a known exact hit must not cause five unrelated detail requests");
+assert.equal(boundedJapaneseSearch.items[0].aliases[0], "Hagane no Renkinjutsushi");
+assert.equal(boundedJapaneseSearch.items[0].chapterCount, 116,
+  "only the verified detail record may attest this chapter count");
+assert.equal(boundedJapaneseSearch.items[4].detailOutcome, "SKIPPED_IRRELEVANT");
+const legacyBoundedJapaneseSearch = await provider.reading.lookup({
+  titles: ["Hagane no Renkinjutsushi"],
+});
+assert.equal("chapterCount" in legacyBoundedJapaneseSearch.items[0], false);
+assert.equal("detailOutcome" in legacyBoundedJapaneseSearch.items[0], false);
+
 console.log("MangaFire Provider conformance fixtures: OK");
