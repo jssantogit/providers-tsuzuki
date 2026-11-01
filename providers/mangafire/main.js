@@ -79,6 +79,9 @@ async function verifiedLookupAliases(item, requestedTitle, remainingDetails, for
       aliases,
       detailsUsed: 1,
       detailOutcome: aliases.length > 0 ? "VERIFIED_WITH_ALIASES" : "VERIFIED_NO_ALIASES",
+      // Chapter count is source-attested only when returned by this exact HID's
+      // verified detail record, never inferred from a search result's rank.
+      chapterCount: sourceReportedChapterCount(record),
     };
   } catch (error) {
     // A failing optional detail lookup cannot create a false work binding.
@@ -227,12 +230,21 @@ async function lookupUnchecked(input) {
         !hasSourceEditionQualifier(item),
       );
     const needsPrimaryDetails = unknownEditionPrimaries.length > 1;
-    for (const item of sourceHits) {
+    // Real #176: a Japanese search may return 20 hits, one exact primary and
+    // a relevant English-title candidate whose translated alias is revealed by
+    // its detail response. Preserve the top source-ranked candidates, but do
+    // not spend the entire enrichment budget on the unrelated tail once at
+    // least one direct identity has already been attested by the search.
+    const rankedUnattestedLimit = attestedMatches.size > 0 ? 3 : sourceHits.length;
+    for (const [rank, item] of sourceHits.entries()) {
       const externalWorkId = cleanText(item?.hid);
       const candidateTitle = cleanText(item?.title);
       if (!externalWorkId || !candidateTitle || seen.has(externalWorkId)) continue;
       seen.add(externalWorkId);
-      const detail = ambiguousAttested && !attestedMatches.has(externalWorkId)
+      const skipUnrelatedDetail =
+        (ambiguousAttested || rank >= rankedUnattestedLimit) &&
+        !attestedMatches.has(externalWorkId);
+      const detail = skipUnrelatedDetail
         ? { aliases: explicitAliases(item), detailsUsed: 0, detailOutcome: "SKIPPED_IRRELEVANT" }
         : await verifiedLookupAliases(
           item,
@@ -253,9 +265,10 @@ async function lookupUnchecked(input) {
           : {}),
         url: titleUrl(item),
         language: LANGUAGE,
-        ...(!includeDetailDiagnostics || sourceReportedChapterCount(item) == null
+        ...(!includeDetailDiagnostics ||
+          (detail.chapterCount ?? sourceReportedChapterCount(item)) == null
           ? {}
-          : { chapterCount: sourceReportedChapterCount(item) }),
+          : { chapterCount: detail.chapterCount ?? sourceReportedChapterCount(item) }),
       });
       if (items.length >= MAX_LOOKUP_RESULTS) break;
     }
