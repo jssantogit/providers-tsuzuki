@@ -467,7 +467,7 @@ assert.deepEqual(Object.keys(legacyCount.items[0]).sort(),
   ["externalWorkId", "title", "aliases", "url", "language"].sort(),
   "legacy candidate wire shape must be identical even when source has additional metadata");
 const unknownDiagnosticsVersion = await provider.reading.lookup({
-  titles: ["Vagabond"], diagnosticsVersion: 2,
+  titles: ["Vagabond"], diagnosticsVersion: 3,
 });
 assert.deepEqual(Object.keys(unknownDiagnosticsVersion.items[0]).sort(),
   ["externalWorkId", "title", "aliases", "url", "language"].sort(),
