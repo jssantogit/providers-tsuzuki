@@ -179,6 +179,34 @@ assert.deepEqual(
   "two chapters numbered zero in different volumes must never be collapsed",
 );
 
+// Physical #176: source entry Ch. 0 - Volume 112 is a whole-volume
+// container, not canonical chapter 0. A later/official volume entry must not
+// replace an authentic chapter-zero prologue during variant deduplication.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  assert.equal(new URL(url).pathname, "/api/titles/chapter-zero-real/chapters");
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify({
+      items: [
+        { id: 900, number: 0, name: "Prologue", language: "en", type: "fan", createdAt: 10 },
+        { id: 901, number: 0, name: "Volume 112", language: "en", type: "official", createdAt: 20 },
+        { id: 902, number: 0, name: "Vol. 112", language: "en", type: "official", createdAt: 21 },
+        { id: 903, number: 1, name: "Romance Dawn", language: "en", type: "official", createdAt: 22 },
+      ],
+      meta: { hasNext: false },
+    }),
+  });
+};
+const realZero = await provider.reading.chapters({
+  binding: { externalWorkId: "chapter-zero-real", facetId: "en" },
+  cursor: null,
+});
+assert.deepEqual(
+  realZero.items.map(item => [item.providerChapterId, item.rawLabel]),
+  [["900", "Ch. 0 - Prologue"], ["903", "Ch. 1 - Romance Dawn"]],
+  "a misnumbered volume must never displace the genuine Ch. 0 during source variant selection",
+);
+
 // A numeric database parent ID cannot be equated to a public work HID.
  // Rejecting it would break valid MangaFire pages if the site exposes both
  // identifiers in different namespaces.
