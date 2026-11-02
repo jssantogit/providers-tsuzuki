@@ -179,6 +179,33 @@ assert.deepEqual(
   "two chapters numbered zero in different volumes must never be collapsed",
 );
 
+// #176: without an attested volume, two different source Chapter 0 IDs
+// are *not* proven variants of the same chapter. Never select the newest
+// source ID silently and erase the other candidate before the Host can
+// detect ambiguity. Non-zero official-vs-fan version consolidation stays.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  assert.equal(new URL(url).pathname, "/api/titles/unknown-zero/chapters");
+  return JSON.stringify({ statusCode: 200, body: JSON.stringify({
+    items: [
+      { id: 9324579, number: 0, language: "en", type: "official", createdAt: 10 },
+      { id: 9312345, number: 0, language: "en", type: "official", createdAt: 20 },
+      { id: 9312344, number: 0, language: "en", type: "fan", createdAt: 30 },
+      { id: 9312399, number: 1, language: "en", type: "fan", createdAt: 20 },
+      { id: 9312400, number: 1, language: "en", type: "official", createdAt: 10 },
+    ],
+    meta: { hasNext: false },
+  }) });
+};
+const unqualifiedZero = await provider.reading.chapters({
+  binding: { externalWorkId: "unknown-zero", facetId: "en" },
+  cursor: null,
+});
+assert.deepEqual(
+  unqualifiedZero.items.map(item => item.providerChapterId),
+  ["9324579", "9312345", "9312344", "9312400"],
+  "unqualified Chapter 0 source IDs must remain separate unless the Provider proves they are the same chapter",
+);
+
 // A numeric database parent ID cannot be equated to a public work HID.
  // Rejecting it would break valid MangaFire pages if the site exposes both
  // identifiers in different namespaces.
