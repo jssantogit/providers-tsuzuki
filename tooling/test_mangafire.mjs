@@ -179,6 +179,59 @@ assert.deepEqual(
   "two chapters numbered zero in different volumes must never be collapsed",
 );
 
+// #176 A54: Source exposes "Darkshine vs Garou" as 0 and
+// "Saitama vs Garou (not full)" as 0.2. A source-provided number
+// alone is not editorial proof of a real early chapter. Keep the
+// observation and source ID, but do not manufacture a definitive
+// "Ch. 0" prefix from that unsupported source-title claim.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  assert.equal(new URL(url).pathname, "/api/titles/early-scenes/chapters");
+  return JSON.stringify({ statusCode: 200, body: JSON.stringify({
+    items: [
+      { id: 710, number: 0, name: "Darkshine vs Garou", language: "en" },
+      { id: 711, number: 0.2, name: "Saitama vs Garou (not full)", language: "en" },
+      { id: 712, number: 0.3, name: "Child Emperor vs Evil Natural Water", language: "en" },
+      { id: 713, number: 1, volume: 1, name: "Chapter 1 - Volume 1 (1r0n)", language: "en" },
+      { id: 714, number: 0, volume: 1, name: "Opening", language: "en" },
+    ],
+    meta: { hasNext: false },
+  }) });
+};
+const earlyScenes = await provider.reading.chapters({
+  binding: { externalWorkId: "early-scenes", facetId: "en" },
+});
+assert.deepEqual(
+  earlyScenes.items.map(({ providerChapterId, rawLabel, rawNumber }) =>
+    ({ providerChapterId, rawLabel, rawNumber })),
+  [
+    { providerChapterId: "710", rawLabel: "Darkshine vs Garou", rawNumber: 0 },
+    { providerChapterId: "711", rawLabel: "Saitama vs Garou (not full)", rawNumber: 0.2 },
+    { providerChapterId: "712", rawLabel: "Child Emperor vs Evil Natural Water", rawNumber: 0.3 },
+    { providerChapterId: "713", rawLabel: "Vol. 1 Ch. 1 - Chapter 1 - Volume 1 (1r0n)", rawNumber: 1 },
+    { providerChapterId: "714", rawLabel: "Vol. 1 Ch. 0 - Opening", rawNumber: 0 },
+  ],
+  "unqualified source-numbered scenes must remain evidence, not invented canonical chapters",
+);
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  assert.equal(new URL(url).pathname, "/api/titles/real-early/chapters");
+  return JSON.stringify({ statusCode: 200, body: JSON.stringify({
+    items: [
+      { id: 720, number: 0, name: "Prologue", language: "en" },
+      { id: 721, number: 0.2, name: "Chapter 0.2 Bonus", language: "en" },
+      { id: 722, number: 1, name: "Chapter 1", language: "en" },
+    ],
+    meta: { hasNext: false },
+  }) });
+};
+const realEarly = await provider.reading.chapters({
+  binding: { externalWorkId: "real-early", facetId: "en" },
+});
+assert.deepEqual(realEarly.items.map(item => item.providerChapterId + ":" + item.rawLabel), [
+  "720:Ch. 0 - Prologue",
+  "721:Ch. 0.2 - Chapter 0.2 Bonus",
+  "722:Ch. 1 - Chapter 1",
+]);
+
 // Physical #176: source entry Ch. 0 - Volume 112 is a whole-volume
 // container, not canonical chapter 0. A later/official volume entry must not
 // replace an authentic chapter-zero prologue during variant deduplication.
