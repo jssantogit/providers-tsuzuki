@@ -156,13 +156,15 @@ function verifiedItems(response, capability) {
   return response.items;
 }
 
-// MangaFire occasionally inserts a complete volume into its /chapters list
-// with number=0 and name="Volume 112". These are *not* canonical Ch. 0.
+// MangaFire occasionally inserts whole volumes as numbered chapter zero.
+// Explicit "Volume 112" and "Volume 112 Extra/Bundle" are containers, not
+// ordinary chapters. Filter before choosing official/newer source variants;
+// retain unrelated genuine Prologue, Ch. 0 and separately numbered volumes.
 function isMisnumberedVolumeContainer(item) {
   return item?.number != null &&
     item.number !== "" &&
     Number(item.number) === 0 &&
-    /^vol(?:ume)?[.]?[ \t]*[0-9]+$/i.test(cleanText(item?.name));
+    /^vol(?:ume)?[.]?[ \\t]*[0-9]+(?:$|[ \\t:.-].*)/i.test(cleanText(item?.name));
 }
 
 function sourceChapterVolume(item) {
