@@ -174,7 +174,7 @@ assert.deepEqual(
   volumeBound.items.map(item => ({ id: item.providerChapterId, volume: item.volume, label: item.rawLabel })),
   [
     { id: "111", volume: 1, label: "Vol. 1 Ch. 0 - Prologue" },
-    { id: "112", volume: 112, label: "Vol. 112 Ch. 0 - Volume 112 Extra" },
+    { id: "113", volume: 112, label: "Vol. 112 Ch. 0 - Fan version" },
   ],
   "two chapters numbered zero in different volumes must never be collapsed",
 );
@@ -191,6 +191,8 @@ globalThis.tsuzuki.http.request = async (_method, url) => {
         { id: 900, number: 0, name: "Prologue", language: "en", type: "fan", createdAt: 10 },
         { id: 901, number: 0, name: "Volume 112", language: "en", type: "official", createdAt: 20 },
         { id: 902, number: 0, name: "Vol. 112", language: "en", type: "official", createdAt: 21 },
+        { id: 904, number: 0, name: "Volume 112 Extra", language: "en", type: "official", createdAt: 23 },
+        { id: 905, number: 0, name: "Vol. 112: Full Bundle", language: "en", type: "official", createdAt: 24 },
         { id: 903, number: 1, name: "Romance Dawn", language: "en", type: "official", createdAt: 22 },
       ],
       meta: { hasNext: false },
@@ -204,7 +206,7 @@ const realZero = await provider.reading.chapters({
 assert.deepEqual(
   realZero.items.map(item => [item.providerChapterId, item.rawLabel]),
   [["900", "Ch. 0 - Prologue"], ["903", "Ch. 1 - Romance Dawn"]],
-  "a misnumbered volume must never displace the genuine Ch. 0 during source variant selection",
+  "bare and explicitly titled volume bundles must not displace an actual Ch. 0",
 );
 
 // A numeric database parent ID cannot be equated to a public work HID.
