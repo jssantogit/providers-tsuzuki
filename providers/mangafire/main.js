@@ -162,7 +162,7 @@ function isMisnumberedVolumeContainer(item) {
   return item?.number != null &&
     item.number !== "" &&
     Number(item.number) === 0 &&
-    /^vol(?:ume)?\\.?\\s*\\d+$/i.test(cleanText(item?.name));
+    /^vol(?:ume)?[.]?[ \t]*[0-9]+$/i.test(cleanText(item?.name));
 }
 
 function sourceChapterVolume(item) {
