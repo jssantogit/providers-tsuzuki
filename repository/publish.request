@@ -1,4 +1,4 @@
-sequence=29
-reason=mangafire-v0.1.11-code12-exclude-explicit-volume-containers
-source_prs=58
+sequence=30
+reason=mangafire-v0.1.12-code13-quarantine-early-chapter-scene-numbering
+source_prs=59
 guard=atomic-signed-publication-and-immutable-artifacts
