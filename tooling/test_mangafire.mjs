@@ -138,7 +138,35 @@ assert.equal(requests.length, 3);
      "Contradictory upstream chapter metadata must never reach the Reader",
    );
  }
- // A numeric database parent ID cannot be equated to a public work HID.
+ // #176: chapter 0 in volume 112 is not the same chapter identity as
+// chapter 0 in another volume, even if their numbers match. Previously the
+// source merged solely by number and retained the latest chapter arbitrarily.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  assert.equal(pathname, "/api/titles/volume-bound/chapters");
+  return JSON.stringify({ statusCode: 200, body: JSON.stringify({
+    items: [
+      { id: 111, number: 0, volume: 1, name: "Prologue", language: "en", type: "official", createdAt: 10 },
+      { id: 112, number: 0, volume: 112, name: "Volume 112 Extra", language: "en", type: "official", createdAt: 20 },
+      { id: 113, number: 0, volume: 112, name: "Fan version", language: "en", type: "fan", createdAt: 30 },
+    ],
+    meta: { hasNext: false },
+  }) });
+};
+const volumeBound = await provider.reading.chapters({
+  binding: { externalWorkId: "volume-bound", facetId: "en" },
+  cursor: null,
+});
+assert.deepEqual(
+  volumeBound.items.map(item => ({ id: item.providerChapterId, volume: item.volume, label: item.rawLabel })),
+  [
+    { id: "111", volume: 1, label: "Vol. 1 Ch. 0 - Prologue" },
+    { id: "112", volume: 112, label: "Vol. 112 Ch. 0 - Volume 112 Extra" },
+  ],
+  "two chapters numbered zero in different volumes must never be collapsed",
+);
+
+// A numeric database parent ID cannot be equated to a public work HID.
  // Rejecting it would break valid MangaFire pages if the site exposes both
  // identifiers in different namespaces.
  globalThis.tsuzuki.http.request = async () => JSON.stringify({
