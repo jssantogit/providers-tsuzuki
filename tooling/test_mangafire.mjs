@@ -113,6 +113,19 @@ for (const page of pages.pages) {
     `page host must be covered by Provider network authority: ${new URL(page.url).hostname}`,
   );
 }
+// The 2026 MangaFire reader also serves chapter images from mfcdn2.xyz.
+// It must be explicitly covered by the signed provider's narrow CDN grant;
+// successful chapter discovery is not enough if Host rejects its page URLs.
+assert.equal(
+  originAllowed("https://nw8.mfcdn2.xyz/assets/t2/s1/images/001.jpg", allowedPageOrigins),
+  true,
+  "MangaFire real image CDN mfcdn2.xyz must be authorized for Reader pages",
+);
+assert.equal(
+  originAllowed("https://unrelated-cdn.example/assets/page.jpg", allowedPageOrigins),
+  false,
+  "MangaFire permission must not expand to arbitrary image hosts",
+);
 assert.equal(requests.length, 3);
 
  // Provider chapter IDs are opaque and must not be trusted as the identity of a
