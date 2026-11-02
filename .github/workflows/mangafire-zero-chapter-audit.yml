@@ -1,0 +1,22 @@
+name: Read-only MangaFire chapter zero upstream audit
+on:
+  push:
+    branches:
+      - 'investigate/issue-176-zero-chapter-upstream-*'
+    paths:
+      - 'tooling/probe_mangafire_zero_chapter.mjs'
+      - '.github/workflows/mangafire-zero-chapter-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read limited public chapter identity and page counts
+        run: node tooling/probe_mangafire_zero_chapter.mjs
