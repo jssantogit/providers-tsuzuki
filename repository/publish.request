@@ -1,4 +1,4 @@
-sequence=27
-reason=mangafire-v0.1.9-code10-issue176-volume-scope-and-mfcdn2-reader
-source_prs=56
+sequence=28
+reason=mangafire-v0.1.10-code11-filter-explicit-zero-volume-bundles
+source_prs=57
 guard=atomic-signed-publication-and-immutable-artifacts
