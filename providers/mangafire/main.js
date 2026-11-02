@@ -167,6 +167,22 @@ function isMisnumberedVolumeContainer(item) {
     /^vol(?:ume)?[.]?[ \t]*[0-9]+(?:$|[ \t:.-].*)/i.test(cleanText(item?.name));
 }
 
+// A numeric source field may represent an unordered preview, fan scene,
+// redraw or other bonus, especially below Chapter 1. The Host must not
+// manufacture a canonical "Ch. 0.x" identity when the source-authored name
+// supplies no corresponding number/prologue signal. Preserve the chapter
+// observation (ID, raw number, title): changing only rawLabel to the source
+// text lets the Host retain provisional evidence without auto-promoting it.
+function earlyChapterNameAttested(name, number, volume) {
+  if (volume != null || number >= 1 || number < 0 || !name) return true;
+  if (number === 0 &&
+      /^(?:prologue|prologo|intro|introduction|preface|pilot)(?:\b|[\s:.-])/i.test(name)) {
+    return true;
+  }
+  const explicit = /^(?:(?:ch(?:apter)?|cap[ií]tulo)\.?\s*)?(0(?:\.\d+)?)(?=$|[\s:.-])/i.exec(name);
+  return explicit != null && Number(explicit[1]) === number;
+}
+
 function sourceChapterVolume(item) {
   const raw = item?.volume;
   if (raw == null || raw === "") return null;
@@ -463,9 +479,12 @@ async function chapters(input) {
     const numberLabel = String(number);
     const volume = sourceChapterVolume(item);
     const sourceLabel = `${volume == null ? "" : `Vol. ${volume} `}Ch. ${numberLabel}`;
+    const sourceNumberAttested = earlyChapterNameAttested(itemName, number, volume);
     result.push({
       providerChapterId: id,
-      rawLabel: itemName ? `${sourceLabel} - ${itemName}` : sourceLabel,
+      rawLabel: itemName && !sourceNumberAttested
+        ? itemName
+        : itemName ? `${sourceLabel} - ${itemName}` : sourceLabel,
       rawNumber: number,
       ...(volume == null ? {} : { volume }),
       title: itemName || null,
