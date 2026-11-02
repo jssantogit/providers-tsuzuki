@@ -156,6 +156,16 @@ function verifiedItems(response, capability) {
   return response.items;
 }
 
+function sourceChapterVolume(item) {
+  const raw = item?.volume;
+  if (raw == null || raw === "") return null;
+  const volume = Number(raw);
+  if (!Number.isInteger(volume) || volume < 0 || volume > 10000) {
+    throw new Error("MangaFire chapters invalid volume");
+  }
+  return volume;
+}
+
 function mergeChapterVariants(items) {
   const selected = new Map();
   for (const item of items) {
@@ -167,7 +177,10 @@ function mergeChapterVariants(items) {
     if (item?.id == null || String(item.id).trim() === "") {
       throw new Error("MangaFire chapters invalid items id");
     }
-    const key = String(number);
+    // A chapter number can restart across volumes. Only compare official/fan
+    // variants within the same attested volume (or both unknown).
+    const volume = sourceChapterVolume(item);
+    const key = `${volume == null ? "?" : volume}:${number}`;
     const current = selected.get(key);
     if (current == null || preferChapterVariant(item, current)) {
       selected.set(key, item);
@@ -434,10 +447,13 @@ async function chapters(input) {
 
     const itemName = cleanText(item?.name);
     const numberLabel = String(number);
+    const volume = sourceChapterVolume(item);
+    const sourceLabel = `${volume == null ? "" : `Vol. ${volume} `}Ch. ${numberLabel}`;
     result.push({
       providerChapterId: id,
-      rawLabel: itemName ? `Ch. ${numberLabel} - ${itemName}` : `Ch. ${numberLabel}`,
+      rawLabel: itemName ? `${sourceLabel} - ${itemName}` : sourceLabel,
       rawNumber: number,
+      ...(volume == null ? {} : { volume }),
       title: itemName || null,
       language,
       scanlationGroup: cleanText(item?.type) || null,

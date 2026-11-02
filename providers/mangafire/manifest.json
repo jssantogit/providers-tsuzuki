@@ -3,8 +3,8 @@
   "id": "app.tsuzuki.mangafire",
   "name": "MangaFire",
   "version": {
-    "name": "0.1.8",
-    "code": 9
+    "name": "0.1.9",
+    "code": 10
   },
   "minHostApi": 1,
   "entrypoint": "main.js",
@@ -33,6 +33,8 @@
         "https://*.mfcdn.nl",
         "https://mfcdn1.xyz",
         "https://*.mfcdn1.xyz",
+        "https://mfcdn2.xyz",
+        "https://*.mfcdn2.xyz",
         "https://mfcdn3.xyz",
         "https://*.mfcdn3.xyz"
       ],

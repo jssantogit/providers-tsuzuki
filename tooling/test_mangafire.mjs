@@ -113,6 +113,19 @@ for (const page of pages.pages) {
     `page host must be covered by Provider network authority: ${new URL(page.url).hostname}`,
   );
 }
+// The 2026 MangaFire reader also serves chapter images from mfcdn2.xyz.
+// It must be explicitly covered by the signed provider's narrow CDN grant;
+// successful chapter discovery is not enough if Host rejects its page URLs.
+assert.equal(
+  originAllowed("https://nw8.mfcdn2.xyz/assets/t2/s1/images/001.jpg", allowedPageOrigins),
+  true,
+  "MangaFire real image CDN mfcdn2.xyz must be authorized for Reader pages",
+);
+assert.equal(
+  originAllowed("https://unrelated-cdn.example/assets/page.jpg", allowedPageOrigins),
+  false,
+  "MangaFire permission must not expand to arbitrary image hosts",
+);
 assert.equal(requests.length, 3);
 
  // Provider chapter IDs are opaque and must not be trusted as the identity of a
@@ -138,7 +151,35 @@ assert.equal(requests.length, 3);
      "Contradictory upstream chapter metadata must never reach the Reader",
    );
  }
- // A numeric database parent ID cannot be equated to a public work HID.
+ // #176: chapter 0 in volume 112 is not the same chapter identity as
+// chapter 0 in another volume, even if their numbers match. Previously the
+// source merged solely by number and retained the latest chapter arbitrarily.
+globalThis.tsuzuki.http.request = async (_method, url) => {
+  const pathname = new URL(url).pathname;
+  assert.equal(pathname, "/api/titles/volume-bound/chapters");
+  return JSON.stringify({ statusCode: 200, body: JSON.stringify({
+    items: [
+      { id: 111, number: 0, volume: 1, name: "Prologue", language: "en", type: "official", createdAt: 10 },
+      { id: 112, number: 0, volume: 112, name: "Volume 112 Extra", language: "en", type: "official", createdAt: 20 },
+      { id: 113, number: 0, volume: 112, name: "Fan version", language: "en", type: "fan", createdAt: 30 },
+    ],
+    meta: { hasNext: false },
+  }) });
+};
+const volumeBound = await provider.reading.chapters({
+  binding: { externalWorkId: "volume-bound", facetId: "en" },
+  cursor: null,
+});
+assert.deepEqual(
+  volumeBound.items.map(item => ({ id: item.providerChapterId, volume: item.volume, label: item.rawLabel })),
+  [
+    { id: "111", volume: 1, label: "Vol. 1 Ch. 0 - Prologue" },
+    { id: "112", volume: 112, label: "Vol. 112 Ch. 0 - Volume 112 Extra" },
+  ],
+  "two chapters numbered zero in different volumes must never be collapsed",
+);
+
+// A numeric database parent ID cannot be equated to a public work HID.
  // Rejecting it would break valid MangaFire pages if the site exposes both
  // identifiers in different namespaces.
  globalThis.tsuzuki.http.request = async () => JSON.stringify({

@@ -1,4 +1,4 @@
-sequence=26
-reason=mangafire-v0.1.8-code9-multi-hid-verified-author-and-coverage-smoke
-source_prs=55
+sequence=27
+reason=mangafire-v0.1.9-code10-issue176-volume-scope-and-mfcdn2-reader
+source_prs=56
 guard=atomic-signed-publication-and-immutable-artifacts
