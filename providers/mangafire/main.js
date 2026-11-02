@@ -180,7 +180,14 @@ function mergeChapterVariants(items) {
     // A chapter number can restart across volumes. Only compare official/fan
     // variants within the same attested volume (or both unknown).
     const volume = sourceChapterVolume(item);
-    const key = `${volume == null ? "?" : volume}:${number}`;
+    // A bare Chapter 0 is commonly a volume-level placeholder. Without
+    // independently attested volume identity, a different source chapter ID
+    // is *not* proof of an alternate release of the same canonical chapter.
+    // Preserve distinct zero IDs so the Host sees ambiguity rather than
+    // silently selecting a latest upload from an unrelated volume.
+    const key = volume == null && number === 0
+      ? `unknown-zero-id:${String(item.id)}`
+      : `${volume == null ? "?" : volume}:${number}`;
     const current = selected.get(key);
     if (current == null || preferChapterVariant(item, current)) {
       selected.set(key, item);
