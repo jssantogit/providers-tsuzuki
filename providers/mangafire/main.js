@@ -176,10 +176,10 @@ function isMisnumberedVolumeContainer(item) {
 function earlyChapterNameAttested(name, number, volume) {
   if (volume != null || number >= 1 || number < 0 || !name) return true;
   if (number === 0 &&
-      /^(?:prologue|prologo|intro|introduction|preface|pilot)(?:\\b|[\\s:.-])/i.test(name)) {
+      /^(?:prologue|prologo|intro|introduction|preface|pilot)(?:\b|[\s:.-])/i.test(name)) {
     return true;
   }
-  const explicit = /^(?:(?:ch(?:apter)?|cap[ií]tulo)\\.?\\s*)?(0(?:\\.\\d+)?)(?=$|[\\s:.-])/i.exec(name);
+  const explicit = /^(?:(?:ch(?:apter)?|cap[ií]tulo)\.?\s*)?(0(?:\.\d+)?)(?=$|[\s:.-])/i.exec(name);
   return explicit != null && Number(explicit[1]) === number;
 }
 
