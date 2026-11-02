@@ -156,6 +156,15 @@ function verifiedItems(response, capability) {
   return response.items;
 }
 
+// MangaFire occasionally inserts a complete volume into its /chapters list
+// with number=0 and name="Volume 112". These are *not* canonical Ch. 0.
+function isMisnumberedVolumeContainer(item) {
+  return item?.number != null &&
+    item.number !== "" &&
+    Number(item.number) === 0 &&
+    /^vol(?:ume)?\\.?\\s*\\d+$/i.test(cleanText(item?.name));
+}
+
 function sourceChapterVolume(item) {
   const raw = item?.volume;
   if (raw == null || raw === "") return null;
@@ -438,8 +447,11 @@ async function chapters(input) {
   // prefer it while deduplicating official/fan versions of the same number.
   const facetItems = rawItems.filter((item) => {
     const sourceLanguage = cleanText(item?.language).toLowerCase();
-    return !sourceLanguage || sourceLanguage === language;
+    return (!sourceLanguage || sourceLanguage === language) &&
+      !isMisnumberedVolumeContainer(item);
   });
+  // Exclude mislabeled full volumes *before* choosing official/newest variants:
+  // otherwise a "Ch. 0 - Volume 112" can displace a real prologue.
   for (const item of mergeChapterVariants(facetItems)) {
     const id = item?.id == null ? "" : String(item.id);
     const number = Number(item?.number);
