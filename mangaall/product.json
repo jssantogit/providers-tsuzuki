@@ -3,8 +3,8 @@
   "id": "app.tsuzuki.mangaall",
   "name": "MangaAll",
   "role": "multi-source-chapter-evidence-and-reading",
-  "publicationStatus": "metadata-only-preview",
-  "integrationModel": "source-isolated-adapters-Host-V1",
+  "publicationStatus": "development-unpublished",
+  "integrationModel": "one-provider-id-multiple-internal-content-sources",
   "sourceIds": [
     "mangalivre",
     "mangadex",
@@ -23,14 +23,16 @@
     {
       "id": "mangadex",
       "name": "MangaDex",
-      "status": "metadata-only-preview",
-      "adapterProviderId": "app.tsuzuki.mangaall.mangadex",
-      "readingStatus": "not-published"
+      "status": "integrated-development",
+      "readingStatus": "pages-withheld",
+      "legacyAdapterProviderId": "app.tsuzuki.mangaall.mangadex"
     },
     {
       "id": "mangafire",
       "name": "MangaFire",
-      "status": "planned"
+      "status": "integrated-development",
+      "readingStatus": "pages-implemented-pending-mangaall-smoke",
+      "legacyProviderId": "app.tsuzuki.mangafire"
     },
     {
       "id": "mangaball",
@@ -42,9 +44,9 @@
     {
       "id": "mangadot",
       "name": "MangaDot",
-      "status": "metadata-only-preview",
-      "adapterProviderId": "app.tsuzuki.mangaall.mangadot",
-      "readingStatus": "not-published"
+      "status": "integrated-development",
+      "readingStatus": "pages-withheld",
+      "legacyAdapterProviderId": "app.tsuzuki.mangaall.mangadot"
     },
     {
       "id": "animexnovel",
@@ -58,11 +60,12 @@
     }
   ],
   "capabilities": {
-    "chapterEvidence": "active-mangadex-mangadot",
-    "readingPages": "withheld-pending-attribution-and-physical-smoke"
+    "chapterEvidence": "mangadex-mangadot-mangafire-development",
+    "readingPages": "mangafire-only-not-yet-smoked-in-mangaall"
   },
   "firstPhysicalSmokeSources": [
     "mangadex",
-    "mangadot"
+    "mangadot",
+    "mangafire"
   ]
 }
