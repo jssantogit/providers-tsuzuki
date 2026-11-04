@@ -1,0 +1,64 @@
+{
+  "manifestVersion": 1,
+  "id": "app.tsuzuki.mangaall",
+  "name": "MangaAll",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "minHostApi": 1,
+  "entrypoint": "main.js",
+  "capabilities": [
+    {
+      "id": "reading.lookup",
+      "version": 1
+    },
+    {
+      "id": "reading.chapters",
+      "version": 1
+    },
+    {
+      "id": "reading.pages",
+      "version": 1
+    }
+  ],
+  "permissions": {
+    "network": {
+      "origins": [
+        "https://api.mangadex.org",
+        "https://uploads.mangadex.org",
+        "https://*.mangadex.network",
+        "https://mangadot.net",
+        "https://mangafire.to",
+        "https://*.mangafire.to",
+        "https://mfcdn.cc",
+        "https://*.mfcdn.cc",
+        "https://mfcdn.nl",
+        "https://*.mfcdn.nl",
+        "https://mfcdn1.xyz",
+        "https://*.mfcdn1.xyz",
+        "https://mfcdn2.xyz",
+        "https://*.mfcdn2.xyz",
+        "https://mfcdn3.xyz",
+        "https://*.mfcdn3.xyz"
+      ],
+      "localNetwork": false
+    },
+    "browser": {
+      "origins": [
+        "https://mangafire.to",
+        "https://*.mangafire.to"
+      ]
+    },
+    "storage": {
+      "enabled": false
+    },
+    "secrets": []
+  },
+  "contentLanguages": [
+    "en",
+    "pt-br"
+  ],
+  "settings": [],
+  "publication": "development"
+}
