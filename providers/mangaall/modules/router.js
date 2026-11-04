@@ -152,13 +152,20 @@ export function createMangaAllReading(adapters) {
       if (!Array.isArray(page?.items) || page.items.length > 16000) {
         throw new Error("MangaAll invalid chapter response");
       }
-      const items = page.items.filter((chapter) => {
+      const validLanguageItems = page.items.filter((chapter) => {
         // Unknown is kept UNKNOWN, not silently assigned to the requested facet.
         const declared = chapter?.language;
         if (declared == null) return true;
         if (typeof declared !== "string") throw new Error("MangaAll invalid chapter language");
         return declared.toLowerCase() === language;
-      }).map((chapter) => {
+      });
+      // A nonempty upstream page containing only chapters from another language
+      // is a source contract failure, NOT a complete-empty snapshot. Publishing
+      // the latter could erase existing canonical evidence or hide real chapters.
+      if (page.items.length > 0 && validLanguageItems.length === 0) {
+        throw new Error("MangaAll chapter language mismatch");
+      }
+      const items = validLanguageItems.map((chapter) => {
         const id = chapter?.providerChapterId;
         if (typeof id !== "string" || !id.length) throw new Error("MangaAll invalid chapter ID");
         if (source === "mangafire") {
