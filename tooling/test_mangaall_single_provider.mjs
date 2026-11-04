@@ -40,10 +40,11 @@ const adapters = Object.fromEntries(["mangadex", "mangadot", "mangafire"].map((s
       return { items: [{ providerChapterId: source === "mangafire" ? "987" : source + ":123",
         rawLabel: "Ch. 1", rawNumber: 1, language: "en" }], nextCursor: null };
     },
-    ...(source === "mangafire" ? { async pages(req) {
+    ...(source === "mangafire" || source === "mangadot" ? { async pages(req) {
       calls.push(["pages", source, req.providerChapterId, req.binding.externalWorkId]);
       return { type: "page_list", pages: [{
-        url: "https://mfcdn.cc/image/1.png", headers: { Referer: "https://mangafire.to" },
+        url: source === "mangafire" ? "https://mfcdn.cc/image/1.png" : "https://mangadot.net/pages/1.png",
+        headers: { Referer: source === "mangafire" ? "https://mangafire.to" : "https://mangadot.net" },
       }] };
     } } : {}),
   },
@@ -71,6 +72,10 @@ assert.deepEqual(calls.at(-1), ["chapters", "mangafire", "example"]);
 const pages = await reading.pages({ binding: binding(workIds[2]), providerChapterId: fire.items[0].providerChapterId });
 assert.equal(pages.pages.length, 1);
 assert.deepEqual(calls.at(-1), ["pages", "mangafire", "987", "example"]);
+const dotPages = await reading.pages({ binding: binding(workIds[1]), providerChapterId: "mangadot:uploads:8001" });
+assert.equal(dotPages.pages.length, 1);
+assert.deepEqual(calls.at(-1), ["pages", "mangadot", "mangadot:uploads:8001", workIds[1]]);
+await assert.rejects(reading.pages({ binding: binding(workIds[1]), providerChapterId: "mangafire:987" }), /chapter source mismatch/i);
 
 await assert.rejects(reading.chapters({ binding: binding("mangaball:416") }), /unknown source|paused/i);
 await assert.rejects(reading.chapters({ binding: binding("bad") }), /unknown source|invalid work/i);
