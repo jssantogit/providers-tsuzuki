@@ -24,7 +24,7 @@ assert.deepEqual(
   product.sources.map(({ id }) => id),
   ["mangalivre", "mangadex", "mangafire", "mangaball", "mangadot", "animexnovel", "mangaflix"],
 );
-assert.deepEqual(product.firstPhysicalSmokeSources, ["mangadex", "mangadot"],
+assert.deepEqual(product.firstPhysicalSmokeSources, ["mangadex", "mangadot", "mangafire"],
   "the first smoke must not require paused MangaBall");
 assert.equal(product.sources.find(({ id }) => id === "mangaball")?.status,
   "paused-awaiting-api-approval",
