@@ -97,8 +97,21 @@ export async function pages(input) {
   if (!match) throw new Error("MangaAll invalid chapter ID");
   const kind = match[1], id = match[2];
   const response = await api("GET", "/api/" + kind + "/" + id + "/images");
-  if (!response?.manga || String(response.manga.id) !== workId) {
+  // The image DTO may contain only { chapter, images }. Never trust a
+  // chapter ID alone: confirm membership in this exact work's chapter list.
+  // An explicit foreign manga ID is always rejected, not reinterpreted.
+  if (response?.manga != null && String(response.manga.id) !== workId) {
     throw new Error("MangaAll work mismatch");
+  }
+  if (response?.manga == null) {
+    const lang = facetLang(input);
+    const chapters = await api("GET", "/api/manga/" + workId + "/chapters/list", [["lang", lang]]);
+    if (!Array.isArray(chapters) || chapters.length > 16000 ||
+        !chapters.some((row) => cleanId(row?.id) === id &&
+          (row?.source == null || row.source === "user" ? "uploads" : "chapters") === kind &&
+          typeof row?.language === "string" && row.language.toLowerCase() === lang)) {
+      throw new Error("MangaAll work mismatch");
+    }
   }
   if (!Array.isArray(response.images) || response.images.length === 0 ||
       response.images.length > 5000) throw new Error("MangaAll invalid page metadata");
