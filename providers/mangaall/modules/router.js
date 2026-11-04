@@ -30,7 +30,7 @@ function requireLanguage(binding, source) {
 function invalidCursor() { throw new Error("MangaAll invalid cursor"); }
 
 function lookupState(value) {
-  if (value == null) return SOURCE_IDS.map((source) => [source, null]);
+  if (value == null) return SOURCE_IDS.map((source) => [source, null, false]);
   if (typeof value !== "string" || value.length > MAX_CURSOR_LENGTH) invalidCursor();
   let parsed;
   try { parsed = JSON.parse(value); } catch { invalidCursor(); }
@@ -42,9 +42,17 @@ function lookupState(value) {
   const keys = Object.keys(parsed.remaining);
   if (!keys.length || keys.some((key) => !SOURCE_SET.has(key))) invalidCursor();
   return SOURCE_IDS.filter((key) => keys.includes(key)).map((key) => {
-    const cursor = parsed.remaining[key];
-    if (typeof cursor !== "string" || !cursor.length || cursor.length > MAX_SOURCE_CURSOR_LENGTH) invalidCursor();
-    return [key, cursor];
+    const entry = parsed.remaining[key];
+    // A failed source is retried at most once, with the original cursor.
+    // The explicit retry bit prevents unbounded pages for an outage.
+    const retry = entry !== null && typeof entry === "object" && !Array.isArray(entry);
+    if (retry && (entry.r !== 1 || Object.keys(entry).some((part) => part !== "r" && part !== "c") ||
+        !Object.hasOwn(entry, "c"))) invalidCursor();
+    const cursor = retry ? entry.c : entry;
+    if (cursor !== null &&
+        (typeof cursor !== "string" || !cursor.length || cursor.length > MAX_SOURCE_CURSOR_LENGTH)) invalidCursor();
+    if (cursor === null && !retry) invalidCursor();
+    return [key, cursor, retry];
   });
 }
 
@@ -92,7 +100,7 @@ export function createMangaAllReading(adapters) {
       }
       const pending = lookupState(input?.cursor);
       // Do not allow an upstream to prevent other independent source lookups.
-      const replies = await Promise.all(pending.map(async ([source, cursor]) => {
+      const replies = await Promise.all(pending.map(async ([source, cursor, retried]) => {
         try {
           const adapter = sourceAdapter(adapters, source);
           if (typeof adapter.lookup !== "function") throw new Error("MangaAll lookup unavailable");
@@ -119,7 +127,7 @@ export function createMangaAllReading(adapters) {
           });
           return { source, items, nextCursor: page.nextCursor ?? null };
         } catch {
-          return { source, failure: true };
+          return { source, failure: true, cursor, retried };
         }
       }));
       const successful = replies.filter((r) => !r.failure);
@@ -134,6 +142,11 @@ export function createMangaAllReading(adapters) {
           items.push(item);
         }
         if (page.nextCursor !== null) remaining[page.source] = page.nextCursor;
+      }
+      for (const failure of replies.filter((reply) => reply.failure && !reply.retried)) {
+        // Keep a failed source for one bounded retry. Do not invent "no
+        // candidates" for a healthy source after another site went offline.
+        remaining[failure.source] = { c: failure.cursor, r: 1 };
       }
       const nextCursor = Object.keys(remaining).length
         ? JSON.stringify({ v: 1, remaining }) : null;
