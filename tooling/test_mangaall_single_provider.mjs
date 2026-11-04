@@ -94,4 +94,63 @@ const down = createMangaAllReading({
 });
 await assert.rejects(down.lookup({ titles: ["Example"] }), /all sources failed/i);
 
+
+// Language is a reading facet, not a provider identity. Enforce it before
+// invoking upstream modules and never relabel a chapter from another language.
+const languages = [];
+const languageRouter = createMangaAllReading({
+  mangadex: {
+    async chapters(request) {
+      languages.push(["mangadex", request.binding.facetId]);
+      return { items: [
+        { providerChapterId: "mangadex:en-1", rawNumber: 1, language: "en" },
+        { providerChapterId: "mangadex:pt-1", rawNumber: 2, language: "pt-br" },
+        { providerChapterId: "mangadex:unknown", rawNumber: 3, language: null },
+      ], nextCursor: null };
+    },
+  },
+  mangadot: { async chapters(request) {
+    languages.push(["mangadot", request.binding.facetId]);
+    return { items: [{ providerChapterId: "mangadot:1", rawNumber: 1, language: "pt-br" }], nextCursor: null };
+  } },
+  mangafire: {
+    async chapters(request) {
+      languages.push(["mangafire", request.binding.facetId]);
+      return { items: [{ providerChapterId: "987", rawNumber: 1, language: "en" }], nextCursor: null };
+    },
+    async pages(request) {
+      languages.push(["mangafire-pages", request.binding.facetId]);
+      return { type: "page_list", pages: [{ url: "https://mfcdn.cc/image/1.jpg" }] };
+    },
+  },
+});
+const ptBinding = { ...binding(workIds[0]), facetId: "pt-br" };
+const ptChapterPage = await languageRouter.chapters({ binding: ptBinding });
+assert.deepEqual(ptChapterPage.items.map((item) => [item.providerChapterId, item.language]), [
+  ["mangadex:pt-1", "pt-br"], ["mangadex:unknown", null],
+], "do not expose English chapters as Portuguese, or relabel unknown language");
+const enChapterPage = await languageRouter.chapters({ binding: binding(workIds[0]) });
+assert.deepEqual(enChapterPage.items.map((item) => item.providerChapterId),
+  ["mangadex:en-1", "mangadex:unknown"]);
+await assert.rejects(languageRouter.chapters({
+  binding: { ...binding(workIds[0]), facetId: "fr" },
+}), /unsupported language/i);
+await assert.rejects(languageRouter.chapters({
+  binding: { ...binding(workIds[2]), facetId: "pt-br" },
+}), /unsupported language/i);
+await assert.rejects(languageRouter.pages({
+  binding: { ...binding(workIds[2]), facetId: "pt-br" },
+  providerChapterId: "mangafire:987",
+}), /unsupported language/i);
+assert.deepEqual(languages, [
+  ["mangadex", "pt-br"], ["mangadex", "en"],
+], "rejected facets must not call any upstream adapter");
+await assert.rejects(languageRouter.chapters({
+  binding: { ...binding(workIds[0]), facetId: null },
+}), /missing language/i, "unknown language must not silently default to English");
+const fireKnown = await languageRouter.pages({
+  binding: binding(workIds[2]), providerChapterId: "mangafire:987",
+});
+assert.equal(fireKnown.pages.length, 1);
+
 console.log("MangaAll single-package contract: passed");
