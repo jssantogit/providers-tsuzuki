@@ -89,6 +89,42 @@ const degraded = createMangaAllReading({
 });
 assert.equal((await degraded.lookup({ titles: ["Example"] })).items[0].externalWorkId, workIds[2],
   "an unavailable source cannot suppress healthy reading alternatives");
+// A partially failed source must not disappear silently from MangaAll lookup.
+// Retry its exact source cursor once while healthy sources remain usable.
+let dexAttempts = 0;
+const intermittent = createMangaAllReading({
+  mangadex: { async lookup(req) {
+    dexAttempts++;
+    assert.equal(req.cursor ?? null, null);
+    if (dexAttempts === 1) throw new Error("temporary MangaDex failure");
+    return { items: [{ externalWorkId: workIds[0], title: "Recovered" }], nextCursor: null };
+  } },
+  mangadot: { lookup: adapters.mangadot.lookup },
+  mangafire: { lookup: adapters.mangafire.lookup },
+});
+const initialPartial = await intermittent.lookup({ titles: ["Example"] });
+assert.deepEqual(initialPartial.items.map((item) => item.externalWorkId),
+  [workIds[1], workIds[2]]);
+assert.ok(initialPartial.nextCursor, "temporary source failures require a bounded recovery cursor");
+const recovered = await intermittent.lookup({ titles: ["Example"], cursor: initialPartial.nextCursor });
+assert.deepEqual(recovered.items.map((item) => item.externalWorkId), [workIds[0]]);
+assert.equal(recovered.nextCursor, null);
+assert.equal(dexAttempts, 2, "recovery re-queries only the failed source");
+
+let alwaysFails = 0;
+const boundedFailure = createMangaAllReading({
+  mangadex: { async lookup() { alwaysFails++; throw new Error("still unavailable"); } },
+  mangadot: { async lookup(req) {
+    return { items: [{ externalWorkId: workIds[1], title: "Healthy" }],
+      nextCursor: req.cursor == null ? "next" : null };
+  } },
+  mangafire: { lookup: adapters.mangafire.lookup },
+});
+const firstPartial = await boundedFailure.lookup({ titles: ["Example"] });
+const secondPartial = await boundedFailure.lookup({ titles: ["Example"], cursor: firstPartial.nextCursor });
+assert.equal(secondPartial.nextCursor, null, "retry budget must not create endless pagination");
+assert.equal(alwaysFails, 2, "failed source gets exactly one retry");
+
 const down = createMangaAllReading({
   mangadex: { lookup: fail }, mangadot: { lookup: fail }, mangafire: { lookup: fail },
 });
