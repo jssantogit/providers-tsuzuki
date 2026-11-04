@@ -3,7 +3,8 @@
  *
  * The Host sees only app.tsuzuki.mangaall. The source is carried in verified,
  * source-scoped work/chapter IDs, never inferred from the manga's title.
- * No pages from MangaDex/MangaDot are advertised until validated for release.
+ * MangaDot pages are routed from verified source IDs; MangaDex remains gated
+ * until attribution and Host image-delivery contracts are validated.
  */
 const SOURCE_IDS = Object.freeze(["mangadex", "mangadot", "mangafire"]);
 const SOURCE_SET = new Set(SOURCE_IDS);
@@ -195,15 +196,18 @@ export function createMangaAllReading(adapters) {
       requireLanguage(input.binding, source);
       const chapterId = requireChapterId(source, input?.providerChapterId);
       const adapter = sourceAdapter(adapters, source);
-      if (source !== "mangafire" || typeof adapter.pages !== "function") {
+      if (source === "mangadex" || typeof adapter.pages !== "function") {
         throw new Error("MangaAll pages not available for source");
       }
-      const request = {
-        ...input,
-        binding: { ...input.binding, externalWorkId: localId },
-        providerChapterId: chapterId,
-      };
-      return adapter.pages(request);
+      const request = source === "mangafire"
+        ? { ...input, binding: { ...input.binding, externalWorkId: localId }, providerChapterId: chapterId }
+        : input;
+      const response = await adapter.pages(request);
+      if (response?.type !== "page_list" || !Array.isArray(response.pages) ||
+          response.pages.length === 0 || response.pages.length > 5000) {
+        throw new Error("MangaAll invalid source pages");
+      }
+      return response;
     },
   });
 }
