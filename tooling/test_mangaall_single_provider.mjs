@@ -18,6 +18,12 @@ for (const origin of ["https://api.mangadex.org", "https://mangadot.net", "https
 }
 
 const { createMangaAllReading } = await import(pathToFileURL(path.join(dir, "modules/router.js")).href);
+const actual = (await import(pathToFileURL(path.join(dir, "main.js")).href)).default;
+assert.deepEqual(Object.keys(actual), ["reading"], "the single SCRIPT entrypoint exports one provider");
+for (const capability of ["lookup", "chapters", "pages"]) {
+  assert.equal(typeof actual.reading[capability], "function", "missing " + capability + " export");
+}
+
 const workIds = ["mangadex:11111111-2222-4333-8444-555555555555", "mangadot:317", "mangafire:example"];
 const calls = [];
 const adapters = Object.fromEntries(["mangadex", "mangadot", "mangafire"].map((source, i) => [
