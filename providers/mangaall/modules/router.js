@@ -12,6 +12,20 @@ const MAX_CURSOR_LENGTH = 256;
 const MAX_PAGE_ITEMS = 200;
 const MAX_SOURCE_CURSOR_LENGTH = 64;
 const FIRE_ID = /^[A-Za-z0-9_-]{1,128}$/;
+const SOURCE_LANGUAGES = Object.freeze({
+  mangadex: new Set(["en", "pt-br"]),
+  mangadot: new Set(["en", "pt-br"]),
+  mangafire: new Set(["en"]),
+});
+
+function requireLanguage(binding, source) {
+  const facet = binding?.facetId;
+  if (typeof facet !== "string" || !facet.trim()) throw new Error("MangaAll missing language");
+  const language = facet.trim().toLowerCase();
+  if (!SOURCE_LANGUAGES[source].has(language)) throw new Error("MangaAll unsupported language");
+  return language;
+}
+
 
 function invalidCursor() { throw new Error("MangaAll invalid cursor"); }
 
@@ -128,6 +142,7 @@ export function createMangaAllReading(adapters) {
     },
     async chapters(input) {
       const { source, localId } = sourceForWork(input?.binding);
+      const language = requireLanguage(input.binding, source);
       const adapter = sourceAdapter(adapters, source);
       if (typeof adapter.chapters !== "function") throw new Error("MangaAll chapters unavailable");
       const request = source === "mangafire"
@@ -137,7 +152,13 @@ export function createMangaAllReading(adapters) {
       if (!Array.isArray(page?.items) || page.items.length > 16000) {
         throw new Error("MangaAll invalid chapter response");
       }
-      const items = page.items.map((chapter) => {
+      const items = page.items.filter((chapter) => {
+        // Unknown is kept UNKNOWN, not silently assigned to the requested facet.
+        const declared = chapter?.language;
+        if (declared == null) return true;
+        if (typeof declared !== "string") throw new Error("MangaAll invalid chapter language");
+        return declared.toLowerCase() === language;
+      }).map((chapter) => {
         const id = chapter?.providerChapterId;
         if (typeof id !== "string" || !id.length) throw new Error("MangaAll invalid chapter ID");
         if (source === "mangafire") {
@@ -151,6 +172,7 @@ export function createMangaAllReading(adapters) {
     },
     async pages(input) {
       const { source, localId } = sourceForWork(input?.binding);
+      requireLanguage(input.binding, source);
       const chapterId = requireChapterId(source, input?.providerChapterId);
       const adapter = sourceAdapter(adapters, source);
       if (source !== "mangafire" || typeof adapter.pages !== "function") {
