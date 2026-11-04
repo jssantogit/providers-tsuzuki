@@ -47,7 +47,7 @@ function lookupState(value) {
     // The explicit retry bit prevents unbounded pages for an outage.
     const retry = entry !== null && typeof entry === "object" && !Array.isArray(entry);
     if (retry && (entry.r !== 1 || Object.keys(entry).some((part) => part !== "r" && part !== "c") ||
-        !Object.hasOwn(entry, "c"))) invalidCursor();
+        !Object.prototype.hasOwnProperty.call(entry, "c"))) invalidCursor();
     const cursor = retry ? entry.c : entry;
     if (cursor !== null &&
         (typeof cursor !== "string" || !cursor.length || cursor.length > MAX_SOURCE_CURSOR_LENGTH)) invalidCursor();
