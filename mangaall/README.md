@@ -1,38 +1,26 @@
-# MangaAll — agregador multifonte
+# MangaAll — um provider, várias fontes de conteúdo
 
-MangaAll **não é MangaDex**. Seu papel é reunir adaptadores HTTP(S) que fornecem:
+**Identidade única:** `app.tsuzuki.mangaall`. O usuário instala, habilita e gerencia somente o MangaAll. MangaDex, MangaDot e MangaFire são **fontes internas** de conteúdo, não produtos ou providers que o usuário precise instalar separadamente.
 
-1. Observações verificáveis de capítulos para o **ICE**. A autoridade editorial
-   continua no catálogo canônico do Tsuzuki; observações de um site permanecem
-   `PROVIDER_PROVISIONAL` até reconciliação segura e nunca geram capítulos fictícios.
-2. Fontes de **leitura** para o Reader, com `reading.pages@1` somente após
-   páginas reais, permissões de rede e termos do serviço serem validados.
+## Implementação nesta PR
 
-MangaDex e MangaDot são as fontes ativas desta etapa e podem ser instaladas como
-adaptadores assinados de metadados/capítulos. MangaBall está pausado até autorização da
-API, com identidade e código preservados, fora do índice assinado. Manga Livre.to, MangaFire,
-AnimeXNovel e MangaFlix seguem no escopo de ampliação posterior. MangaFire
-existente (`app.tsuzuki.mangafire`) não será alterado nesta frente.
+- `providers/mangaall/manifest.json` e `main.js`: **um único pacote SCRIPT** (em desenvolvimento, ainda não assinado/publicado), com `reading.lookup@1`, `reading.chapters@1` e `reading.pages@1`.
+- `providers/mangaall/modules/router.js`: consulta as fontes, preserva `source:externalWorkId` e `source:providerChapterId`, valida proveniência antes de encaminhar chapters/pages e mantém cursores paginados sem misturar identidades.
+- `providers/mangaall/modules/sources/`: módulos verificados de MangaDex, MangaDot e MangaFire, copiados na mesma árvore do pacote para não depender de um provider externo instalado.
+- **Reader:** páginas reais implementadas pelo MangaFire; MangaDex/MangaDot continuam somente descoberta e capítulos até revisão de permissões/atribuição, imagens reais e smoke físico. O MangaAll não inventa páginas.
+- **MangaBall:** pausado até autorização legítima da API. Manga Livre.to, AnimeXNovel e MangaFlix permanecem planejados.
 
-## Estado técnico
+As permissões de rede do manifesto único correspondem à união mínima das origens necessárias às fontes ativas. O Host V1 autoriza origens no nível do provider, **não** no de cada fonte: isolamento de operação e identidade é feito pelo roteador e pelos módulos, mas grants/revogação por fonte exigem contrato Host adicional antes de serem anunciados como segurança forte.
 
-- `mangaall/product.json`: identidade única do produto e matriz de fontes.
-- `mangaall/index.js`: contrato de orquestração, com resultados por origem,
-  falhas independentes e roteamento tipado de capítulos e páginas.
-- `providers/mangaall-dex`, `mangaall-ball`, `mangaall-dot`: adaptadores
-  SCRIPT isolados para testes Host V1; **detalhe técnico transitório**, não
-  três produtos independentes para o usuário.
+## Compatibilidade e migração
 
-**A UX MangaAll com instalação única ainda não está implementada.** O Host V1
-guarda apenas um vínculo de obra por provider/facet e aplica grants de rede
-ao manifesto inteiro; não pode orquestrar essas fontes como um único provider
-sem mudar o contrato Host ou criar um grupo coordenado. Não publicar o root
-`app.tsuzuki.mangaall` como um alias de MangaDex nem reivindicar isolamento
-de fontes sem enforcement do Host.
+Os pacotes antigos `app.tsuzuki.mangafire`, `app.tsuzuki.mangaall.mangadex` e `app.tsuzuki.mangaall.mangadot` permanecem publicados no índice atual por compatibilidade. **Eles não são pré-requisito do novo MangaAll.** Não desinstalar, substituir ou desabilitar automaticamente providers anteriores antes de uma estratégia de migração de bindings/progresso verificada.
 
-A versão `0.1.0` dos adaptadores MangaDex e MangaDot anuncia somente `lookup` e
-`chapters` no índice assinado, com cobertura offline de fixtures; `reading.pages`
-permanece desabilitada por contrato. A API pública MangaDex respondeu a busca
-limitada de título, mas o preflight de capítulos não comprovou um capítulo legível;
-MangaDot não teve leitura física comprovada. Publicação assinada de metadados
-**não equivale a Reader habilitado nem a capítulos editoriais confirmados**.
+`mangaall/index.js` é o protótipo anterior de orquestração e mantém testes históricos; a implementação publicável é `providers/mangaall`. Não considerar agrupamento de cards do Host PR #194 suficiente para atingir a arquitetura de provider único.
+
+## Gates
+
+1. CI do repositório + empacotamento e contrato Host V1.
+2. Validação de discovery/chapters/pages reais no Host e correção da experiência de instalação única, sem duplicação visível no Reader.
+3. APK Release assinada atualizável e smoke físico no aparelho.
+4. Publicação assinada somente após essas verificações. A flag `publication=development` impede a inclusão prematura no índice.
