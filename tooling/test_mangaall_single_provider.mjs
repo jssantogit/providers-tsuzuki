@@ -145,6 +145,18 @@ await assert.rejects(languageRouter.pages({
 assert.deepEqual(languages, [
   ["mangadex", "pt-br"], ["mangadex", "en"],
 ], "rejected facets must not call any upstream adapter");
+
+const foreignOnly = createMangaAllReading({
+  mangadex: { async chapters() {
+    return {
+      items: [{ providerChapterId: "mangadex:en-9", rawNumber: 9, language: "en" }],
+      nextCursor: null,
+    };
+  } },
+});
+await assert.rejects(foreignOnly.chapters({ binding: ptBinding }), /language mismatch/i,
+  "wrong-language-only response must not become a complete empty chapter inventory");
+
 await assert.rejects(languageRouter.chapters({
   binding: { ...binding(workIds[0]), facetId: null },
 }), /missing language/i, "unknown language must not silently default to English");
