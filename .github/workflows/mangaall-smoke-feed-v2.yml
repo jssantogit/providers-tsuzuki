@@ -1,0 +1,55 @@
+name: MangaAll isolated physical smoke feed v2
+
+on:
+  push:
+    branches:
+      - 'tsuzuki/mangaall-smoke-v2-20261105'
+    paths:
+      - 'tooling/build_mangaall_smoke_feed_v2.mjs'
+      - '.github/workflows/mangaall-smoke-feed-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify source contracts, MangaDex strict evidence, and version
+        run: |
+          node tooling/test_mangaall_single_provider.mjs
+          node tooling/test_mangaall_reading.mjs
+          node tooling/test_mangaall_mangadex_evidence.mjs
+          python3 - <<'PY'
+          import json
+          m=json.load(open('providers/mangaall/manifest.json'))
+          assert m['id']=='app.tsuzuki.mangaall'
+          assert m['publication']=='development'
+          assert m['version']['code']==2
+          PY
+      - name: Build single MangaAll v2 archive
+        run: |
+          mkdir -p dist/smoke/providers
+          python3 tooling/build_provider.py providers/mangaall dist/smoke/providers/app.tsuzuki.mangaall-2.tsz
+      - name: Create signed, separate v2 smoke repository
+        run: node tooling/build_mangaall_smoke_feed_v2.mjs
+      - name: Persist only public enrollment and signed test artifacts
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add dist/smoke/index.json dist/smoke/enrollment.json dist/smoke/providers/app.tsuzuki.mangaall-2.tsz
+          git commit -m 'test(mangaall): store isolated v2 smoke artifacts' || exit 0
+          git push origin HEAD:tsuzuki/mangaall-smoke-v2-20261105
+      - name: Upload test-only enrollment and archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: mangaall-v2-smoke-repository
+          path: dist/smoke/
+          retention-days: 7
