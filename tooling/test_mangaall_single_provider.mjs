@@ -82,7 +82,13 @@ await assert.rejects(reading.chapters({ binding: binding("bad") }), /unknown sou
 await assert.rejects(reading.chapters({ binding: binding("mangafire:") }), /invalid work/i);
 await assert.rejects(reading.chapters({ binding: binding(workIds[2].replace("example", "a/b")) }), /invalid work/i);
 await assert.rejects(reading.pages({ binding: binding(workIds[2]), providerChapterId: "mangadex:123" }), /chapter source mismatch/i);
-await assert.rejects(reading.pages({ binding: binding(workIds[0]), providerChapterId: "mangadex:123" }), /not available/i);
+const dexPages = await reading.pages({
+  binding: binding(workIds[0]), providerChapterId: "mangadex:123",
+}).catch(error => {
+  assert.match(error.message, /invalid chapter ID|invalid/i);
+  return null;
+});
+assert.equal(dexPages, null, "MangaDex must validate its chapter ID before any network request");
 await assert.rejects(reading.lookup({ titles: ["Example"], cursor: "{bad" }), /invalid cursor/i);
 await assert.rejects(reading.lookup({ titles: ["Example"], cursor: JSON.stringify({ v: 1, remaining: { evil: "1" } }) }), /invalid cursor/i);
 await assert.rejects(reading.lookup({ titles: [] }), /missing title/i);
@@ -201,6 +207,30 @@ await assert.rejects(foreignOnly.chapters({ binding: ptBinding }), /language mis
 await assert.rejects(languageRouter.chapters({
   binding: { ...binding(workIds[0]), facetId: null },
 }), /missing language/i, "unknown language must not silently default to English");
+// MangaDex is a full internal Reader source in the development-only package.
+// The explicit source ID and language remain immutable throughout routing.
+const dexRouted = createMangaAllReading({
+  mangadex: { async pages(request) {
+    assert.equal(request.binding.externalWorkId, workIds[0]);
+    assert.equal(request.binding.facetId, "pt-br");
+    assert.equal(request.providerChapterId, "mangadex:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    return { type: "page_list", pages: [{
+      url: "https://uploads.mangadex.org/data/" + "a".repeat(32) + "/1.jpg",
+    }] };
+  } },
+});
+const realDexId = "mangadex:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+const dexRoutedPages = await dexRouted.pages({
+  binding: ptBinding, providerChapterId: realDexId,
+});
+assert.equal(dexRoutedPages.pages.length, 1);
+await assert.rejects(dexRouted.pages({
+  binding: binding(workIds[1]), providerChapterId: realDexId,
+}), /chapter source mismatch|pages not available/i);
+await assert.rejects(dexRouted.pages({
+  binding: { ...ptBinding, facetId: "ja" }, providerChapterId: realDexId,
+}), /unsupported language/i);
+
 const fireKnown = await languageRouter.pages({
   binding: binding(workIds[2]), providerChapterId: "mangafire:987",
 });
