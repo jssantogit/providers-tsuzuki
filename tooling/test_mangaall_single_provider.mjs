@@ -63,6 +63,32 @@ assert.equal(page2.nextCursor, null);
 assert.deepEqual(calls.filter(([kind]) => kind === "lookup").slice(3),
   [["lookup", "mangadex", "20"]], "completed sources must not be re-queried");
 
+// A source search can return unrelated ranked hits. Those must not become
+// candidates for edition confirmation or pollute automatic source association.
+const misleadingLookup = createMangaAllReading({
+  mangadot: { async lookup() {
+    return { items: [
+      { externalWorkId: "mangadot:4827", title: "Patati patata" },
+      { externalWorkId: "mangadot:4000", title: "Vagabond" },
+      { externalWorkId: "mangadot:4001", title: "Vagabond (Hong Kong Colored Version)" },
+    ], nextCursor: null };
+  } },
+  mangafire: { async lookup() {
+    return { items: [{ externalWorkId: "vagabond", title: "Vagabond" }], nextCursor: null };
+  } },
+  mangadex: { async lookup() { return { items: [], nextCursor: null }; } },
+});
+assert.deepEqual(
+  (await misleadingLookup.lookup({ titles: ["Vagabond"] })).items.map((x) => x.title),
+  ["Vagabond", "Vagabond (Hong Kong Colored Version)", "Vagabond"],
+  "unrelated titles must not be exposed as source candidates",
+);
+assert.deepEqual(
+  (await misleadingLookup.lookup({ titles: ["Vagabond", "Patati patata"] })).items.map((x) => x.title),
+  ["Patati patata", "Vagabond", "Vagabond (Hong Kong Colored Version)", "Vagabond"],
+  "an explicit alternative title must remain valid discovery evidence",
+);
+
 const binding = (id) => ({ providerId: manifest.id, facetId: "en", externalWorkId: id });
 const dex = await reading.chapters({ binding: binding(workIds[0]) });
 assert.equal(dex.items[0].providerChapterId, "mangadex:123");
