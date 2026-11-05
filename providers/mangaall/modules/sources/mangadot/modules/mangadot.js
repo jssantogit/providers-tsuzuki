@@ -97,6 +97,12 @@ export async function pages(input) {
   if (!match) throw new Error("MangaAll invalid chapter ID");
   const kind = match[1], id = match[2];
   const response = await api("GET", "/api/" + kind + "/" + id + "/images");
+  // A manifest sometimes declares its own chapter identity. A conflicting
+  // response must not be trusted even if its request URL used the right ID.
+  const declaredChapterId = response?.chapter?.id ?? response?.chapter_id ?? null;
+  if (declaredChapterId != null && cleanId(declaredChapterId) !== id) {
+    throw new Error("MangaAll chapter mismatch");
+  }
   // The image DTO may contain only { chapter, images }. Never trust a
   // chapter ID alone: confirm membership in this exact work's chapter list.
   // An explicit foreign manga ID is always rejected, not reinterpreted.
