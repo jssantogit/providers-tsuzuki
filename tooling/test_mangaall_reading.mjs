@@ -35,7 +35,7 @@ globalThis.tsuzuki = {
           statusCode: 200,
           body: JSON.stringify({
             result: "ok",
-            data: { id: chapterId, type: "chapter", attributes: chapterExternal ? { externalUrl: "https://publisher.example/chapter", translatedLanguage: chapterLanguage } : { translatedLanguage: chapterLanguage }, relationships: [
+            data: { id: chapterId, type: "chapter", attributes: chapterExternal ? {externalUrl:"https://publisher.example/chapter"} : {}, relationships: [
               { type: "manga", id: relatedMangaId },
             ] },
           }),
@@ -51,15 +51,13 @@ const chapterId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const hashes = "a".repeat(32);
 let relatedMangaId = mangaId;
 let chapterExternal = false;
-let chapterLanguage = "en";
 
 fixture = () => reply({
   result: "ok", baseUrl: "https://uploads.mangadex.org",
   chapter: { hash: hashes, data: ["page-001.jpg", "page-002.png"], dataSaver: [] },
 });
-chapterLanguage = "en";
 const dex = await modules.mangadex.pages({
-  binding: { externalWorkId: "mangadex:" + mangaId, facetId: "en" },
+  binding: { externalWorkId: "mangadex:" + mangaId },
   providerChapterId: "mangadex:" + chapterId,
 });
 assert.deepEqual(dex, {
@@ -79,7 +77,7 @@ assert.equal(new URL(requests.at(-1).url).searchParams.get("forcePort443"), "tru
 assert.equal(requests.some(({ url }) => new URL(url).pathname === "/chapter/" + chapterId), true);
 relatedMangaId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
 await assert.rejects(modules.mangadex.pages({
-  binding: { externalWorkId: "mangadex:" + mangaId, facetId: "en" },
+  binding: { externalWorkId: "mangadex:" + mangaId },
   providerChapterId: "mangadex:" + chapterId,
 }), /work mismatch/i, "a chapter from another manga must never be exposed to this binding");
 assert.equal(new URL(requests.at(-1).url).pathname, "/chapter/" + chapterId,
@@ -87,27 +85,20 @@ assert.equal(new URL(requests.at(-1).url).pathname, "/chapter/" + chapterId,
 relatedMangaId = mangaId;
 chapterExternal = true;
 await assert.rejects(modules.mangadex.pages({
-  binding: { externalWorkId: "mangadex:" + mangaId, facetId: "en" },
+  binding: { externalWorkId: "mangadex:" + mangaId },
   providerChapterId: "mangadex:" + chapterId,
 }), /external chapter/i, "MangaDex external releases are evidence but not internally readable");
 assert.equal(new URL(requests.at(-1).url).pathname, "/chapter/" + chapterId,
   "never fetch MangaDex@Home for an external release");
 chapterExternal = false;
 
-// A chapter whose language differs from the requested facet cannot serve pages.
-chapterLanguage = "pt-br";
-await assert.rejects(modules.mangadex.pages({
-  binding: { externalWorkId: "mangadex:" + mangaId, facetId: "en" },
-  providerChapterId: "mangadex:" + chapterId,
-}), /language mismatch/i);
-chapterLanguage = "en";
 const dynamicBase = "https://node.mangadex.network/temporary-token";
 fixture = () => reply({
   result: "ok", baseUrl: dynamicBase,
   chapter: { hash: hashes, data: ["1.jpg"], dataSaver: [] },
 });
 const dynamic = await modules.mangadex.pages({
-  binding: { externalWorkId: "mangadex:" + mangaId, facetId: "en" },
+  binding: { externalWorkId: "mangadex:" + mangaId },
   providerChapterId: "mangadex:" + chapterId,
 });
 assert.equal(dynamic.pages[0].url, dynamicBase + "/data/" + hashes + "/1.jpg",
@@ -125,7 +116,7 @@ for (const malicious of [
     chapter: { hash: hashes, data: ["1.jpg"], dataSaver: [] },
   });
   await assert.rejects(modules.mangadex.pages({
-    binding: { externalWorkId: "mangadex:" + mangaId, facetId: "en" },
+    binding: { externalWorkId: "mangadex:" + mangaId },
     providerChapterId: "mangadex:" + chapterId,
   }), /untrusted image origin/i, "MangaDex should reject " + malicious);
 }
@@ -135,7 +126,7 @@ fixture = () => reply({
   chapter: { hash: hashes, data: ["page-001.jpg"] },
 });
 await assert.rejects(modules.mangadex.pages({
-  binding: { externalWorkId: "mangadex:" + mangaId, facetId: "en" },
+  binding: { externalWorkId: "mangadex:" + mangaId },
   providerChapterId: "mangadex:" + chapterId,
 }), /untrusted (image|page) origin/i);
 
