@@ -115,8 +115,17 @@ function numericChapter(label) {
 
 function groupName(relationships) {
   if (!Array.isArray(relationships)) return null;
-  const group = relationships.find((item) => item?.type === "scanlation_group");
-  return text(group?.attributes?.name, 4096) || null;
+  const names = [], seen = new Set();
+  for (const item of relationships) {
+    if (item?.type !== "scanlation_group") continue;
+    const name = text(item?.attributes?.name, 256);
+    if (!name || seen.has(name)) continue;
+    const next = [...names, name].join(", ");
+    if (next.length > 4096) break;
+    names.push(name);
+    seen.add(name);
+  }
+  return names.length ? names.join(", ") : null;
 }
 
 function publishedDate(attrs) {
