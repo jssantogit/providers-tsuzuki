@@ -211,11 +211,12 @@ assert.equal(fireKnown.pages.length, 1);
 const realRequests = [];
 let memberLanguage = "pt-br";
 let memberWork = "317";
+let declaredImageChapter = 8001;
 globalThis.tsuzuki = { http: { async request(method, url) {
   realRequests.push(url);
   const pathname = new URL(url).pathname;
   const body = pathname === "/api/uploads/8001/images"
-    ? { chapter: { id: 8001 }, images: [{ url: "/chapters/page1.webp" }] }
+    ? { chapter: { id: declaredImageChapter }, images: [{ url: "/chapters/page1.webp" }] }
     : pathname === "/api/manga/317/chapters/list"
       ? (memberWork === "317" ? [{ id: 8001, source: "user", language: memberLanguage }] : [])
       : null;
@@ -231,6 +232,14 @@ assert.equal(verifiedDot.pages[0].url, "https://mangadot.net/chapters/page1.webp
 assert.deepEqual(realRequests.map(url => new URL(url).pathname), [
   "/api/uploads/8001/images", "/api/manga/317/chapters/list",
 ], "image metadata without manga.id must be checked against the exact title's chapters");
+declaredImageChapter = 8002;
+const beforeForeignChapter = realRequests.length;
+await assert.rejects(actual.reading.pages({
+  binding: dotBinding, providerChapterId: "mangadot:uploads:8001",
+}), /chapter mismatch/i, "image manifest must not claim a different chapter");
+assert.equal(realRequests.length, beforeForeignChapter + 1,
+  "foreign chapter must be rejected before a chapter-list verification request");
+declaredImageChapter = 8001;
 memberLanguage = "en";
 await assert.rejects(actual.reading.pages({
   binding: dotBinding, providerChapterId: "mangadot:uploads:8001",
