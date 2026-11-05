@@ -307,4 +307,52 @@ assert.deepEqual(creditedChapters.items.map(ch => ch.scanlationGroup), [
   "Group Alpha, Group Beta", null,
 ], "credit all attested chapter groups once; never invent unknown credits");
 
+// Actual MangaDex pages adapter (not a mock): verify source, language, and
+// per-chapter MangaDex@Home image metadata on the unified package.
+const dexChapterId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+const dexWorkId = "11111111-2222-4333-8444-555555555555";
+let detailLanguage = "pt-br";
+let detailWork = dexWorkId;
+const dexRequests = [];
+globalThis.tsuzuki = { http: { async request(method, url) {
+  assert.equal(method, "GET");
+  const path = new URL(url).pathname;
+  dexRequests.push(path);
+  const body = path === "/chapter/" + dexChapterId
+    ? { result: "ok", data: { id: dexChapterId, type: "chapter",
+      attributes: { translatedLanguage: detailLanguage },
+      relationships: [{ type: "manga", id: detailWork }],
+    } }
+    : path === "/at-home/server/" + dexChapterId
+      ? { result: "ok", baseUrl: "https://uploads.mangadex.org",
+        chapter: { hash: "a".repeat(32), data: ["page1.jpg"] } }
+      : null;
+  if (!body) throw new Error("unexpected MangaDex request " + path);
+  return JSON.stringify({ statusCode: 200, body: JSON.stringify(body) });
+} } };
+const exactDexBinding = { providerId: manifest.id, externalWorkId: workIds[0], facetId: "pt-br" };
+const actualDexPages = await actual.reading.pages({
+  binding: exactDexBinding, providerChapterId: "mangadex:" + dexChapterId,
+});
+assert.equal(actualDexPages.pages[0].url,
+  "https://uploads.mangadex.org/data/" + "a".repeat(32) + "/page1.jpg");
+assert.deepEqual(dexRequests, [
+  "/chapter/" + dexChapterId, "/at-home/server/" + dexChapterId,
+]);
+detailLanguage = "en";
+const beforeWrongLanguage = dexRequests.length;
+await assert.rejects(actual.reading.pages({
+  binding: exactDexBinding, providerChapterId: "mangadex:" + dexChapterId,
+}), /chapter language mismatch/i, "MangaDex cannot serve English pages under a Portuguese facet");
+assert.equal(dexRequests.length, beforeWrongLanguage + 1,
+  "wrong-language chapter must stop before MangaDex@Home");
+detailLanguage = "pt-br";
+detailWork = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+await assert.rejects(actual.reading.pages({
+  binding: exactDexBinding, providerChapterId: "mangadex:" + dexChapterId,
+}), /work mismatch/i, "foreign MangaDex chapter must be rejected");
+await assert.rejects(actual.reading.pages({
+  binding: exactDexBinding, providerChapterId: "mangadex:invalid",
+}), /invalid chapter ID/i, "invalid MangaDex chapter ID must fail before network");
+
 console.log("MangaAll single-package contract: passed");
