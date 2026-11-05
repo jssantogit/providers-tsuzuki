@@ -249,4 +249,36 @@ await assert.rejects(actual.reading.pages({
   binding: dotBinding, providerChapterId: "mangadot:chapters:8001",
 }), /work mismatch|unexpected/i, "chapter kind must not cross uploads/chapters endpoints");
 
+// MangaDex can credit several scanlation groups for the SAME reading chapter.
+// These are chapter-source credits, not creators from a work-search candidate.
+const dexSource = await import(pathToFileURL(path.join(
+  dir, "modules/sources/mangadex/modules/mangadex.js"
+)).href);
+globalThis.tsuzuki = { http: { async request(method, url) {
+  assert.equal(method, "GET");
+  assert.equal(new URL(url).pathname, "/chapter");
+  const body = { result: "ok", offset: 0, total: 2, data: [
+    { id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", type: "chapter",
+      attributes: { chapter: "1", translatedLanguage: "pt-br" },
+      relationships: [
+        { type: "scanlation_group", attributes: { name: "Group Alpha" } },
+        { type: "scanlation_group", attributes: { name: "Group Beta" } },
+        { type: "scanlation_group", attributes: { name: "Group Alpha" } },
+        { type: "scanlation_group", attributes: {} },
+      ],
+    },
+    { id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeef", type: "chapter",
+      attributes: { chapter: "2", translatedLanguage: "pt-br" },
+      relationships: [],
+    },
+  ] };
+  return JSON.stringify({ statusCode: 200, body: JSON.stringify(body) });
+} } };
+const creditedChapters = await dexSource.chapters({ binding: {
+  externalWorkId: workIds[0], facetId: "pt-br",
+} });
+assert.deepEqual(creditedChapters.items.map(ch => ch.scanlationGroup), [
+  "Group Alpha, Group Beta", null,
+], "credit all attested chapter groups once; never invent unknown credits");
+
 console.log("MangaAll single-package contract: passed");
