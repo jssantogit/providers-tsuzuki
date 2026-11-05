@@ -1,0 +1,17 @@
+MangaFire Provider — third-party notice
+
+This Tsuzuki-native Provider is an independent JavaScript implementation for the
+Tsuzuki Provider Platform. Portions of the MangaFire API request flow, response
+field mapping, and VRF signing algorithm/constants were adapted with reference
+to the MangaFire extension in keiyoushi/extensions-source:
+
+  src/all/mangafire/src/eu/kanade/tachiyomi/extension/all/mangafire/
+
+Referenced project copyright notice:
+  Copyright 2015 Javier Tomás
+
+The referenced project is licensed under the Apache License, Version 2.0.
+Those portions have been substantially modified for Tsuzuki's isolated SCRIPT
+runtime, typed Provider contracts, and host-mediated network/browser services.
+
+Apache-2.0 license text is bundled as assets/LICENSE-Apache-2.0.txt.

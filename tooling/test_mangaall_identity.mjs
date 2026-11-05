@@ -7,8 +7,13 @@ const root = path.resolve();
 const product = JSON.parse(fs.readFileSync(path.join(root, "mangaall/product.json"), "utf8"));
 assert.equal(product.id, "app.tsuzuki.mangaall");
 assert.equal(product.name, "MangaAll");
-assert.equal(fs.existsSync(path.join(root, "providers/mangaall/manifest.json")), false,
-  "MangaAll must not be shipped as a MangaDex-only provider");
+const single = JSON.parse(fs.readFileSync(path.join(root, "providers/mangaall/manifest.json"), "utf8"));
+assert.equal(single.id, "app.tsuzuki.mangaall", "MangaAll has one installable identity");
+assert.equal(single.name, "MangaAll");
+assert.equal(single.publication, "development", "single Provider is not published before physical acceptance");
+assert.deepEqual(single.capabilities.map(({ id }) => id), [
+  "reading.lookup", "reading.chapters", "reading.pages",
+]);
 assert.deepEqual(product.sources.map(({ id }) => id), [
   "mangalivre", "mangadex", "mangafire", "mangaball", "mangadot", "animexnovel", "mangaflix",
 ]);

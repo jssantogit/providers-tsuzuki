@@ -19,7 +19,7 @@ for (const [dir, source, expectedPublication] of scripts) {
     "metadata-only providers must not receive a browser grant");
 }
 assert.equal(JSON.parse(fs.readFileSync("mangaall/product.json", "utf8")).publicationStatus,
-  "metadata-only-preview", "MangaAll must not promise readable pages");
+  "development-unpublished", "single MangaAll must not claim published Reader availability");
 const published = JSON.parse(fs.readFileSync("providers/mangafire/manifest.json", "utf8"));
 assert.notEqual(published.publication, "development");
 const workflow = fs.readFileSync(".github/workflows/publish.yml", "utf8");
