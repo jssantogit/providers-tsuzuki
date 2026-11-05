@@ -3,8 +3,8 @@
  *
  * The Host sees only app.tsuzuki.mangaall. The source is carried in verified,
  * source-scoped work/chapter IDs, never inferred from the manga's title.
- * MangaDot pages are routed from verified source IDs; MangaDex remains gated
- * until attribution and Host image-delivery contracts are validated.
+ * All three sources route pages from verified, source-scoped chapter IDs.
+ * MangaDex stays development-only until credit, removal and image gates pass.
  */
 const SOURCE_IDS = Object.freeze(["mangadex", "mangadot", "mangafire"]);
 const SOURCE_SET = new Set(SOURCE_IDS);
