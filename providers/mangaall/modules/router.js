@@ -196,7 +196,7 @@ export function createMangaAllReading(adapters) {
       requireLanguage(input.binding, source);
       const chapterId = requireChapterId(source, input?.providerChapterId);
       const adapter = sourceAdapter(adapters, source);
-      if (source === "mangadex" || typeof adapter.pages !== "function") {
+      if (typeof adapter.pages !== "function") {
         throw new Error("MangaAll pages not available for source");
       }
       const request = source === "mangafire"
