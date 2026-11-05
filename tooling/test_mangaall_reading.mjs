@@ -59,7 +59,7 @@ fixture = () => reply({
 });
 chapterLanguage = "en";
 const dex = await modules.mangadex.pages({
-  binding: { externalWorkId: "mangadex:" + mangaId },
+  binding: { externalWorkId: "mangadex:" + mangaId, facetId: "en" },
   providerChapterId: "mangadex:" + chapterId,
 });
 assert.deepEqual(dex, {
@@ -79,7 +79,7 @@ assert.equal(new URL(requests.at(-1).url).searchParams.get("forcePort443"), "tru
 assert.equal(requests.some(({ url }) => new URL(url).pathname === "/chapter/" + chapterId), true);
 relatedMangaId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
 await assert.rejects(modules.mangadex.pages({
-  binding: { externalWorkId: "mangadex:" + mangaId },
+  binding: { externalWorkId: "mangadex:" + mangaId, facetId: "en" },
   providerChapterId: "mangadex:" + chapterId,
 }), /work mismatch/i, "a chapter from another manga must never be exposed to this binding");
 assert.equal(new URL(requests.at(-1).url).pathname, "/chapter/" + chapterId,
@@ -87,7 +87,7 @@ assert.equal(new URL(requests.at(-1).url).pathname, "/chapter/" + chapterId,
 relatedMangaId = mangaId;
 chapterExternal = true;
 await assert.rejects(modules.mangadex.pages({
-  binding: { externalWorkId: "mangadex:" + mangaId },
+  binding: { externalWorkId: "mangadex:" + mangaId, facetId: "en" },
   providerChapterId: "mangadex:" + chapterId,
 }), /external chapter/i, "MangaDex external releases are evidence but not internally readable");
 assert.equal(new URL(requests.at(-1).url).pathname, "/chapter/" + chapterId,
@@ -107,7 +107,7 @@ fixture = () => reply({
   chapter: { hash: hashes, data: ["1.jpg"], dataSaver: [] },
 });
 const dynamic = await modules.mangadex.pages({
-  binding: { externalWorkId: "mangadex:" + mangaId },
+  binding: { externalWorkId: "mangadex:" + mangaId, facetId: "en" },
   providerChapterId: "mangadex:" + chapterId,
 });
 assert.equal(dynamic.pages[0].url, dynamicBase + "/data/" + hashes + "/1.jpg",
@@ -125,7 +125,7 @@ for (const malicious of [
     chapter: { hash: hashes, data: ["1.jpg"], dataSaver: [] },
   });
   await assert.rejects(modules.mangadex.pages({
-    binding: { externalWorkId: "mangadex:" + mangaId },
+    binding: { externalWorkId: "mangadex:" + mangaId, facetId: "en" },
     providerChapterId: "mangadex:" + chapterId,
   }), /untrusted image origin/i, "MangaDex should reject " + malicious);
 }
@@ -135,7 +135,7 @@ fixture = () => reply({
   chapter: { hash: hashes, data: ["page-001.jpg"] },
 });
 await assert.rejects(modules.mangadex.pages({
-  binding: { externalWorkId: "mangadex:" + mangaId },
+  binding: { externalWorkId: "mangadex:" + mangaId, facetId: "en" },
   providerChapterId: "mangadex:" + chapterId,
 }), /untrusted (image|page) origin/i);
 
