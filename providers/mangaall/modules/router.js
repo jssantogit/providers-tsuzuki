@@ -19,6 +19,22 @@ const SOURCE_LANGUAGES = Object.freeze({
   mangafire: new Set(["en"]),
 });
 
+// A source's ranked search results are hints, never proof of work identity.
+// Only titles or source-attested aliases matching the requested title can
+// enter edition selection or downstream automatic candidate assessment.
+function lookupTitleMatches(requestedTitles, candidate) {
+  const tokens = (value) => typeof value === "string"
+    ? value.normalize("NFKD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase()
+        .split(/[^\\p{L}\\p{N}]+/u).filter(Boolean)
+    : [];
+  const requested = requestedTitles.map(tokens).filter((terms) => terms.length);
+  const names = [candidate?.title, ...(Array.isArray(candidate?.aliases) ? candidate.aliases : [])];
+  return requested.some((terms) => names.some((name) => {
+    const found = new Set(tokens(name));
+    return terms.every((term) => found.has(term));
+  }));
+}
+
 function requireLanguage(binding, source) {
   const facet = binding?.facetId;
   if (typeof facet !== "string" || !facet.trim()) throw new Error("MangaAll missing language");
@@ -112,7 +128,7 @@ export function createMangaAllReading(adapters) {
                 page.nextCursor.length === 0 || page.nextCursor.length > MAX_SOURCE_CURSOR_LENGTH))) {
             throw new Error("MangaAll invalid source lookup response");
           }
-          const items = page.items.map((candidate) => {
+          const items = page.items.filter((candidate) => lookupTitleMatches(input.titles, candidate)).map((candidate) => {
             const id = candidate?.externalWorkId;
             if (typeof id !== "string" || !id.length) {
               throw new Error("MangaAll invalid source candidate");
