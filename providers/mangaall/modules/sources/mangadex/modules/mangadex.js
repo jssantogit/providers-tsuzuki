@@ -195,6 +195,13 @@ export async function pages(input) {
         typeof rel.id === "string" && rel.id.toLowerCase() === workId.toLowerCase())) {
     throw new Error("MangaAll work mismatch");
   }
+  // The chapter detail is authoritative for the language of these pages.
+  // An indexed chapter in another language cannot be relabelled by a facet.
+  const requestedLanguage = input?.binding?.facetId;
+  if (!LANGUAGES.has(requestedLanguage) ||
+      entity.data?.attributes?.translatedLanguage !== requestedLanguage) {
+    throw new Error("MangaAll chapter language mismatch");
+  }
   const externalUrl = entity.data?.attributes?.externalUrl;
   // External releases still contribute chapter evidence to ICE, but MangaDex
   // cannot deliver their pages through MangaDex@Home. Do not fabricate pages.
