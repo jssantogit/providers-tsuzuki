@@ -126,7 +126,12 @@ async function verifiedWorkEvidence(item, language, includeCoverage) {
     for (const chapter of page.data) {
       if (chapter?.type !== "chapter" || !ID_PATTERN.test(chapter.id || "") ||
           chapter.attributes?.translatedLanguage !== language ||
-          chapter.attributes.externalUrl) continue;
+          chapter.attributes.externalUrl ||
+          !Array.isArray(chapter.relationships) ||
+          !chapter.relationships.some((relationship) =>
+            relationship?.type === "manga" &&
+            typeof relationship.id === "string" &&
+            relationship.id.toLowerCase() === id)) continue;
       const number = numericChapter(text(chapter.attributes.chapter, 32));
       if (number == null || number < 0 || number * 1000 > 1000000000) continue;
       numbers.push(Math.round(number * 1000));
