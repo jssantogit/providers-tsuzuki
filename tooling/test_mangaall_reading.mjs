@@ -35,7 +35,7 @@ globalThis.tsuzuki = {
           statusCode: 200,
           body: JSON.stringify({
             result: "ok",
-            data: { id: chapterId, type: "chapter", attributes: chapterExternal ? {externalUrl:"https://publisher.example/chapter"} : {}, relationships: [
+            data: { id: chapterId, type: "chapter", attributes: chapterExternal ? { externalUrl: "https://publisher.example/chapter", translatedLanguage: chapterLanguage } : { translatedLanguage: chapterLanguage }, relationships: [
               { type: "manga", id: relatedMangaId },
             ] },
           }),
@@ -51,11 +51,13 @@ const chapterId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const hashes = "a".repeat(32);
 let relatedMangaId = mangaId;
 let chapterExternal = false;
+let chapterLanguage = "en";
 
 fixture = () => reply({
   result: "ok", baseUrl: "https://uploads.mangadex.org",
   chapter: { hash: hashes, data: ["page-001.jpg", "page-002.png"], dataSaver: [] },
 });
+chapterLanguage = "en";
 const dex = await modules.mangadex.pages({
   binding: { externalWorkId: "mangadex:" + mangaId },
   providerChapterId: "mangadex:" + chapterId,
@@ -92,6 +94,13 @@ assert.equal(new URL(requests.at(-1).url).pathname, "/chapter/" + chapterId,
   "never fetch MangaDex@Home for an external release");
 chapterExternal = false;
 
+// A chapter whose language differs from the requested facet cannot serve pages.
+chapterLanguage = "pt-br";
+await assert.rejects(modules.mangadex.pages({
+  binding: { externalWorkId: "mangadex:" + mangaId, facetId: "en" },
+  providerChapterId: "mangadex:" + chapterId,
+}), /language mismatch/i);
+chapterLanguage = "en";
 const dynamicBase = "https://node.mangadex.network/temporary-token";
 fixture = () => reply({
   result: "ok", baseUrl: dynamicBase,
