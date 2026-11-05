@@ -1,0 +1,47 @@
+name: MangaAll isolated physical smoke feed
+
+on:
+  push:
+    branches:
+      - 'tsuzuki/mangaall-smoke-20261105'
+    paths:
+      - 'tooling/build_mangaall_smoke_feed.mjs'
+      - '.github/workflows/mangaall-smoke-feed.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify MangaAll single-provider contract
+        run: |
+          node tooling/test_mangaall_single_provider.mjs
+          node tooling/test_mangaall_reading.mjs
+      - name: Build test-only provider archive
+        run: |
+          mkdir -p dist/smoke/providers
+          python3 tooling/build_provider.py providers/mangaall dist/smoke/providers/app.tsuzuki.mangaall-1.tsz
+      - name: Sign isolated smoke repository with disposable test key
+        run: node tooling/build_mangaall_smoke_feed.mjs
+      - name: Commit test artifacts only to smoke branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add dist/smoke/index.json dist/smoke/enrollment.json dist/smoke/providers/app.tsuzuki.mangaall-1.tsz
+          git commit -m 'test(mangaall): isolated smoke provider feed artifacts' || exit 0
+          git push origin HEAD:tsuzuki/mangaall-smoke-20261105
+      - name: Upload test-only enrollment and provider archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: mangaall-smoke-repository
+          path: dist/smoke/
+          retention-days: 7
