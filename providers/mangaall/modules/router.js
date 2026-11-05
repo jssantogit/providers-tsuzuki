@@ -24,8 +24,8 @@ const SOURCE_LANGUAGES = Object.freeze({
 // enter edition selection or downstream automatic candidate assessment.
 function lookupTitleMatches(requestedTitles, candidate) {
   const tokens = (value) => typeof value === "string"
-    ? value.normalize("NFKD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase()
-        .split(/[^\\p{L}\\p{N}]+/u).filter(Boolean)
+    ? value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+        .split(/[^\p{L}\p{N}]+/u).filter(Boolean)
     : [];
   const requested = requestedTitles.map(tokens).filter((terms) => terms.length);
   const names = [candidate?.title, ...(Array.isArray(candidate?.aliases) ? candidate.aliases : [])];
