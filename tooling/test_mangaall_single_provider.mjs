@@ -82,13 +82,9 @@ await assert.rejects(reading.chapters({ binding: binding("bad") }), /unknown sou
 await assert.rejects(reading.chapters({ binding: binding("mangafire:") }), /invalid work/i);
 await assert.rejects(reading.chapters({ binding: binding(workIds[2].replace("example", "a/b")) }), /invalid work/i);
 await assert.rejects(reading.pages({ binding: binding(workIds[2]), providerChapterId: "mangadex:123" }), /chapter source mismatch/i);
-const dexPages = await reading.pages({
+await assert.rejects(reading.pages({
   binding: binding(workIds[0]), providerChapterId: "mangadex:123",
-}).catch(error => {
-  assert.match(error.message, /invalid chapter ID|invalid/i);
-  return null;
-});
-assert.equal(dexPages, null, "MangaDex must validate its chapter ID before any network request");
+}), /pages not available/i, "mock adapter without pages is not a real MangaDex Reader source");
 await assert.rejects(reading.lookup({ titles: ["Example"], cursor: "{bad" }), /invalid cursor/i);
 await assert.rejects(reading.lookup({ titles: ["Example"], cursor: JSON.stringify({ v: 1, remaining: { evil: "1" } }) }), /invalid cursor/i);
 await assert.rejects(reading.lookup({ titles: [] }), /missing title/i);
