@@ -7,6 +7,7 @@ const chapterId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 let detailId = mangaId;
 let creator = "Takehiko Inoue";
 let translatedLanguage = "en";
+let relatedMangaId = mangaId;
 let detailCalls = 0;
 let chapterCalls = 0;
 const seen = [];
@@ -38,6 +39,7 @@ globalThis.tsuzuki = { http: { async request(method, url) {
     return response({ offset: 0, total: 1, data: [{
       type: "chapter", id: chapterId,
       attributes: { chapter: "1", translatedLanguage },
+      relationships: [{ type: "manga", id: relatedMangaId }],
     }] });
   }
   throw Error("Unexpected API path: " + parsed.pathname);
@@ -71,6 +73,12 @@ creator = "";
 const noCreator = (await lookup(request("en"))).items[0];
 assert.deepEqual(noCreator.authors || [], [], "missing author cannot be assumed");
 creator = "Takehiko Inoue";
+
+relatedMangaId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+const foreignChapter = (await lookup(request("en"))).items[0];
+assert.notEqual(foreignChapter.coverageOutcome, "OBSERVED",
+  "a chapter from a foreign MangaDex work cannot attest this source's coverage");
+relatedMangaId = mangaId;
 
 translatedLanguage = "pt-br";
 const portuguese = (await lookup(request("pt-br"))).items[0];
