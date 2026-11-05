@@ -175,8 +175,8 @@ export async function chapters(input) {
   return { items, nextCursor };
 }
 
-// Internal Reader prototype. Do not export from main.js or advertise reading.pages
-// until image-host grants, MangaDex attribution/removal policy and Android smoke pass.
+// Development-only Reader adapter. Publication remains gated by attribution,
+// scanlation-group removal enforcement and physical Android image delivery.
 export async function pages(input) {
   const workId = parseWorkId(input?.binding?.externalWorkId);
   const rawId = input?.providerChapterId;
