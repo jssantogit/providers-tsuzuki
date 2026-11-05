@@ -130,7 +130,7 @@ const intermittent = createMangaAllReading({
     dexAttempts++;
     assert.equal(req.cursor ?? null, null);
     if (dexAttempts === 1) throw new Error("temporary MangaDex failure");
-    return { items: [{ externalWorkId: workIds[0], title: "Recovered" }], nextCursor: null };
+    return { items: [{ externalWorkId: workIds[0], title: "Recovered", aliases: ["Example"] }], nextCursor: null };
   } },
   mangadot: { lookup: adapters.mangadot.lookup },
   mangafire: { lookup: adapters.mangafire.lookup },
@@ -148,7 +148,7 @@ let alwaysFails = 0;
 const boundedFailure = createMangaAllReading({
   mangadex: { async lookup() { alwaysFails++; throw new Error("still unavailable"); } },
   mangadot: { async lookup(req) {
-    return { items: [{ externalWorkId: workIds[1], title: "Healthy" }],
+    return { items: [{ externalWorkId: workIds[1], title: "Healthy", aliases: ["Example"] }],
       nextCursor: req.cursor == null ? "next" : null };
   } },
   mangafire: { lookup: adapters.mangafire.lookup },
