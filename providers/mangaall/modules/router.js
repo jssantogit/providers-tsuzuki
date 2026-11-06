@@ -9,7 +9,10 @@
 const SOURCE_IDS = Object.freeze(["mangadex", "mangadot", "mangafire"]);
 const SOURCE_SET = new Set(SOURCE_IDS);
 const PROVIDER_ID = "app.tsuzuki.mangaall";
-const MAX_CURSOR_LENGTH = 256;
+// The Host runtime rejects lookup responses larger than 64 KiB. Leave room
+// for the continuation cursor and the JSON response envelope.
+const MAX_CURSOR_LENGTH = 512;
+const MAX_LOOKUP_RESULT_CHARS = 48 * 1024;
 const MAX_PAGE_ITEMS = 200;
 const MAX_SOURCE_CURSOR_LENGTH = 64;
 const FIRE_ID = /^[A-Za-z0-9_-]{1,128}$/;
@@ -62,14 +65,22 @@ function lookupState(value) {
     const entry = parsed.remaining[key];
     // A failed source is retried at most once, with the original cursor.
     // The explicit retry bit prevents unbounded pages for an outage.
-    const retry = entry !== null && typeof entry === "object" && !Array.isArray(entry);
-    if (retry && (entry.r !== 1 || Object.keys(entry).some((part) => part !== "r" && part !== "c") ||
-        !Object.prototype.hasOwnProperty.call(entry, "c"))) invalidCursor();
-    const cursor = retry ? entry.c : entry;
+    const structured = entry !== null && typeof entry === "object" && !Array.isArray(entry);
+    const retry = structured && entry.r === 1 && Object.keys(entry).every(
+      (part) => part === "r" || part === "c");
+    // An offset into the *filtered current source page* allows splitting a
+    // large result without discarding any source-attested aliases or IDs.
+    // Re-fetching that page is bounded by the Host's eight-page lookup gate.
+    const partial = structured && Object.hasOwn(entry, "o") &&
+      Number.isInteger(entry.o) && entry.o >= 0 && entry.o <= MAX_PAGE_ITEMS &&
+      Object.keys(entry).every((part) => part === "o" || part === "c");
+    if (structured && !(retry || partial)) invalidCursor();
+    if (structured && !Object.hasOwn(entry, "c")) invalidCursor();
+    const cursor = structured ? entry.c : entry;
     if (cursor !== null &&
         (typeof cursor !== "string" || !cursor.length || cursor.length > MAX_SOURCE_CURSOR_LENGTH)) invalidCursor();
-    if (cursor === null && !retry) invalidCursor();
-    return [key, cursor, retry];
+    if (cursor === null && !structured) invalidCursor();
+    return [key, cursor, retry, partial ? entry.o : 0];
   });
 }
 
@@ -117,7 +128,7 @@ export function createMangaAllReading(adapters) {
       }
       const pending = lookupState(input?.cursor);
       // Do not allow an upstream to prevent other independent source lookups.
-      const replies = await Promise.all(pending.map(async ([source, cursor, retried]) => {
+      const replies = await Promise.all(pending.map(async ([source, cursor, retried, offset]) => {
         try {
           const adapter = sourceAdapter(adapters, source);
           if (typeof adapter.lookup !== "function") throw new Error("MangaAll lookup unavailable");
@@ -142,7 +153,8 @@ export function createMangaAllReading(adapters) {
             }
             return candidate;
           });
-          return { source, items, nextCursor: page.nextCursor ?? null };
+          if (offset > items.length) throw new Error("MangaAll source page changed during continuation");
+          return { source, items, nextCursor: page.nextCursor ?? null, cursor, offset };
         } catch {
           return { source, failure: true, cursor, retried };
         }
@@ -152,13 +164,34 @@ export function createMangaAllReading(adapters) {
       const remaining = Object.create(null);
       const items = [];
       const seen = new Set();
+      let serializedItemChars = 0;
       for (const page of successful) {
-        for (const item of page.items) {
-          if (seen.has(item.externalWorkId)) continue;
+        let consumed = page.offset;
+        for (let index = page.offset; index < page.items.length; index++) {
+          const item = page.items[index];
+          if (seen.has(item.externalWorkId)) {
+            consumed++;
+            continue;
+          }
+          const encodedLength = JSON.stringify(item).length + 1;
+          if (encodedLength > MAX_LOOKUP_RESULT_CHARS) {
+            throw new Error("MangaAll single source candidate exceeds Host result budget");
+          }
+          if (serializedItemChars + encodedLength > MAX_LOOKUP_RESULT_CHARS) {
+            // Keep the cursor at the first *unreturned* item in this exact
+            // source page. No alias truncation or accidental unique binding.
+            break;
+          }
+          serializedItemChars += encodedLength;
           seen.add(item.externalWorkId);
           items.push(item);
+          consumed++;
         }
-        if (page.nextCursor !== null) remaining[page.source] = page.nextCursor;
+        if (consumed < page.items.length) {
+          remaining[page.source] = { c: page.cursor, o: consumed };
+        } else if (page.nextCursor !== null) {
+          remaining[page.source] = page.nextCursor;
+        }
       }
       for (const failure of replies.filter((reply) => reply.failure && !reply.retried)) {
         // Keep a failed source for one bounded retry. Do not invent "no
