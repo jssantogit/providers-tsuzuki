@@ -1,0 +1,70 @@
+name: Publish stable MangaAll preview
+
+on:
+  push:
+    branches:
+      - 'tsuzuki/mangaall-preview'
+    paths:
+      - 'repository/preview-publish.request'
+  workflow_dispatch:
+
+concurrency:
+  group: mangaall-preview-stable
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/tsuzuki/mangaall-preview'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Validate authoring and immutable-version contracts
+        run: |
+          node tooling/test_mangaall_single_provider.mjs
+          node tooling/test_mangaall_preview_versioning.mjs
+          node tooling/test_mangaall_reading.mjs
+          node tooling/test_mangaall_image_origin_contract.mjs
+      - name: Build next version of the same MangaAll package
+        run: |
+          mkdir -p dist/preview/providers
+          python3 - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          manifest = json.loads(Path('providers/mangaall/manifest.json').read_text())
+          assert manifest['id'] == 'app.tsuzuki.mangaall'
+          assert manifest['publication'] == 'development'
+          package = f"dist/preview/providers/{manifest['id']}-{manifest['version']['code']}.tsz"
+          subprocess.run(['python3','tooling/build_provider.py','providers/mangaall',package], check=True)
+          PY
+      - name: Sign stable preview index (dedicated durable secret)
+        env:
+          TSUZUKI_MANGAALL_PREVIEW_SIGNING_KEY_PEM: ${{ secrets.TSUZUKI_MANGAALL_PREVIEW_SIGNING_KEY_PEM }}
+        run: |
+          test -n "$TSUZUKI_MANGAALL_PREVIEW_SIGNING_KEY_PEM" || {
+            echo '::error::Configure persistent MangaAll preview signing secret before publishing.'
+            exit 1
+          }
+          node tooling/build_mangaall_preview_feed.mjs
+      - name: Publish immutable snapshot and public enrollment without exposing signer
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add dist/preview
+          if git diff --cached --quiet; then
+            echo 'No new version to publish'
+            exit 0
+          fi
+          git commit -m '[preview] Signed MangaAll next monotonic version'
+          git push origin HEAD:tsuzuki/mangaall-preview

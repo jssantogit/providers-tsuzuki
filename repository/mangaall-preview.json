@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "repositoryId": "app.tsuzuki.mangaall.preview",
+  "displayName": "MangaAll — Prévia",
+  "keyId": "mangaall-preview-root-2026-11",
+  "indexUrl": "https://raw.githubusercontent.com/jssantogit/providers-tsuzuki/tsuzuki/mangaall-preview/dist/preview/index.json",
+  "artifactBaseUrl": "https://raw.githubusercontent.com/jssantogit/providers-tsuzuki/tsuzuki/mangaall-preview/dist/preview/providers"
+}
