@@ -133,7 +133,10 @@ do {
   assert.ok(budgetPages <= 8, "Host bounds lookup continuation to eight pages");
 } while (budgetCursor);
 assert.ok(budgetPages > 1, "fixture must exercise a continuation, not a small page");
-assert.deepEqual(recoveredIds, expectedIds, "every source candidate must survive pagination");
+assert.equal(new Set(recoveredIds).size, recoveredIds.length,
+  "continuation cannot duplicate previously returned source IDs");
+assert.deepEqual(recoveredIds.slice().sort(), expectedIds.slice().sort(),
+  "every source candidate must survive pagination, regardless of page interleaving");
 assert.ok(budgetCalls.filter(([source]) => source === "mangadot").length >= 1);
 assert.ok(budgetCalls.filter(([source]) => source === "mangafire").length >= 1);
 
