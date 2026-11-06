@@ -89,6 +89,54 @@ assert.deepEqual(
   "an explicit alternative title must remain valid discovery evidence",
 );
 
+// Regression: a valid merged search may exceed the SCRIPT runtime's 64 KiB
+// response envelope. Page source results without dropping source-scoped work
+// identities, and preserve alias/edition evidence instead of truncating it.
+const bulkyAliases = Array.from({ length: 6 }, (_, i) =>
+  "Example alternative " + i + " " + "x".repeat(950));
+const manyDexWorks = Array.from({ length: 20 }, (_, i) => ({
+  externalWorkId: "mangadex:source-work-" + i,
+  title: "Example",
+  aliases: bulkyAliases,
+  language: null,
+}));
+const budgetCalls = [];
+const budgeted = createMangaAllReading({
+  mangadex: { async lookup(req) {
+    budgetCalls.push(["mangadex", req.cursor ?? null]);
+    return { items: manyDexWorks, nextCursor: null };
+  } },
+  mangadot: { async lookup(req) {
+    budgetCalls.push(["mangadot", req.cursor ?? null]);
+    return { items: [{ externalWorkId: "mangadot:317", title: "Example" }], nextCursor: null };
+  } },
+  mangafire: { async lookup(req) {
+    budgetCalls.push(["mangafire", req.cursor ?? null]);
+    return { items: [{ externalWorkId: "fire-example", title: "Example", language: "en" }], nextCursor: null };
+  } },
+});
+const expectedIds = [...manyDexWorks.map(item => item.externalWorkId),
+  "mangadot:317", "mangafire:fire-example"];
+const recoveredIds = [];
+let budgetCursor = null, budgetPages = 0;
+do {
+  const page = await budgeted.lookup({ titles: ["Example"], cursor: budgetCursor });
+  budgetPages++;
+  assert.ok(JSON.stringify(page).length < 64 * 1024,
+    "one SCRIPT lookup response must fit Host runtime limit");
+  recoveredIds.push(...page.items.map(item => item.externalWorkId));
+  for (const item of page.items.filter(item => item.externalWorkId.startsWith("mangadex:"))) {
+    assert.deepEqual(item.aliases, bulkyAliases,
+      "pagination must never discard source-attested aliases or edition hints");
+  }
+  budgetCursor = page.nextCursor;
+  assert.ok(budgetPages <= 8, "Host bounds lookup continuation to eight pages");
+} while (budgetCursor);
+assert.ok(budgetPages > 1, "fixture must exercise a continuation, not a small page");
+assert.deepEqual(recoveredIds, expectedIds, "every source candidate must survive pagination");
+assert.ok(budgetCalls.filter(([source]) => source === "mangadot").length >= 1);
+assert.ok(budgetCalls.filter(([source]) => source === "mangafire").length >= 1);
+
 const binding = (id) => ({ providerId: manifest.id, facetId: "en", externalWorkId: id });
 const dex = await reading.chapters({ binding: binding(workIds[0]) });
 assert.equal(dex.items[0].providerChapterId, "mangadex:123");
