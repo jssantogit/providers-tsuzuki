@@ -140,6 +140,41 @@ assert.deepEqual(recoveredIds.slice().sort(), expectedIds.slice().sort(),
 assert.ok(budgetCalls.filter(([source]) => source === "mangadot").length >= 1);
 assert.ok(budgetCalls.filter(([source]) => source === "mangafire").length >= 1);
 
+// Regression from the v3 A54 smoke: JavaScript character lengths are not
+// UTF-8 bytes. MangaDex multilingual aliases can overflow the 64 KiB Host
+// result limit even when the merged string is under 48 KiB characters.
+for (const scenario of [
+  { name: "utf8-multilingual", worksPerSource: 25, aliases: ["ワンパンマン".repeat(100)] },
+  { name: "many-small-works", worksPerSource: 200, aliases: [] },
+]) {
+  const sources = Object.fromEntries(["mangadex", "mangadot", "mangafire"].map(source => [
+    source, { async lookup() {
+      return { items: Array.from({ length: scenario.worksPerSource }, (_, i) => ({
+        externalWorkId: source === "mangafire" ? "work-" + i : source + ":work-" + i,
+        title: "Example",
+        aliases: scenario.aliases,
+      })), nextCursor: null };
+    } },
+  ]));
+  const readingWithBudget = createMangaAllReading(sources);
+  let next = null, pages = 0;
+  const ids = [];
+  do {
+    const page = await readingWithBudget.lookup({ titles: ["Example"], cursor: next });
+    assert.ok(Buffer.byteLength(JSON.stringify(page), "utf8") < 65536,
+      scenario.name + " returned a response that the Host rejects");
+    assert.ok(page.items.length <= 500,
+      scenario.name + " returned more than Host's 500 candidates per page");
+    ids.push(...page.items.map(item => item.externalWorkId));
+    next = page.nextCursor;
+    assert.ok(++pages <= 8, "continuation must be bounded");
+  } while (next);
+  assert.equal(new Set(ids).size, scenario.worksPerSource * 3,
+    scenario.name + " must preserve every source identity across pages");
+  assert.equal(ids.length, scenario.worksPerSource * 3);
+  assert.ok(pages > 1, scenario.name + " should require pagination");
+}
+
 const binding = (id) => ({ providerId: manifest.id, facetId: "en", externalWorkId: id });
 const dex = await reading.chapters({ binding: binding(workIds[0]) });
 assert.equal(dex.items[0].providerChapterId, "mangadex:123");
