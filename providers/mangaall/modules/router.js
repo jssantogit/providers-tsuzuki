@@ -50,7 +50,7 @@ function requireLanguage(binding, source) {
 function invalidCursor() { throw new Error("MangaAll invalid cursor"); }
 
 function lookupState(value) {
-  if (value == null) return SOURCE_IDS.map((source) => [source, null, false]);
+  if (value == null) return SOURCE_IDS.map((source) => [source, null, false, 0]);
   if (typeof value !== "string" || value.length > MAX_CURSOR_LENGTH) invalidCursor();
   let parsed;
   try { parsed = JSON.parse(value); } catch { invalidCursor(); }
