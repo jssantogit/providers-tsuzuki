@@ -1,0 +1,57 @@
+name: MangaAll isolated physical smoke feed v3
+
+on:
+  push:
+    branches:
+      - 'tsuzuki/mangaall-smoke-v3-20261106'
+    paths:
+      - 'tooling/build_mangaall_smoke_feed_v3.mjs'
+      - '.github/workflows/mangaall-smoke-feed-v3.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Package and sign MangaAll v3 test feed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify code and fail-closed contracts
+        run: |
+          node tooling/test_mangaall_single_provider.mjs
+          node tooling/test_mangaall_mangadex_evidence.mjs
+          node tooling/test_mangaall_reading.mjs
+          node tooling/test_mangaall_image_origin_contract.mjs
+          python3 - <<'PY'
+          import json
+          m = json.load(open('providers/mangaall/manifest.json'))
+          assert m['id'] == 'app.tsuzuki.mangaall'
+          assert m['publication'] == 'development'
+          assert m['version'] == {'name': '0.3.0', 'code': 3}
+          PY
+      - name: Build single MangaAll 0.3.0 package
+        run: |
+          mkdir -p dist/smoke/providers
+          python3 tooling/build_provider.py providers/mangaall dist/smoke/providers/app.tsuzuki.mangaall-3.tsz
+      - name: Sign temporary, separate v3 smoke repository
+        run: node tooling/build_mangaall_smoke_feed_v3.mjs
+      - name: Persist only public enrollment, signed index and archive
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add dist/smoke/index.json dist/smoke/enrollment.json dist/smoke/providers/app.tsuzuki.mangaall-3.tsz
+          git commit -m 'test(mangaall): store isolated v3 smoke artifacts' || exit 0
+          git push origin HEAD:tsuzuki/mangaall-smoke-v3-20261106
+      - name: Upload test-only feed
+        uses: actions/upload-artifact@v4
+        with:
+          name: mangaall-v3-smoke-repository
+          path: dist/smoke/
+          retention-days: 7
