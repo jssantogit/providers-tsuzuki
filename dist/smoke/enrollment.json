@@ -2,5 +2,6 @@
   "repositoryId": "app.tsuzuki.mangaall.smoke.v4",
   "indexUrl": "https://raw.githubusercontent.com/jssantogit/providers-tsuzuki/tsuzuki/mangaall-smoke-v4-20261106/dist/smoke/index.json",
   "keyId": "mangaall-smoke-v4-20261106",
-  "publicKeyBase64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE2cbpTUzb8Ttr7vZvy9ZPe4OV+52RQv7kxPMuX0uz7ybf4b3wmC5Awl1vwXKvr8oY/RAafDu4aGDRBr/XoIwIHg=="
+  "publicKeyBase64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE2cbpTUzb8Ttr7vZvy9ZPe4OV+52RQv7kxPMuX0uz7ybf4b3wmC5Awl1vwXKvr8oY/RAafDu4aGDRBr/XoIwIHg==",
+  "displayName": "MangaAll — Smoke v4"
 }
