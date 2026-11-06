@@ -75,6 +75,43 @@ class PublicationPlanningTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing published"):
             prepare_publication(self.root)
 
+    def test_one_mangaall_provider_updates_without_changing_repository_identity(self):
+        (self.root / "providers/mangaall").mkdir(parents=True)
+        self.write(
+            "providers/mangaall/manifest.json",
+            {"id": "app.tsuzuki.mangaall", "version": {"code": 4, "name": "0.4.0"},
+             "publication": "development"},
+        )
+        self.assertFalse(prepare_publication(self.root))
+        self.write(
+            "providers/mangaall/manifest.json",
+            {"id": "app.tsuzuki.mangaall", "version": {"code": 5, "name": "1.0.0"}},
+        )
+        (self.root / "dist/providers/app.tsuzuki.mangaall-5.tsz").write_bytes(b"mangaall-release")
+        self.assertTrue(prepare_publication(self.root))
+        self.assertEqual(self.current_sequence(), 25)
+        self.assertEqual(
+            json.loads((self.root / "repository/config.json").read_text())["repositoryId"],
+            "app.tsuzuki.providers",
+        )
+        previous = json.loads((self.root / "dist/index.payload.json").read_text())
+        previous["sequence"] = 25
+        previous["providers"].append(
+            self.desc("app.tsuzuki.mangaall", 5, "1.0.0", b"mangaall-release"),
+        )
+        self.write("dist/index.payload.json", previous)
+        self.write(
+            "providers/mangaall/manifest.json",
+            {"id": "app.tsuzuki.mangaall", "version": {"code": 6, "name": "1.2.0"}},
+        )
+        (self.root / "dist/providers/app.tsuzuki.mangaall-6.tsz").write_bytes(b"mangaall-update")
+        self.assertTrue(prepare_publication(self.root))
+        self.assertEqual(self.current_sequence(), 26)
+        self.assertTrue(
+            (self.root / "dist/providers/app.tsuzuki.mangaall-5.tsz").exists(),
+            "retain prior immutable package for installed clients and rollback",
+        )
+
     def test_development_provider_not_promoted(self):
         (self.root / "providers/mangaall-ball").mkdir(parents=True, exist_ok=True)
         self.write("providers/mangaall-ball/manifest.json", {"id": "app.tsuzuki.mangaall.ball", "version": {"code": 1, "name": "0.1.0"}, "publication": "development"})

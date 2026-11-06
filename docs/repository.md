@@ -12,6 +12,42 @@ The reference repository uses:
 
 The public-key Base64 value and SHA-256 fingerprint are generated from `repository/public-key.pem`.
 
+## One-link enrollment (new Host)
+
+Once the updated Tsuzuki Host has passed its release gates, open
+**Settings → Providers → Repositories → Add repository**, paste only:
+
+`https://raw.githubusercontent.com/jssantogit/providers-tsuzuki/main/dist/enrollment.json`
+
+Tap **Verify repository**, inspect the resolved name, repository ID, signed-index
+URL and the P-256 SHA-256 fingerprint, and explicitly approve trust. The document
+contains **only public** bootstrap material. It is not signed by itself; the
+Host separately verifies the index signature against the displayed public key
+*before* allowing enrollment, and pins this trust root thereafter.
+
+### Normal updates — no reinstall/re-enrollment
+
+This repository's stable identity is `app.tsuzuki.providers` and its signing
+root is `tsuzuki-provider-root-2026-02`. Publish each MangaAll release as
+the **same** `app.tsuzuki.mangaall` Provider with a strictly higher
+`version.code`. `version.name` is the user-visible release (for example
+`1.0.0` → `1.2.0`). The signed index increments its repository sequence;
+the Host recognizes `UPDATE_AVAILABLE`, verifies SHA-256 and the signature,
+then updates in place with rollback. The old signed package stays immutable.
+**Never** create `...smoke.v5`, `...smoke.v6` as the standard update mechanism.
+
+The v1–v4 one-off physical smoke feeds used distinct ephemeral keys and
+repository IDs; they are **not** an upgradable release channel. Migrating a
+device installed from one of these feeds to this stable repository requires
+a **single explicit origin change** after the stable MangaAll release has
+passed acceptance, never a silent repin.
+
+A persistent development channel, if retained, must have its own fixed
+repository ID, fixed HTTPS index URL and a private signing key stored as
+a durable protected GitHub Actions secret with owner-controlled backup.
+No ephemeral signing keys may be regenerated per version. This release
+does **not** publish development-only MangaAll to the stable production index.
+
 ## Enroll this repository in Tsuzuki
 
 In **Settings → Providers → Repositories → Add repository**, enter exactly:
