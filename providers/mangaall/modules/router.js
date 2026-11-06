@@ -9,11 +9,21 @@
 const SOURCE_IDS = Object.freeze(["mangadex", "mangadot", "mangafire"]);
 const SOURCE_SET = new Set(SOURCE_IDS);
 const PROVIDER_ID = "app.tsuzuki.mangaall";
-// The Host runtime rejects lookup responses larger than 64 KiB. Leave room
-// for the continuation cursor and the JSON response envelope.
+// Runtime output is capped at 64 KiB of UTF-8, not JavaScript UTF-16 code units.
+// Leave substantial margin for the response envelope and continuation cursor.
 const MAX_CURSOR_LENGTH = 512;
-const MAX_LOOKUP_RESULT_CHARS = 48 * 1024;
+const MAX_LOOKUP_RESULT_BYTES = 48 * 1024;
+const MAX_HOST_PAGE_ITEMS = 500;
 const MAX_PAGE_ITEMS = 200;
+
+function utf8ByteLength(value) {
+  let bytes = 0;
+  for (const point of value) {
+    const code = point.codePointAt(0);
+    bytes += code <= 0x7f ? 1 : code <= 0x7ff ? 2 : code <= 0xffff ? 3 : 4;
+  }
+  return bytes;
+}
 const MAX_SOURCE_CURSOR_LENGTH = 64;
 const FIRE_ID = /^[A-Za-z0-9_-]{1,128}$/;
 const SOURCE_LANGUAGES = Object.freeze({
@@ -164,7 +174,7 @@ export function createMangaAllReading(adapters) {
       const remaining = Object.create(null);
       const items = [];
       const seen = new Set();
-      let serializedItemChars = 0;
+      let serializedItemBytes = 0;
       for (const page of successful) {
         let consumed = page.offset;
         for (let index = page.offset; index < page.items.length; index++) {
@@ -173,16 +183,17 @@ export function createMangaAllReading(adapters) {
             consumed++;
             continue;
           }
-          const encodedLength = JSON.stringify(item).length + 1;
-          if (encodedLength > MAX_LOOKUP_RESULT_CHARS) {
+          const encodedLength = utf8ByteLength(JSON.stringify(item)) + 1;
+          if (encodedLength > MAX_LOOKUP_RESULT_BYTES) {
             throw new Error("MangaAll single source candidate exceeds Host result budget");
           }
-          if (serializedItemChars + encodedLength > MAX_LOOKUP_RESULT_CHARS) {
+          if (items.length >= MAX_HOST_PAGE_ITEMS ||
+              serializedItemBytes + encodedLength > MAX_LOOKUP_RESULT_BYTES) {
             // Keep the cursor at the first *unreturned* item in this exact
             // source page. No alias truncation or accidental unique binding.
             break;
           }
-          serializedItemChars += encodedLength;
+          serializedItemBytes += encodedLength;
           seen.add(item.externalWorkId);
           items.push(item);
           consumed++;
