@@ -75,6 +75,83 @@ function parseWorkId(value) {
   return id;
 }
 
+
+// Source-verified work details are advisory. They do not establish an
+// editorial edition; the Host must independently corroborate creators and
+// match exact source chapters before adding Reader choices.
+const MAX_EVIDENCE_WORKS = 2;
+function normalizedIdentity(value) {
+  return text(value).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+function exactSourceName(candidate, requested) {
+  return [candidate.title, ...candidate.aliases]
+    .some((name) => normalizedIdentity(name) === normalizedIdentity(requested));
+}
+async function verifiedWorkEvidence(item, language, includeCoverage) {
+  const id = item.externalWorkId.slice(SOURCE.length + 1);
+  let details;
+  try {
+    details = await getMangaDexJson("/manga/" + id, [["includes[]", "author"]]);
+  } catch {
+    return { detailOutcome: "DETAIL_FAILED" };
+  }
+  const record = details?.data;
+  const names = titleCandidates(record || {});
+  if (record?.id?.toLowerCase() !== id || record?.type !== "manga" ||
+      !names || ![names.title, ...names.aliases].some((name) =>
+        [item.title, ...item.aliases].some((old) =>
+          normalizedIdentity(old) === normalizedIdentity(name)))) {
+    return { detailOutcome: "IDENTITY_MISMATCH" };
+  }
+  const authors = [...new Set(record.relationships
+    .filter((rel) => rel?.type === "author" && ID_PATTERN.test(rel.id || ""))
+    .map((rel) => text(rel.attributes?.name, 128)).filter(Boolean))].slice(0, 8);
+  const evidence = {
+    detailOutcome: names.aliases.length > 0 ? "VERIFIED_WITH_ALIASES" : "VERIFIED_NO_ALIASES",
+    authors,
+    aliases: names.aliases,
+  };
+  if (!includeCoverage || !LANGUAGES.has(language)) return evidence;
+  try {
+    const page = await getMangaDexJson("/chapter", [
+      ["manga", id], ["translatedLanguage[]", language],
+      ["contentRating[]", "safe"], ["contentRating[]", "suggestive"],
+      ["limit", 2], ["offset", 0],
+    ]);
+    if (!Number.isInteger(page.total) || page.total < 0 || page.total > 1000000 ||
+        page.data.length > 2 || page.data.length > page.total) {
+      return { ...evidence, coverageOutcome: "INVALID_RESPONSE" };
+    }
+    const numbers = [];
+    for (const chapter of page.data) {
+      if (chapter?.type !== "chapter" || !ID_PATTERN.test(chapter.id || "") ||
+          chapter.attributes?.translatedLanguage !== language ||
+          chapter.attributes.externalUrl ||
+          !Array.isArray(chapter.relationships) ||
+          !chapter.relationships.some((relationship) =>
+            relationship?.type === "manga" &&
+            typeof relationship.id === "string" &&
+            relationship.id.toLowerCase() === id)) continue;
+      const number = numericChapter(text(chapter.attributes.chapter, 32));
+      if (number == null || number < 0 || number * 1000 > 1000000000) continue;
+      numbers.push(Math.round(number * 1000));
+    }
+    if (numbers.length) {
+      return { ...evidence, coverageOutcome: "OBSERVED",
+        coverageObservedCount: numbers.length,
+        coverageMinMilli: Math.min(...numbers), coverageMaxMilli: Math.max(...numbers),
+        coverageHasMore: page.total > page.data.length };
+    }
+    if (page.total === 0) {
+      return { ...evidence, coverageOutcome: "EMPTY",
+        coverageObservedCount: 0, coverageHasMore: false };
+    }
+    return { ...evidence, coverageOutcome: "UNKNOWN" };
+  } catch {
+    return { ...evidence, coverageOutcome: "FAILED" };
+  }
+}
+
 export async function lookup(input) {
   const titles = Array.isArray(input?.titles) ? input.titles : [];
   if (!titles.length) throw new Error("MangaAll missing lookup title");
@@ -103,6 +180,19 @@ export async function lookup(input) {
       // MangaDex titles are multilingual; facets constrain chapters, not work identity.
       language: null,
     });
+  }
+  // Only the exact source-title contenders can receive work-level author
+  // and first-page coverage evidence. This is bounded and opt-in; an API
+  // failure never converts a healthy search result into an empty catalog.
+  if (input?.editorialEvidenceVersion === 1) {
+    const requestedLanguage = input?.requestedLanguage;
+    const contenders = items.filter((item) => exactSourceName(item, title))
+      .slice(0, MAX_EVIDENCE_WORKS);
+    for (const candidate of contenders) {
+      Object.assign(candidate, await verifiedWorkEvidence(
+        candidate, requestedLanguage, input?.coverageEvidenceVersion === 1,
+      ));
+    }
   }
   return { items, nextCursor };
 }

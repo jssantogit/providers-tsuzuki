@@ -9,8 +9,21 @@
 const SOURCE_IDS = Object.freeze(["mangadex", "mangadot", "mangafire"]);
 const SOURCE_SET = new Set(SOURCE_IDS);
 const PROVIDER_ID = "app.tsuzuki.mangaall";
-const MAX_CURSOR_LENGTH = 256;
+// Runtime output is capped at 64 KiB of UTF-8, not JavaScript UTF-16 code units.
+// Leave substantial margin for the response envelope and continuation cursor.
+const MAX_CURSOR_LENGTH = 512;
+const MAX_LOOKUP_RESULT_BYTES = 48 * 1024;
+const MAX_HOST_PAGE_ITEMS = 500;
 const MAX_PAGE_ITEMS = 200;
+
+function utf8ByteLength(value) {
+  let bytes = 0;
+  for (const point of value) {
+    const code = point.codePointAt(0);
+    bytes += code <= 0x7f ? 1 : code <= 0x7ff ? 2 : code <= 0xffff ? 3 : 4;
+  }
+  return bytes;
+}
 const MAX_SOURCE_CURSOR_LENGTH = 64;
 const FIRE_ID = /^[A-Za-z0-9_-]{1,128}$/;
 const SOURCE_LANGUAGES = Object.freeze({
@@ -18,6 +31,22 @@ const SOURCE_LANGUAGES = Object.freeze({
   mangadot: new Set(["en", "pt-br"]),
   mangafire: new Set(["en"]),
 });
+
+// A source's ranked search results are hints, never proof of work identity.
+// Only titles or source-attested aliases matching the requested title can
+// enter edition selection or downstream automatic candidate assessment.
+function lookupTitleMatches(requestedTitles, candidate) {
+  const tokens = (value) => typeof value === "string"
+    ? value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+        .split(/[^\p{L}\p{N}]+/u).filter(Boolean)
+    : [];
+  const requested = requestedTitles.map(tokens).filter((terms) => terms.length);
+  const names = [candidate?.title, ...(Array.isArray(candidate?.aliases) ? candidate.aliases : [])];
+  return requested.some((terms) => names.some((name) => {
+    const found = new Set(tokens(name));
+    return terms.every((term) => found.has(term));
+  }));
+}
 
 function requireLanguage(binding, source) {
   const facet = binding?.facetId;
@@ -31,7 +60,7 @@ function requireLanguage(binding, source) {
 function invalidCursor() { throw new Error("MangaAll invalid cursor"); }
 
 function lookupState(value) {
-  if (value == null) return SOURCE_IDS.map((source) => [source, null, false]);
+  if (value == null) return SOURCE_IDS.map((source) => [source, null, false, 0]);
   if (typeof value !== "string" || value.length > MAX_CURSOR_LENGTH) invalidCursor();
   let parsed;
   try { parsed = JSON.parse(value); } catch { invalidCursor(); }
@@ -46,14 +75,22 @@ function lookupState(value) {
     const entry = parsed.remaining[key];
     // A failed source is retried at most once, with the original cursor.
     // The explicit retry bit prevents unbounded pages for an outage.
-    const retry = entry !== null && typeof entry === "object" && !Array.isArray(entry);
-    if (retry && (entry.r !== 1 || Object.keys(entry).some((part) => part !== "r" && part !== "c") ||
-        !Object.prototype.hasOwnProperty.call(entry, "c"))) invalidCursor();
-    const cursor = retry ? entry.c : entry;
+    const structured = entry !== null && typeof entry === "object" && !Array.isArray(entry);
+    const retry = structured && entry.r === 1 && Object.keys(entry).every(
+      (part) => part === "r" || part === "c");
+    // An offset into the *filtered current source page* allows splitting a
+    // large result without discarding any source-attested aliases or IDs.
+    // Re-fetching that page is bounded by the Host's eight-page lookup gate.
+    const partial = structured && Object.hasOwn(entry, "o") &&
+      Number.isInteger(entry.o) && entry.o >= 0 && entry.o <= MAX_PAGE_ITEMS &&
+      Object.keys(entry).every((part) => part === "o" || part === "c");
+    if (structured && !(retry || partial)) invalidCursor();
+    if (structured && !Object.hasOwn(entry, "c")) invalidCursor();
+    const cursor = structured ? entry.c : entry;
     if (cursor !== null &&
         (typeof cursor !== "string" || !cursor.length || cursor.length > MAX_SOURCE_CURSOR_LENGTH)) invalidCursor();
-    if (cursor === null && !retry) invalidCursor();
-    return [key, cursor, retry];
+    if (cursor === null && !structured) invalidCursor();
+    return [key, cursor, retry, partial ? entry.o : 0];
   });
 }
 
@@ -101,7 +138,7 @@ export function createMangaAllReading(adapters) {
       }
       const pending = lookupState(input?.cursor);
       // Do not allow an upstream to prevent other independent source lookups.
-      const replies = await Promise.all(pending.map(async ([source, cursor, retried]) => {
+      const replies = await Promise.all(pending.map(async ([source, cursor, retried, offset]) => {
         try {
           const adapter = sourceAdapter(adapters, source);
           if (typeof adapter.lookup !== "function") throw new Error("MangaAll lookup unavailable");
@@ -112,7 +149,7 @@ export function createMangaAllReading(adapters) {
                 page.nextCursor.length === 0 || page.nextCursor.length > MAX_SOURCE_CURSOR_LENGTH))) {
             throw new Error("MangaAll invalid source lookup response");
           }
-          const items = page.items.map((candidate) => {
+          const items = page.items.filter((candidate) => lookupTitleMatches(input.titles, candidate)).map((candidate) => {
             const id = candidate?.externalWorkId;
             if (typeof id !== "string" || !id.length) {
               throw new Error("MangaAll invalid source candidate");
@@ -126,7 +163,8 @@ export function createMangaAllReading(adapters) {
             }
             return candidate;
           });
-          return { source, items, nextCursor: page.nextCursor ?? null };
+          if (offset > items.length) throw new Error("MangaAll source page changed during continuation");
+          return { source, items, nextCursor: page.nextCursor ?? null, cursor, offset };
         } catch {
           return { source, failure: true, cursor, retried };
         }
@@ -136,13 +174,35 @@ export function createMangaAllReading(adapters) {
       const remaining = Object.create(null);
       const items = [];
       const seen = new Set();
+      let serializedItemBytes = 0;
       for (const page of successful) {
-        for (const item of page.items) {
-          if (seen.has(item.externalWorkId)) continue;
+        let consumed = page.offset;
+        for (let index = page.offset; index < page.items.length; index++) {
+          const item = page.items[index];
+          if (seen.has(item.externalWorkId)) {
+            consumed++;
+            continue;
+          }
+          const encodedLength = utf8ByteLength(JSON.stringify(item)) + 1;
+          if (encodedLength > MAX_LOOKUP_RESULT_BYTES) {
+            throw new Error("MangaAll single source candidate exceeds Host result budget");
+          }
+          if (items.length >= MAX_HOST_PAGE_ITEMS ||
+              serializedItemBytes + encodedLength > MAX_LOOKUP_RESULT_BYTES) {
+            // Keep the cursor at the first *unreturned* item in this exact
+            // source page. No alias truncation or accidental unique binding.
+            break;
+          }
+          serializedItemBytes += encodedLength;
           seen.add(item.externalWorkId);
           items.push(item);
+          consumed++;
         }
-        if (page.nextCursor !== null) remaining[page.source] = page.nextCursor;
+        if (consumed < page.items.length) {
+          remaining[page.source] = { c: page.cursor, o: consumed };
+        } else if (page.nextCursor !== null) {
+          remaining[page.source] = page.nextCursor;
+        }
       }
       for (const failure of replies.filter((reply) => reply.failure && !reply.retried)) {
         // Keep a failed source for one bounded retry. Do not invent "no
