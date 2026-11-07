@@ -42,15 +42,43 @@ device installed from one of these feeds to this stable repository requires
 a **single explicit origin change** after the stable MangaAll release has
 passed acceptance, never a silent repin.
 
-A persistent development channel, if retained, must have its own fixed
-repository ID, fixed HTTPS index URL and a private signing key stored as
-a durable protected GitHub Actions secret with owner-controlled backup.
-No ephemeral signing keys may be regenerated per version. This release
-does **not** publish development-only MangaAll to the stable production index.
+MangaAll uses the **existing** signed repository, not a second preview
+repository, new signing key or a different publisher. Versions remain opt-in
+installations from that same signed index. `publication=development` continues
+to exclude the experimental package until physical smoke and release gates pass.
 
-## Enroll this repository in Tsuzuki
+### First-time migration from an old smoke installation
 
-In **Settings → Providers → Repositories → Add repository**, enter exactly:
+The disposable smoke feeds used a different trust origin. When the unified
+MangaAll release is approved and present in the official signed index:
+
+1. Update the Tsuzuki Host in place. Never remove the Host or its data.
+2. Uninstall **only** the old `app.tsuzuki.mangaall` from the smoke origin
+   using Providers → Instalados → Desinstalar.
+3. Remove only its old `app.tsuzuki.mangaall.smoke.vN` enrollment if present.
+4. Refresh the **existing** `app.tsuzuki.providers` repository. Do **not**
+   add it again if already enrolled with its pinned key.
+5. Install the single `app.tsuzuki.mangaall`. From then on, every increase
+   in `version.code` appears as **Atualizar**, preserving trust and rollback.
+
+The official signed index still includes the older `mangaall.mangadex` and
+`mangaall.mangadot` source-adapter packages for compatibility and package
+immutability. A new Host hides their **Discover** cards only when the
+unified MangaAll is eligible in that same repository; installed older packages
+remain visible for deliberate user removal. Never silently uninstall them.
+
+### MangaAll promotion gate
+
+Before publishing the first unified package, confirm the updated Host and
+provider CI/Android gates, real chapter mapping, correct editorial candidate
+identity, language/source choices, image delivery, attribution and physical
+Reader smoke. Only then promote the manifest from `development`, increase
+`version.code` as needed and explicitly run the existing official publisher.
+This is a deliberate signed-index addition, **not** a new repository.
+
+## Manual enrollment for older Hosts
+
+Only older Hosts without the single-link form need the five manual fields. Use:
 
 - Repository name: `Tsuzuki Providers`
 - Repository ID: `app.tsuzuki.providers`
@@ -62,9 +90,20 @@ Tsuzuki should display this SHA-256 fingerprint before trust is confirmed:
 
 `20875348d95649ff0009e329f0d43de1b84ccf8af7966c215d5e0f449e697159`
 
-Confirm trust only if the displayed fingerprint matches exactly. The verified signed repository **sequence `21`** contains the existing Direct P2P, MangaFire and Nyaa packages, plus **MangaAll / MangaDex** and **MangaAll / MangaDot** version `0.1.1` / code `2`. This release removes repository-only `publication` fields from the Host V1 packaged manifests, fixing the on-device `Provider manifest is malformed` error found in sequence 20. MangaBall remains paused and is **not** in the signed index. MangaAll adapters expose only `reading.lookup@1` and `reading.chapters@1`, **not** Reader pages.
+Confirm trust only if the displayed fingerprint matches exactly. The official
+signed index contains existing Direct P2P, MangaFire and Nyaa packages and
+legacy MangaAll / MangaDex and MangaAll / MangaDot adapters. Those adapters
+are **not** the single, multi-source MangaAll package. MangaBall remains
+paused. The unified MangaAll is currently development-only and **absent**
+from the official index.
 
-**Already enrolled with this same key?** Refresh the existing repository in the app, preserving existing installed Providers, grants and library. The two MangaAll source adapters appear in **Discover**. In Host versions that contain the MangaAll family grouping (PR #167), the app can install both as one MangaAll set; older Hosts may list the two adapters separately. No app reinstall, data reset, repository re-enrollment or key rotation is needed for this publication.
+**Already enrolled with this same key?** Refresh the repository rather than
+re-enrolling or resetting app data. No reinstall or key rotation is needed
+for a normal update of a Provider from this repository.
+
+**Historical note:** publication sequence 21 fixed malformed package manifests
+by excluding repository-only `publication` metadata from Host V1 archives.
+Do not confuse that legacy migration with the new unified MangaAll release.
 
 ## Bootstrap-key replacement in October 2026
 
