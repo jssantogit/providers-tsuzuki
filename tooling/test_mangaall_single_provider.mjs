@@ -247,7 +247,37 @@ assert.equal(alwaysFails, 2, "failed source gets exactly one retry");
 const down = createMangaAllReading({
   mangadex: { lookup: fail }, mangadot: { lookup: fail }, mangafire: { lookup: fail },
 });
-await assert.rejects(down.lookup({ titles: ["Example"] }), /all sources failed/i);
+// The A54 v0.4 smoke produced repeated generic SCRIPT_ERROR during lookup.
+// If every internal source fails, surface an existing typed Host error envelope,
+// not a script crash or a deceptive complete-empty edition search.
+assert.deepEqual(await down.lookup({ titles: ["Example"] }), {
+  items: [], nextCursor: null, lookupFailureCode: "UNCLASSIFIED_ERROR",
+});
+const allBlocked = createMangaAllReading({
+  mangadex: { async lookup() { throw new Error("MangaAll HTTP 403"); } },
+  mangadot: { async lookup() { throw new Error("MangaAll HTTP 403"); } },
+  mangafire: { async lookup() {
+    return { items: [], nextCursor: null, lookupFailureCode: "CHALLENGE_BLOCKED", lookupHttpStatus: 403 };
+  } },
+});
+assert.deepEqual(await allBlocked.lookup({ titles: ["Example"] }), {
+  items: [], nextCursor: null, lookupFailureCode: "CHALLENGE_BLOCKED", lookupHttpStatus: 403,
+}, "three independently verified challenge responses must preserve their closed failure cause");
+const inconsistentFailures = createMangaAllReading({
+  mangadex: { async lookup() { throw new Error("MangaAll HTTP 403"); } },
+  mangadot: { async lookup() { throw new Error("MangaAll invalid JSON"); } },
+  mangafire: { async lookup() { throw new Error("unrecognized upstream failure"); } },
+});
+assert.deepEqual(await inconsistentFailures.lookup({ titles: ["Example"] }), {
+  items: [], nextCursor: null, lookupFailureCode: "UNCLASSIFIED_ERROR",
+}, "mixed failures must never claim that all sources were challenged");
+const allInvalid = createMangaAllReading(Object.fromEntries(
+  ["mangadex", "mangadot", "mangafire"].map(source => [source,
+    { async lookup() { throw new Error("MangaAll invalid JSON"); } }]),
+));
+assert.deepEqual(await allInvalid.lookup({ titles: ["Example"] }), {
+  items: [], nextCursor: null, lookupFailureCode: "INVALID_RESPONSE",
+}, "invalid JSON across all sources must not be hidden as SCRIPT_ERROR");
 
 
 // Language is a reading facet, not a provider identity. Enforce it before
