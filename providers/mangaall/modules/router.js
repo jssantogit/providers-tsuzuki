@@ -57,6 +57,49 @@ function requireLanguage(binding, source) {
 }
 
 
+// Only closed failure codes and trustworthy HTTP status numbers may leave
+// this SCRIPT provider. The Host already translates this envelope into
+// SOURCE_READ_ERROR; unstructured upstream exceptions must stay private.
+const LOOKUP_FAILURE_CODES = new Set([
+  "CHALLENGE_BLOCKED", "HTTP_ERROR", "INVALID_RESPONSE", "UNCLASSIFIED_ERROR",
+]);
+
+function classifyLookupFailure(error) {
+  const upstreamCode = error?.lookupFailureCode;
+  if (LOOKUP_FAILURE_CODES.has(upstreamCode)) {
+    const status = error?.lookupHttpStatus;
+    return { code: upstreamCode, status: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null };
+  }
+  if (error?.challengeRequired === true) {
+    const status = error?.httpStatus;
+    return { code: "CHALLENGE_BLOCKED", status: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null };
+  }
+  const message = error instanceof Error ? error.message : "";
+  const statusMatch = /^(?:MangaAll HTTP |MangaFire API request failed with HTTP )([1-5][0-9]{2})$/.exec(message);
+  const status = Number.isInteger(error?.httpStatus) && error.httpStatus >= 100 && error.httpStatus <= 599
+    ? error.httpStatus : statusMatch ? Number(statusMatch[1]) : null;
+  if (status !== null) {
+    return { code: status === 403 ? "CHALLENGE_BLOCKED" : "HTTP_ERROR", status };
+  }
+  if (/^MangaAll invalid (?:HTTP response|HTTP status|JSON|API response|response size|source lookup response|source candidate)$/.test(message)) {
+    return { code: "INVALID_RESPONSE", status: null };
+  }
+  return { code: "UNCLASSIFIED_ERROR", status: null };
+}
+
+function allSourcesFailed(replies) {
+  const failures = replies.map((reply) => reply.error);
+  const code = failures.every((entry) => entry.code === failures[0].code)
+    ? failures[0].code : "UNCLASSIFIED_ERROR";
+  const firstStatus = failures[0].status;
+  const status = code !== "UNCLASSIFIED_ERROR" && firstStatus !== null &&
+    failures.every((entry) => entry.status === firstStatus) ? firstStatus : null;
+  return {
+    items: [], nextCursor: null, lookupFailureCode: code,
+    ...(status === null ? {} : { lookupHttpStatus: status }),
+  };
+}
+
 function invalidCursor() { throw new Error("MangaAll invalid cursor"); }
 
 function lookupState(value) {
@@ -143,7 +186,12 @@ export function createMangaAllReading(adapters) {
           const adapter = sourceAdapter(adapters, source);
           if (typeof adapter.lookup !== "function") throw new Error("MangaAll lookup unavailable");
           const page = await adapter.lookup({ ...input, cursor });
-          if (page?.lookupFailureCode) throw new Error("MangaAll source lookup failed");
+          if (page?.lookupFailureCode) {
+            const failure = new Error("MangaAll source lookup failed");
+            failure.lookupFailureCode = page.lookupFailureCode;
+            failure.lookupHttpStatus = page.lookupHttpStatus;
+            throw failure;
+          }
           if (!Array.isArray(page?.items) || page.items.length > MAX_PAGE_ITEMS ||
               (page.nextCursor != null && (typeof page.nextCursor !== "string" ||
                 page.nextCursor.length === 0 || page.nextCursor.length > MAX_SOURCE_CURSOR_LENGTH))) {
@@ -165,12 +213,12 @@ export function createMangaAllReading(adapters) {
           });
           if (offset > items.length) throw new Error("MangaAll source page changed during continuation");
           return { source, items, nextCursor: page.nextCursor ?? null, cursor, offset };
-        } catch {
-          return { source, failure: true, cursor, retried };
+        } catch (error) {
+          return { source, failure: true, cursor, retried, error: classifyLookupFailure(error) };
         }
       }));
       const successful = replies.filter((r) => !r.failure);
-      if (!successful.length) throw new Error("MangaAll all sources failed");
+      if (!successful.length) return allSourcesFailed(replies);
       const remaining = Object.create(null);
       const items = [];
       const seen = new Set();
