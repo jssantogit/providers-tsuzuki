@@ -51,6 +51,8 @@ jobs:
               output = pathlib.Path('dist/providers') / f"{manifest['id']}-{manifest['version']['code']}.tsz"
               subprocess.run(['python3', 'tooling/build_provider.py', str(manifest_path.parent), str(output)], check=True)
           PY
+      - name: Prepare stable one-link repository bootstrap
+        run: node tooling/build_enrollment.mjs
       - name: Plan atomic signed publication
         id: publication
         run: python3 tooling/prepare_publication.py

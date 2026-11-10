@@ -7,7 +7,7 @@ const dir = path.resolve("providers/mangaall");
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
 assert.equal(manifest.id, "app.tsuzuki.mangaall");
 assert.equal(manifest.name, "MangaAll");
-assert.equal(manifest.publication, "development", "never publish before Host/Reader physical acceptance");
+assert.equal(manifest.publication, "preview", "MangaAll 0.5.0 uses the persistent signed repository, not a fresh smoke root");
 assert.deepEqual(manifest.capabilities.map((cap) => cap.id), [
   "reading.lookup", "reading.chapters", "reading.pages",
 ]);
@@ -63,6 +63,152 @@ assert.equal(page2.nextCursor, null);
 assert.deepEqual(calls.filter(([kind]) => kind === "lookup").slice(3),
   [["lookup", "mangadex", "20"]], "completed sources must not be re-queried");
 
+// A source search can return unrelated ranked hits. Those must not become
+// candidates for edition confirmation or pollute automatic source association.
+const misleadingLookup = createMangaAllReading({
+  mangadot: { async lookup() {
+    return { items: [
+      { externalWorkId: "mangadot:4827", title: "Patati patata" },
+      { externalWorkId: "mangadot:4000", title: "Vagabond" },
+      { externalWorkId: "mangadot:4001", title: "Vagabond (Hong Kong Colored Version)" },
+    ], nextCursor: null };
+  } },
+  mangafire: { async lookup() {
+    return { items: [{ externalWorkId: "vagabond", title: "Vagabond" }], nextCursor: null };
+  } },
+  mangadex: { async lookup() { return { items: [], nextCursor: null }; } },
+});
+assert.deepEqual(
+  (await misleadingLookup.lookup({ titles: ["Vagabond"] })).items.map((x) => x.title),
+  ["Vagabond", "Vagabond (Hong Kong Colored Version)", "Vagabond"],
+  "unrelated titles must not be exposed as source candidates",
+);
+assert.deepEqual(
+  (await misleadingLookup.lookup({ titles: ["Vagabond", "Patati patata"] })).items.map((x) => x.title),
+  ["Patati patata", "Vagabond", "Vagabond (Hong Kong Colored Version)", "Vagabond"],
+  "an explicit alternative title must remain valid discovery evidence",
+);
+
+// A short title must not match unrelated works containing the same word.
+// Explicit source-attested edition qualifiers and exact aliases stay discoverable.
+const monsterScoped = createMangaAllReading({
+  mangadex: { async lookup() { return { items: [
+    { externalWorkId: "mangadex:exact", title: "MONSTER" },
+    { externalWorkId: "mangadex:unrelated", title: "Monster X Monster" },
+    { externalWorkId: "mangadex:perfect", title: "MONSTER (Perfect Edition)" },
+    { externalWorkId: "mangadex:other", title: "My Covenant with the Monster Lord" },
+  ], nextCursor: null }; } },
+  mangadot: { async lookup() { return { items: [
+    { externalWorkId: "mangadot:7", title: "Monster no Niku" },
+    { externalWorkId: "mangadot:8", title: "Other Story", aliases: ["Monster"] },
+  ], nextCursor: null }; } },
+  mangafire: { async lookup() { return { items: [], nextCursor: null }; } },
+});
+assert.deepEqual(
+  (await monsterScoped.lookup({ titles: ["Monster"] })).items.map(x => x.externalWorkId),
+  ["mangadex:exact", "mangadex:perfect", "mangadot:8"],
+  "word-in-title results are unrelated works, while named editions and exact aliases remain",
+);
+const dragonBallScoped = createMangaAllReading({
+  mangadex: { async lookup() { return { items: [
+    { externalWorkId: "mangadex:ball", title: "Dragon Ball" },
+    { externalWorkId: "mangadex:super", title: "Dragon Ball Super" },
+  ], nextCursor: null }; } },
+  mangadot: { async lookup() { return { items: [], nextCursor: null }; } },
+  mangafire: { async lookup() { return { items: [], nextCursor: null }; } },
+});
+assert.deepEqual(
+  (await dragonBallScoped.lookup({ titles: ["Dragon Ball"] })).items.map(x => x.externalWorkId),
+  ["mangadex:ball"],
+  "a sequel sharing all query tokens cannot become the original editorial work",
+);
+
+// Regression: a valid merged search may exceed the SCRIPT runtime's 64 KiB
+// response envelope. Page source results without dropping source-scoped work
+// identities, and preserve alias/edition evidence instead of truncating it.
+const bulkyAliases = Array.from({ length: 6 }, (_, i) =>
+  "Example alternative " + i + " " + "x".repeat(950));
+const manyDexWorks = Array.from({ length: 20 }, (_, i) => ({
+  externalWorkId: "mangadex:source-work-" + i,
+  title: "Example",
+  aliases: bulkyAliases,
+  language: null,
+}));
+const budgetCalls = [];
+const budgeted = createMangaAllReading({
+  mangadex: { async lookup(req) {
+    budgetCalls.push(["mangadex", req.cursor ?? null]);
+    return { items: manyDexWorks, nextCursor: null };
+  } },
+  mangadot: { async lookup(req) {
+    budgetCalls.push(["mangadot", req.cursor ?? null]);
+    return { items: [{ externalWorkId: "mangadot:317", title: "Example" }], nextCursor: null };
+  } },
+  mangafire: { async lookup(req) {
+    budgetCalls.push(["mangafire", req.cursor ?? null]);
+    return { items: [{ externalWorkId: "fire-example", title: "Example", language: "en" }], nextCursor: null };
+  } },
+});
+const expectedIds = [...manyDexWorks.map(item => item.externalWorkId),
+  "mangadot:317", "mangafire:fire-example"];
+const recoveredIds = [];
+let budgetCursor = null, budgetPages = 0;
+do {
+  const page = await budgeted.lookup({ titles: ["Example"], cursor: budgetCursor });
+  budgetPages++;
+  assert.ok(JSON.stringify(page).length < 64 * 1024,
+    "one SCRIPT lookup response must fit Host runtime limit");
+  recoveredIds.push(...page.items.map(item => item.externalWorkId));
+  for (const item of page.items.filter(item => item.externalWorkId.startsWith("mangadex:"))) {
+    assert.deepEqual(item.aliases, bulkyAliases,
+      "pagination must never discard source-attested aliases or edition hints");
+  }
+  budgetCursor = page.nextCursor;
+  assert.ok(budgetPages <= 8, "Host bounds lookup continuation to eight pages");
+} while (budgetCursor);
+assert.ok(budgetPages > 1, "fixture must exercise a continuation, not a small page");
+assert.equal(new Set(recoveredIds).size, recoveredIds.length,
+  "continuation cannot duplicate previously returned source IDs");
+assert.deepEqual(recoveredIds.slice().sort(), expectedIds.slice().sort(),
+  "every source candidate must survive pagination, regardless of page interleaving");
+assert.ok(budgetCalls.filter(([source]) => source === "mangadot").length >= 1);
+assert.ok(budgetCalls.filter(([source]) => source === "mangafire").length >= 1);
+
+// Regression from the v3 A54 smoke: JavaScript character lengths are not
+// UTF-8 bytes. MangaDex multilingual aliases can overflow the 64 KiB Host
+// result limit even when the merged string is under 48 KiB characters.
+for (const scenario of [
+  { name: "utf8-multilingual", worksPerSource: 25, aliases: ["ワンパンマン".repeat(100)] },
+  { name: "many-small-works", worksPerSource: 200, aliases: [] },
+]) {
+  const sources = Object.fromEntries(["mangadex", "mangadot", "mangafire"].map(source => [
+    source, { async lookup() {
+      return { items: Array.from({ length: scenario.worksPerSource }, (_, i) => ({
+        externalWorkId: source === "mangafire" ? "work-" + i : source + ":work-" + i,
+        title: "Example",
+        aliases: scenario.aliases,
+      })), nextCursor: null };
+    } },
+  ]));
+  const readingWithBudget = createMangaAllReading(sources);
+  let next = null, pages = 0;
+  const ids = [];
+  do {
+    const page = await readingWithBudget.lookup({ titles: ["Example"], cursor: next });
+    assert.ok(Buffer.byteLength(JSON.stringify(page), "utf8") < 65536,
+      scenario.name + " returned a response that the Host rejects");
+    assert.ok(page.items.length <= 500,
+      scenario.name + " returned more than Host's 500 candidates per page");
+    ids.push(...page.items.map(item => item.externalWorkId));
+    next = page.nextCursor;
+    assert.ok(++pages <= 8, "continuation must be bounded");
+  } while (next);
+  assert.equal(new Set(ids).size, scenario.worksPerSource * 3,
+    scenario.name + " must preserve every source identity across pages");
+  assert.equal(ids.length, scenario.worksPerSource * 3);
+  assert.ok(pages > 1, scenario.name + " should require pagination");
+}
+
 const binding = (id) => ({ providerId: manifest.id, facetId: "en", externalWorkId: id });
 const dex = await reading.chapters({ binding: binding(workIds[0]) });
 assert.equal(dex.items[0].providerChapterId, "mangadex:123");
@@ -104,7 +250,7 @@ const intermittent = createMangaAllReading({
     dexAttempts++;
     assert.equal(req.cursor ?? null, null);
     if (dexAttempts === 1) throw new Error("temporary MangaDex failure");
-    return { items: [{ externalWorkId: workIds[0], title: "Recovered" }], nextCursor: null };
+    return { items: [{ externalWorkId: workIds[0], title: "Recovered", aliases: ["Example"] }], nextCursor: null };
   } },
   mangadot: { lookup: adapters.mangadot.lookup },
   mangafire: { lookup: adapters.mangafire.lookup },
@@ -122,7 +268,7 @@ let alwaysFails = 0;
 const boundedFailure = createMangaAllReading({
   mangadex: { async lookup() { alwaysFails++; throw new Error("still unavailable"); } },
   mangadot: { async lookup(req) {
-    return { items: [{ externalWorkId: workIds[1], title: "Healthy" }],
+    return { items: [{ externalWorkId: workIds[1], title: "Healthy", aliases: ["Example"] }],
       nextCursor: req.cursor == null ? "next" : null };
   } },
   mangafire: { lookup: adapters.mangafire.lookup },
@@ -135,7 +281,37 @@ assert.equal(alwaysFails, 2, "failed source gets exactly one retry");
 const down = createMangaAllReading({
   mangadex: { lookup: fail }, mangadot: { lookup: fail }, mangafire: { lookup: fail },
 });
-await assert.rejects(down.lookup({ titles: ["Example"] }), /all sources failed/i);
+// The A54 v0.4 smoke produced repeated generic SCRIPT_ERROR during lookup.
+// If every internal source fails, surface an existing typed Host error envelope,
+// not a script crash or a deceptive complete-empty edition search.
+assert.deepEqual(await down.lookup({ titles: ["Example"] }), {
+  items: [], nextCursor: null, lookupFailureCode: "UNCLASSIFIED_ERROR",
+});
+const allBlocked = createMangaAllReading({
+  mangadex: { async lookup() { throw new Error("MangaAll HTTP 403"); } },
+  mangadot: { async lookup() { throw new Error("MangaAll HTTP 403"); } },
+  mangafire: { async lookup() {
+    return { items: [], nextCursor: null, lookupFailureCode: "CHALLENGE_BLOCKED", lookupHttpStatus: 403 };
+  } },
+});
+assert.deepEqual(await allBlocked.lookup({ titles: ["Example"] }), {
+  items: [], nextCursor: null, lookupFailureCode: "CHALLENGE_BLOCKED", lookupHttpStatus: 403,
+}, "three independently verified challenge responses must preserve their closed failure cause");
+const inconsistentFailures = createMangaAllReading({
+  mangadex: { async lookup() { throw new Error("MangaAll HTTP 403"); } },
+  mangadot: { async lookup() { throw new Error("MangaAll invalid JSON"); } },
+  mangafire: { async lookup() { throw new Error("unrecognized upstream failure"); } },
+});
+assert.deepEqual(await inconsistentFailures.lookup({ titles: ["Example"] }), {
+  items: [], nextCursor: null, lookupFailureCode: "UNCLASSIFIED_ERROR",
+}, "mixed failures must never claim that all sources were challenged");
+const allInvalid = createMangaAllReading(Object.fromEntries(
+  ["mangadex", "mangadot", "mangafire"].map(source => [source,
+    { async lookup() { throw new Error("MangaAll invalid JSON"); } }]),
+));
+assert.deepEqual(await allInvalid.lookup({ titles: ["Example"] }), {
+  items: [], nextCursor: null, lookupFailureCode: "INVALID_RESPONSE",
+}, "invalid JSON across all sources must not be hidden as SCRIPT_ERROR");
 
 
 // Language is a reading facet, not a provider identity. Enforce it before
@@ -354,5 +530,36 @@ await assert.rejects(actual.reading.pages({
 await assert.rejects(actual.reading.pages({
   binding: exactDexBinding, providerChapterId: "mangadex:invalid",
 }), /invalid chapter ID/i, "invalid MangaDex chapter ID must fail before network");
+
+// A fuzzy MangaFire hit on the first canonical spelling must not prevent an
+// explicitly supplied alternative title from reaching a real exact source HID.
+// Earlier behavior stopped after any nonempty search response, then the
+// aggregator discarded the unrelated candidates and Reader had no source.
+const fireSearches = [];
+globalThis.tsuzuki = { http: { async request(method, url) {
+  assert.equal(method, "GET");
+  const parsed = new URL(url);
+  assert.equal(parsed.origin, "https://mangafire.to");
+  const reply = (body) => JSON.stringify({ statusCode: 200, body: JSON.stringify(body) });
+  if (parsed.pathname === "/api/titles") {
+    const term = parsed.searchParams.get("keyword");
+    fireSearches.push(term);
+    return reply({ items: [term === "Vagabond"
+      ? { hid: "real-vagabond", slug: "vagabond", title: "Vagabond" }
+      : { hid: "unrelated", slug: "unrelated", title: "Patati patata" }] });
+  }
+  if (parsed.pathname === "/api/titles/unrelated") {
+    return reply({ data: { hid: "unrelated", title: "Patati patata" } });
+  }
+  throw new Error("unexpected MangaFire fixture request " + parsed.pathname);
+} } };
+const fireReader = (await import(pathToFileURL(path.join(
+  dir, "modules/sources/mangafire/main.js",
+)).href)).default.reading;
+const fallback = await fireReader.lookup({ titles: ["Japanese Original", "Vagabond"] });
+assert.deepEqual(fireSearches, ["Japanese Original", "Vagabond"],
+  "fuzzy first-title responses must not suppress exact alternative-title search");
+assert.deepEqual(fallback.items.map((item) => item.title), ["Vagabond"],
+  "unrelated hits must not consume the identity or enrichment budget");
 
 console.log("MangaAll single-package contract: passed");

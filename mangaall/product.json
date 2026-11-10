@@ -3,7 +3,7 @@
   "id": "app.tsuzuki.mangaall",
   "name": "MangaAll",
   "role": "multi-source-chapter-evidence-and-reading",
-  "publicationStatus": "development-unpublished",
+  "publicationStatus": "preview-ready-for-signing",
   "integrationModel": "one-provider-id-multiple-internal-content-sources",
   "sourceIds": [
     "mangalivre",
@@ -23,9 +23,8 @@
     {
       "id": "mangadex",
       "name": "MangaDex",
-      "status": "integrated-development",
-      "readingStatus": "pages-withheld",
-      "legacyAdapterProviderId": "app.tsuzuki.mangaall.mangadex"
+      "status": "integrated-in-unified-provider",
+      "readingStatus": "pages-withheld"
     },
     {
       "id": "mangafire",
@@ -44,9 +43,8 @@
     {
       "id": "mangadot",
       "name": "MangaDot",
-      "status": "integrated-development",
-      "readingStatus": "pages-withheld",
-      "legacyAdapterProviderId": "app.tsuzuki.mangaall.mangadot"
+      "status": "integrated-in-unified-provider",
+      "readingStatus": "pages-withheld"
     },
     {
       "id": "animexnovel",

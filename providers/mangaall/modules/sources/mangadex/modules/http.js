@@ -7,10 +7,12 @@ export async function getMangaDexJson(endpoint, pairs = []) {
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const atHomeId = endpoint.startsWith("/at-home/server/") ? endpoint.slice("/at-home/server/".length) : null;
   const chapterId = endpoint.startsWith("/chapter/") ? endpoint.slice("/chapter/".length) : null;
+  const mangaEntityId = endpoint.startsWith("/manga/") ? endpoint.slice("/manga/".length) : null;
+  const mangaEntityAllowed = mangaEntityId !== null && uuid.test(mangaEntityId);
   const atHomeAllowed = atHomeId !== null && uuid.test(atHomeId);
   const chapterEntityAllowed = chapterId !== null && uuid.test(chapterId);
   if (endpoint !== "/manga" && endpoint !== "/chapter" &&
-      !atHomeAllowed && !chapterEntityAllowed) {
+      !atHomeAllowed && !chapterEntityAllowed && !mangaEntityAllowed) {
     throw new Error("MangaAll unsupported MangaDex endpoint");
   }
   const query = pairs.map(([key, value]) =>
@@ -44,6 +46,7 @@ export async function getMangaDexJson(endpoint, pairs = []) {
   if (result?.result !== "ok" ||
       (atHomeAllowed ? !result.chapter :
         chapterEntityAllowed ? result.data?.type !== "chapter" || !Array.isArray(result.data?.relationships) :
+          mangaEntityAllowed ? result.data?.type !== "manga" || !Array.isArray(result.data?.relationships) :
           !Array.isArray(result.data))) {
     throw new Error("MangaAll invalid API response");
   }

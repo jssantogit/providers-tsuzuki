@@ -3,8 +3,8 @@
   "id": "app.tsuzuki.mangaall",
   "name": "MangaAll",
   "version": {
-    "name": "0.1.0",
-    "code": 1
+    "name": "0.5.0",
+    "code": 5
   },
   "minHostApi": 1,
   "entrypoint": "main.js",
@@ -60,5 +60,5 @@
     "pt-br"
   ],
   "settings": [],
-  "publication": "development"
+  "publication": "preview"
 }

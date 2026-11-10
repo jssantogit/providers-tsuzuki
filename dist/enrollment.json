@@ -1,0 +1,7 @@
+{
+  "displayName": "Tsuzuki Providers",
+  "repositoryId": "app.tsuzuki.providers",
+  "indexUrl": "https://raw.githubusercontent.com/jssantogit/providers-tsuzuki/main/dist/index.json",
+  "keyId": "tsuzuki-provider-root-2026-02",
+  "publicKeyBase64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEbMgJgxuSDFzFOgh+kTtDlUAgVwh4dtXEz4J5rn2udb1fdw7eKDHrkJBXP3l13k35/42i8NBs7pCGSCO3o75nnw=="
+}

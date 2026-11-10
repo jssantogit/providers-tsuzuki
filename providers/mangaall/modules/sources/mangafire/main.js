@@ -5,6 +5,7 @@
  */
 
 import { BASE_URL, chaptersForTitle, pagesForChapter, searchTitles, titleDetails } from "./modules/api.js";
+import { lookupTitleMatches } from "../../router.js";
 
 const LANGUAGE = "en";
 const MAX_LOOKUP_TITLES = 3;
@@ -402,7 +403,18 @@ async function lookupUnchecked(input) {
       }
     }
 
-    if (items.length > 0) break;
+    // Keep only source-attested titles, aliases or explicit editorial variants.
+    // Fuzzy hits on the first spelling must not suppress a later canonical
+    // alternative. Discard their HIDs and spent optional detail budget before
+    // searching the next provided spelling; never treat them as Reader proof.
+    const relevant = items.filter((item) => lookupTitleMatches([title], item));
+    if (relevant.length > 0) {
+      items.splice(0, items.length, ...relevant);
+      break;
+    }
+    items.length = 0;
+    seen.clear();
+    detailLookups = 0;
   }
 
   return { items, nextCursor: null };
