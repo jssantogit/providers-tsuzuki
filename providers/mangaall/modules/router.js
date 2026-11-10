@@ -38,7 +38,7 @@ const SOURCE_LANGUAGES = Object.freeze({
 // Admit an exact source title/alias or an explicitly named edition of that
 // title. Even qualified variants are manual candidates, not auto bindings.
 const EDITION_SUFFIX = /^(?:(?:hong kong|official|fan|digital) )?(?:colou?r(?:ed)?|full colou?r|perfect edition|omnibus|special edition|deluxe edition|collectors? edition|one shot|oneshot)(?: version| edition)?$/;
-function lookupTitleMatches(requestedTitles, candidate) {
+export function lookupTitleMatches(requestedTitles, candidate) {
   const tokens = (value) => typeof value === "string"
     ? value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
         .split(/[^\p{L}\p{N}]+/u).filter(Boolean)
