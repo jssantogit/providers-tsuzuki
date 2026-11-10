@@ -1,0 +1,8 @@
+{
+  "retiredProviderIds": [
+    "app.tsuzuki.mangaall.mangadex",
+    "app.tsuzuki.mangaall.mangadot"
+  ],
+  "replacementProviderId": "app.tsuzuki.mangaall",
+  "reason": "MangaDex and MangaDot are internal MangaAll content sources, not installable providers"
+}
