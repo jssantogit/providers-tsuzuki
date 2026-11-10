@@ -32,9 +32,12 @@ const SOURCE_LANGUAGES = Object.freeze({
   mangafire: new Set(["en"]),
 });
 
-// A source's ranked search results are hints, never proof of work identity.
-// Only titles or source-attested aliases matching the requested title can
-// enter edition selection or downstream automatic candidate assessment.
+// Ranked search hits are hints, never proof of work identity. Token
+// containment admitted 384 "Monster" candidates, including unrelated works
+// like "Monster X Monster", exhausting the Host's eight-page lookup budget.
+// Admit an exact source title/alias or an explicitly named edition of that
+// title. Even qualified variants are manual candidates, not auto bindings.
+const EDITION_SUFFIX = /^(?:(?:hong kong|official|fan|digital) )?(?:colou?r(?:ed)?|full colou?r|perfect edition|omnibus|special edition|deluxe edition|collectors? edition|one shot|oneshot)(?: version| edition)?$/;
 function lookupTitleMatches(requestedTitles, candidate) {
   const tokens = (value) => typeof value === "string"
     ? value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
@@ -43,8 +46,10 @@ function lookupTitleMatches(requestedTitles, candidate) {
   const requested = requestedTitles.map(tokens).filter((terms) => terms.length);
   const names = [candidate?.title, ...(Array.isArray(candidate?.aliases) ? candidate.aliases : [])];
   return requested.some((terms) => names.some((name) => {
-    const found = new Set(tokens(name));
-    return terms.every((term) => found.has(term));
+    const found = tokens(name);
+    if (found.length < terms.length || !terms.every((term, i) => found[i] === term)) return false;
+    return found.length === terms.length ||
+      EDITION_SUFFIX.test(found.slice(terms.length).join(" "));
   }));
 }
 
