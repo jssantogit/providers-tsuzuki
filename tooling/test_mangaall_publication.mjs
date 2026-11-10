@@ -5,19 +5,33 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 const scripts = [
-  ["mangaall-dex", "mangadex", "metadata-only"],
+  ["mangaall-dex", "mangadex", "development"],
   ["mangaall-ball", "mangaball", "development"],
-  ["mangaall-dot", "mangadot", "metadata-only"],
+  ["mangaall-dot", "mangadot", "development"],
 ];
 for (const [dir, source, expectedPublication] of scripts) {
   const manifest = JSON.parse(fs.readFileSync("providers/" + dir + "/manifest.json", "utf8"));
   assert.equal(manifest.publication, expectedPublication,
-    "MangaAll / " + source + " must honor metadata-only release or paused isolation");
+    "MangaAll / " + source + " is a historical internal adapter, never separately installed");
   assert.deepEqual(manifest.capabilities.map(v => v.id), ["reading.lookup", "reading.chapters"],
-    "the signed metadata release must not imply Reader pages or arbitrary capabilities");
+    "deprecated adapters must not claim Reader pages");
   assert.equal(manifest.permissions.browser.origins.length, 0,
     "metadata-only providers must not receive a browser grant");
 }
+const retirements = JSON.parse(fs.readFileSync("repository/retirements.json", "utf8"));
+assert.deepEqual(retirements.retiredProviderIds, [
+  "app.tsuzuki.mangaall.mangadex",
+  "app.tsuzuki.mangaall.mangadot",
+], "only the accidental source-adapter packages are retired");
+assert.equal(retirements.replacementProviderId, "app.tsuzuki.mangaall",
+  "retirement must be paired with the unified MangaAll package");
+const unified = JSON.parse(fs.readFileSync("providers/mangaall/manifest.json", "utf8"));
+assert.equal(unified.id, retirements.replacementProviderId);
+assert.equal(unified.version.code, 5);
+assert.equal(unified.version.name, "0.5.0");
+assert.deepEqual(unified.capabilities.map(v => v.id), [
+  "reading.lookup", "reading.chapters", "reading.pages",
+], "only the single unified package exposes Reader functionality");
 assert.equal(JSON.parse(fs.readFileSync("mangaall/product.json", "utf8")).publicationStatus,
   "development-unpublished", "single MangaAll must not claim published Reader availability");
 const published = JSON.parse(fs.readFileSync("providers/mangafire/manifest.json", "utf8"));
@@ -52,4 +66,4 @@ try {
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });
 }
-console.log("MangaAll signed metadata-only MangaDex/MangaDot, paused MangaBall publication gate: OK");
+console.log("MangaAll unified identity, retired source adapters, paused MangaBall: OK");
