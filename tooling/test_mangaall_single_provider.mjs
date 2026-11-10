@@ -89,6 +89,40 @@ assert.deepEqual(
   "an explicit alternative title must remain valid discovery evidence",
 );
 
+// A short title must not match unrelated works containing the same word.
+// Explicit source-attested edition qualifiers and exact aliases stay discoverable.
+const monsterScoped = createMangaAllReading({
+  mangadex: { async lookup() { return { items: [
+    { externalWorkId: "mangadex:exact", title: "MONSTER" },
+    { externalWorkId: "mangadex:unrelated", title: "Monster X Monster" },
+    { externalWorkId: "mangadex:perfect", title: "MONSTER (Perfect Edition)" },
+    { externalWorkId: "mangadex:other", title: "My Covenant with the Monster Lord" },
+  ], nextCursor: null }; } },
+  mangadot: { async lookup() { return { items: [
+    { externalWorkId: "mangadot:7", title: "Monster no Niku" },
+    { externalWorkId: "mangadot:8", title: "Other Story", aliases: ["Monster"] },
+  ], nextCursor: null }; } },
+  mangafire: { async lookup() { return { items: [], nextCursor: null }; } },
+});
+assert.deepEqual(
+  (await monsterScoped.lookup({ titles: ["Monster"] })).items.map(x => x.externalWorkId),
+  ["mangadex:exact", "mangadex:perfect", "mangadot:8"],
+  "word-in-title results are unrelated works, while named editions and exact aliases remain",
+);
+const dragonBallScoped = createMangaAllReading({
+  mangadex: { async lookup() { return { items: [
+    { externalWorkId: "mangadex:ball", title: "Dragon Ball" },
+    { externalWorkId: "mangadex:super", title: "Dragon Ball Super" },
+  ], nextCursor: null }; } },
+  mangadot: { async lookup() { return { items: [], nextCursor: null }; } },
+  mangafire: { async lookup() { return { items: [], nextCursor: null }; } },
+});
+assert.deepEqual(
+  (await dragonBallScoped.lookup({ titles: ["Dragon Ball"] })).items.map(x => x.externalWorkId),
+  ["mangadex:ball"],
+  "a sequel sharing all query tokens cannot become the original editorial work",
+);
+
 // Regression: a valid merged search may exceed the SCRIPT runtime's 64 KiB
 // response envelope. Page source results without dropping source-scoped work
 // identities, and preserve alias/edition evidence instead of truncating it.
