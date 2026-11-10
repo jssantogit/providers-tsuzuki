@@ -33,7 +33,7 @@ assert.deepEqual(unified.capabilities.map(v => v.id), [
   "reading.lookup", "reading.chapters", "reading.pages",
 ], "only the single unified package exposes Reader functionality");
 assert.equal(JSON.parse(fs.readFileSync("mangaall/product.json", "utf8")).publicationStatus,
-  "development-unpublished", "single MangaAll must not claim published Reader availability");
+  "preview-ready-for-signing", "preview code5 remains unverified until signed publication and physical smoke");
 const published = JSON.parse(fs.readFileSync("providers/mangafire/manifest.json", "utf8"));
 assert.notEqual(published.publication, "development");
 const workflow = fs.readFileSync(".github/workflows/publish.yml", "utf8");
