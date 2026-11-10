@@ -112,6 +112,55 @@ class PublicationPlanningTest(unittest.TestCase):
             "retain prior immutable package for installed clients and rollback",
         )
 
+    def test_explicit_mangaall_adapter_retirement_requires_unified_replacement_and_keeps_archives(self):
+        retired_ids = ["app.tsuzuki.mangaall.mangadex", "app.tsuzuki.mangaall.mangadot"]
+        previous = json.loads((self.root / "dist/index.payload.json").read_text())
+        for provider_id in retired_ids:
+            previous["providers"].append(self.desc(provider_id, 2, "0.1.1", provider_id.encode()))
+            (self.root / "dist/providers" / (provider_id + "-2.tsz")).write_bytes(provider_id.encode())
+        self.write("dist/index.payload.json", previous)
+        self.write("repository/retirements.json", {
+            "retiredProviderIds": retired_ids,
+            "replacementProviderId": "app.tsuzuki.mangaall",
+        })
+        with self.assertRaisesRegex(ValueError, "replacement"):
+            prepare_publication(self.root)
+        (self.root / "providers/mangaall").mkdir()
+        self.write("providers/mangaall/manifest.json", {
+            "id": "app.tsuzuki.mangaall", "version": {"code": 5, "name": "0.5.0"},
+        })
+        (self.root / "dist/providers/app.tsuzuki.mangaall-5.tsz").write_bytes(b"new-unified")
+        self.assertTrue(prepare_publication(self.root))
+        self.assertEqual(self.current_sequence(), 25)
+        for provider_id in retired_ids:
+            self.assertTrue((self.root / "dist/providers" / (provider_id + "-2.tsz")).is_file())
+
+    def test_no_arbitrary_signed_provider_can_be_retired(self):
+        self.write("repository/retirements.json", {
+            "retiredProviderIds": ["app.tsuzuki.nyaa"],
+            "replacementProviderId": "app.tsuzuki.mangaall",
+        })
+        with self.assertRaisesRegex(ValueError, "not a permitted legacy MangaAll adapter"):
+            prepare_publication(self.root)
+
+    def test_legacy_retirement_rejects_tampered_immutable_archive(self):
+        previous = json.loads((self.root / "dist/index.payload.json").read_text())
+        identity = "app.tsuzuki.mangaall.mangadex"
+        previous["providers"].append(self.desc(identity, 2, "0.1.1", b"untampered"))
+        self.write("dist/index.payload.json", previous)
+        (self.root / "dist/providers" / (identity + "-2.tsz")).write_bytes(b"tampered")
+        self.write("repository/retirements.json", {
+            "retiredProviderIds": [identity],
+            "replacementProviderId": "app.tsuzuki.mangaall",
+        })
+        (self.root / "providers/mangaall").mkdir()
+        self.write("providers/mangaall/manifest.json", {
+            "id": "app.tsuzuki.mangaall", "version": {"code": 5, "name": "0.5.0"},
+        })
+        (self.root / "dist/providers/app.tsuzuki.mangaall-5.tsz").write_bytes(b"unified")
+        with self.assertRaisesRegex(ValueError, "archive"):
+            prepare_publication(self.root)
+
     def test_development_provider_not_promoted(self):
         (self.root / "providers/mangaall-ball").mkdir(parents=True, exist_ok=True)
         self.write("providers/mangaall-ball/manifest.json", {"id": "app.tsuzuki.mangaall.ball", "version": {"code": 1, "name": "0.1.0"}, "publication": "development"})
