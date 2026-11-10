@@ -7,7 +7,7 @@ const dir = path.resolve("providers/mangaall");
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
 assert.equal(manifest.id, "app.tsuzuki.mangaall");
 assert.equal(manifest.name, "MangaAll");
-assert.equal(manifest.publication, "development", "never publish before Host/Reader physical acceptance");
+assert.equal(manifest.publication, "preview", "MangaAll 0.5.0 uses the persistent signed repository, not a fresh smoke root");
 assert.deepEqual(manifest.capabilities.map((cap) => cap.id), [
   "reading.lookup", "reading.chapters", "reading.pages",
 ]);
