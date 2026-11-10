@@ -1,4 +1,6 @@
-sequence=30
-reason=mangafire-v0.1.12-code13-quarantine-early-chapter-scene-numbering
-source_prs=59
-guard=atomic-signed-publication-and-immutable-artifacts
+sequence=31
+reason=mangaall-0.5.0-code5-unified-preview-retire-legacy-mangadex-mangadot
+source_prs=61
+guard=atomic-signed-publication-preserve-root-and-immutable-artifacts
+signed_repository_id=app.tsuzuki.providers
+signing_key_id=tsuzuki-provider-root-2026-02
