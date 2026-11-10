@@ -51,9 +51,45 @@ def prepare_publication(root: pathlib.Path) -> bool:
         else:
             changed = True
 
+    # Retire only the two accidentally shipped MangaAll source adapters, and
+    # only as part of the atomic signed publication of the single unified ID.
+    # Never remove immutable archives: existing installations may need them
+    # for audit/recovery even though new catalog discovery must not expose them.
+    retirements_path = root / "repository/retirements.json"
+    retired = set()
+    if retirements_path.is_file():
+        plan = json.loads(retirements_path.read_text(encoding="utf-8"))
+        declared = plan.get("retiredProviderIds", [])
+        if not isinstance(declared, list) or len(declared) != len(set(declared)):
+            raise ValueError("retired provider IDs must be a unique list")
+        retired = set(declared)
+        permitted = {
+            "app.tsuzuki.mangaall.mangadex",
+            "app.tsuzuki.mangaall.mangadot",
+        }
+        if retired - permitted:
+            raise ValueError("not a permitted legacy MangaAll adapter: " +
+                             ", ".join(sorted(retired - permitted)))
+        if retired:
+            replacement = plan.get("replacementProviderId")
+            if replacement != "app.tsuzuki.mangaall" or replacement not in current:
+                raise ValueError("unified MangaAll replacement must be included in the same signed sequence")
+            if current[replacement]["version"]["code"] < 5:
+                raise ValueError("unified MangaAll replacement must be version code 5 or greater")
+            if retired & set(current):
+                raise ValueError("retired legacy adapter cannot also be published")
+
     missing = set(previous) - set(current)
+    unexpected = missing - retired
+    if unexpected:
+        raise ValueError(f"missing published providers: {', '.join(sorted(unexpected))}")
+    for identity in missing:
+        prior = previous[identity]
+        package = root / "dist/providers" / f"{identity}-{prior['versionCode']}.tsz"
+        if not package.is_file() or hashlib.sha256(package.read_bytes()).hexdigest() != prior["sha256"]:
+            raise ValueError(f"legacy MangaAll adapter archive is missing or modified: {identity}")
     if missing:
-        raise ValueError(f"missing published providers: {', '.join(sorted(missing))}")
+        changed = True
 
     if changed:
         config["sequence"] += 1
