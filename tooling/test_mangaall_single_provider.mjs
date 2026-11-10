@@ -531,4 +531,35 @@ await assert.rejects(actual.reading.pages({
   binding: exactDexBinding, providerChapterId: "mangadex:invalid",
 }), /invalid chapter ID/i, "invalid MangaDex chapter ID must fail before network");
 
+// A fuzzy MangaFire hit on the first canonical spelling must not prevent an
+// explicitly supplied alternative title from reaching a real exact source HID.
+// Earlier behavior stopped after any nonempty search response, then the
+// aggregator discarded the unrelated candidates and Reader had no source.
+const fireSearches = [];
+globalThis.tsuzuki = { http: { async request(method, url) {
+  assert.equal(method, "GET");
+  const parsed = new URL(url);
+  assert.equal(parsed.origin, "https://mangafire.to");
+  const reply = (body) => JSON.stringify({ statusCode: 200, body: JSON.stringify(body) });
+  if (parsed.pathname === "/api/titles") {
+    const term = parsed.searchParams.get("keyword");
+    fireSearches.push(term);
+    return reply({ items: [term === "Vagabond"
+      ? { hid: "real-vagabond", slug: "vagabond", title: "Vagabond" }
+      : { hid: "unrelated", slug: "unrelated", title: "Patati patata" }] });
+  }
+  if (parsed.pathname === "/api/titles/unrelated") {
+    return reply({ data: { hid: "unrelated", title: "Patati patata" } });
+  }
+  throw new Error("unexpected MangaFire fixture request " + parsed.pathname);
+} } };
+const fireReader = (await import(pathToFileURL(path.join(
+  dir, "modules/sources/mangafire/main.js",
+)).href)).default.reading;
+const fallback = await fireReader.lookup({ titles: ["Japanese Original", "Vagabond"] });
+assert.deepEqual(fireSearches, ["Japanese Original", "Vagabond"],
+  "fuzzy first-title responses must not suppress exact alternative-title search");
+assert.deepEqual(fallback.items.map((item) => item.title), ["Vagabond"],
+  "unrelated hits must not consume the identity or enrichment budget");
+
 console.log("MangaAll single-package contract: passed");
