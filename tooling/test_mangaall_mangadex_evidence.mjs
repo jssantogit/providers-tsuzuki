@@ -89,4 +89,38 @@ assert.notEqual(enMismatch.coverageOutcome, "OBSERVED",
 const before = chapterCalls;
 await lookup({ titles: ["Vagabond"], editorialEvidenceVersion: 1, coverageEvidenceVersion: 1 });
 assert.equal(chapterCalls, before, "unknown facet must never get cross-language coverage");
+
+// The MangaDex API accepts up to 100 search rows, but the former 20-item
+// query turned broad title searches into many round trips under the Host's
+// strict eight-page deadline. A conservative 50-row page must preserve every
+// source ID and its exact continuation offset.
+const paginationCalls = [];
+const totalWorks = 53;
+globalThis.tsuzuki = { http: { async request(method, url) {
+  assert.equal(method, "GET");
+  const parsed = new URL(url);
+  assert.equal(parsed.pathname, "/manga");
+  const size = Number(parsed.searchParams.get("limit"));
+  const offset = Number(parsed.searchParams.get("offset"));
+  assert.equal(size, 50, "MangaDex discovery must use the bounded larger page");
+  paginationCalls.push([offset, size]);
+  const rows = Array.from({ length: Math.min(size, totalWorks - offset) }, (_, index) => ({
+    id: "11111111-2222-4333-8444-" + (offset + index + 1).toString(16).padStart(12, "0"),
+    type: "manga", attributes: { title: { en: "Vagabond" }, altTitles: [] },
+  }));
+  return JSON.stringify({
+    statusCode: 200,
+    body: JSON.stringify({ result: "ok", offset, total: totalWorks, data: rows }),
+  });
+} } };
+const firstBroad = await lookup({ titles: ["Vagabond"] });
+assert.equal(firstBroad.items.length, 50);
+assert.equal(firstBroad.nextCursor, "50");
+const lastBroad = await lookup({ titles: ["Vagabond"], cursor: firstBroad.nextCursor });
+assert.equal(lastBroad.items.length, 3);
+assert.equal(lastBroad.nextCursor, null);
+assert.deepEqual(paginationCalls, [[0, 50], [50, 50]]);
+assert.equal(new Set([...firstBroad.items, ...lastBroad.items].map(row => row.externalWorkId)).size,
+  totalWorks, "increasing source page size cannot drop or duplicate source identities");
+
 console.log("MangaDex exact work+author verification and source-language chapter coverage OK");
