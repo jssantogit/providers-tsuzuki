@@ -389,14 +389,21 @@ async function lookupUnchecked(input) {
       if (items.length >= MAX_LOOKUP_RESULTS) break;
     }
 
-    // One verified exact identity does not require any chapter network probes.
-    // Only a set of competing source-attested title/alias HIDs justifies the
-    // extra read-only work. A failed probe never eliminates an identity.
+    // Even one source-attested MangaFire HID can be insufficient for a
+    // *unified* MangaAll lookup: other internal sources may keep the Host's
+    // search PARTIAL. A verified, authored English HID may expose first-page
+    // coverage for provisional evidence, not an edition binding or Reader grant.
+    // Preserve the old multi-contender probe and the explicit opt-in budget.
     if (includeCoveragePreview) {
       const contenders = items.filter((item) =>
         normalizedTitle(item.title) === query ||
         item.aliases.some((alias) => normalizedTitle(alias) === query));
-      if (contenders.length > 1) {
+      const singleTrustedEnglish = contenders.length === 1 &&
+        input?.requestedLanguage === LANGUAGE &&
+        includeEditorialDiagnostics &&
+        ["VERIFIED_WITH_ALIASES", "VERIFIED_NO_ALIASES"].includes(contenders[0].detailOutcome) &&
+        Array.isArray(contenders[0].authors) && contenders[0].authors.length > 0;
+      if (contenders.length > 1 || singleTrustedEnglish) {
         await Promise.all(contenders.slice(0, MAX_COVERAGE_PROBES).map(async (item) => {
           Object.assign(item, await sourceCoveragePreview(item.externalWorkId));
         }));
