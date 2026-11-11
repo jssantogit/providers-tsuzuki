@@ -517,19 +517,22 @@ assert.deepEqual(dexRequests, [
 ]);
 detailLanguage = "en";
 const beforeWrongLanguage = dexRequests.length;
-await assert.rejects(actual.reading.pages({
+assert.deepEqual(await actual.reading.pages({
   binding: exactDexBinding, providerChapterId: "mangadex:" + dexChapterId,
-}), /chapter language mismatch/i, "MangaDex cannot serve English pages under a Portuguese facet");
+}), { type: "page_failure", pageFailureStage: "CHAPTER_LANGUAGE_MISMATCH" },
+  "MangaDex cannot serve English pages under a Portuguese facet");
 assert.equal(dexRequests.length, beforeWrongLanguage + 1,
   "wrong-language chapter must stop before MangaDex@Home");
 detailLanguage = "pt-br";
 detailWork = "ffffffff-ffff-4fff-8fff-ffffffffffff";
-await assert.rejects(actual.reading.pages({
+assert.deepEqual(await actual.reading.pages({
   binding: exactDexBinding, providerChapterId: "mangadex:" + dexChapterId,
-}), /work mismatch/i, "foreign MangaDex chapter must be rejected");
-await assert.rejects(actual.reading.pages({
+}), { type: "page_failure", pageFailureStage: "CHAPTER_WORK_MISMATCH" },
+  "foreign MangaDex chapter must be rejected");
+assert.deepEqual(await actual.reading.pages({
   binding: exactDexBinding, providerChapterId: "mangadex:invalid",
-}), /invalid chapter ID/i, "invalid MangaDex chapter ID must fail before network");
+}), { type: "page_failure", pageFailureStage: "INVALID_CHAPTER_ID" },
+  "invalid MangaDex chapter ID must fail before network");
 
 // A fuzzy MangaFire hit on the first canonical spelling must not prevent an
 // explicitly supplied alternative title from reaching a real exact source HID.
