@@ -1,6 +1,6 @@
-sequence=31
-reason=mangaall-0.5.0-code5-unified-preview-retire-legacy-mangadex-mangadot
-source_prs=61
+sequence=32
+reason=mangaall-0.5.1-code6-bounded-mangadex-and-reader-failure-stages
+source_prs=62
 guard=atomic-signed-publication-preserve-root-and-immutable-artifacts
 signed_repository_id=app.tsuzuki.providers
 signing_key_id=tsuzuki-provider-root-2026-02
