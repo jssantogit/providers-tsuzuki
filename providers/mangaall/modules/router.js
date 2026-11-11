@@ -15,6 +15,16 @@ const MAX_CURSOR_LENGTH = 512;
 const MAX_LOOKUP_RESULT_BYTES = 48 * 1024;
 const MAX_HOST_PAGE_ITEMS = 500;
 const MAX_PAGE_ITEMS = 200;
+const MANGADEX_PAGE_FAILURE_STAGES = new Set([
+  "INVALID_CHAPTER_ID",
+  "CHAPTER_DETAIL_REQUEST_FAILED",
+  "CHAPTER_WORK_MISMATCH",
+  "CHAPTER_LANGUAGE_MISMATCH",
+  "EXTERNAL_CHAPTER",
+  "AT_HOME_REQUEST_FAILED",
+  "UNTRUSTED_IMAGE_ORIGIN",
+  "INVALID_PAGE_METADATA",
+]);
 
 function utf8ByteLength(value) {
   let bytes = 0;
@@ -316,6 +326,14 @@ export function createMangaAllReading(adapters) {
         ? { ...input, binding: { ...input.binding, externalWorkId: localId }, providerChapterId: chapterId }
         : input;
       const response = await adapter.pages(request);
+      if (response?.type === "page_failure") {
+        if (source !== "mangadex" ||
+            !MANGADEX_PAGE_FAILURE_STAGES.has(response.pageFailureStage) ||
+            Object.keys(response).some(key => key !== "type" && key !== "pageFailureStage")) {
+          throw new Error("MangaAll invalid page failure");
+        }
+        return { type: "page_failure", pageFailureStage: response.pageFailureStage };
+      }
       if (response?.type !== "page_list" || !Array.isArray(response.pages) ||
           response.pages.length === 0 || response.pages.length > 5000) {
         throw new Error("MangaAll invalid source pages");
