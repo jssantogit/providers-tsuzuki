@@ -349,6 +349,11 @@ export async function pages(input) {
   } catch {
     // Versioned, closed failure stage. Never expose upstream exception text,
     // chapter tokens, source URLs or network bodies through the SCRIPT result.
-    return { type: "page_failure", pageFailureStage };
+    if (input?.diagnosticsVersion === 2) {
+      return { type: "page_failure", pageFailureStage };
+    }
+    // Old Hosts cannot decode page_failure. Keep their legacy SCRIPT_ERROR
+    // until they opt into this strictly versioned Reader diagnostic envelope.
+    throw new Error("MangaAll reading.pages failed");
   }
 }
