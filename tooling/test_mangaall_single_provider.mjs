@@ -568,6 +568,53 @@ assert.deepEqual(fireSearches, ["Japanese Original", "Vagabond"],
 assert.deepEqual(fallback.items.map((item) => item.title), ["Vagabond"],
   "unrelated hits must not consume the identity or enrichment budget");
 
+// A54 0.5.1: Koe no Katachi has one corroborated MangaFire work but the
+// unified search is partial. A source-side English chapter preview must not
+// require a *second MangaFire HID* before provisional evidence can be read.
+// This preview is NOT a canonical edition decision or Reader authorization.
+let singleSourceHasChapters = true;
+let singleSourcePreviewCalls = 0;
+globalThis.tsuzuki = { http: { async request(method, url) {
+  assert.equal(method, "GET");
+  const parsed = new URL(url);
+  assert.equal(parsed.origin, "https://mangafire.to");
+  const ok = (body) => JSON.stringify({ statusCode: 200, body: JSON.stringify(body) });
+  if (parsed.pathname === "/api/titles") {
+    return ok({ items: [{ hid: "7p56", title: "Koe no Katachi", slug: "koe-no-katachi" }] });
+  }
+  if (parsed.pathname === "/api/titles/7p56") {
+    return ok({ data: { hid: "7p56", title: "Koe no Katachi",
+      aliases: ["A Silent Voice"], authors: ["Yoshitoki Ooima"] } });
+  }
+  if (parsed.pathname === "/api/titles/7p56/chapters") {
+    singleSourcePreviewCalls++;
+    assert.equal(parsed.searchParams.get("language"), "en");
+    return ok({ items: singleSourceHasChapters
+      ? [{ id: "ch-1", number: 1, language: "en" }] : [], meta: { hasNext: false } });
+  }
+  throw new Error("unexpected single-source coverage request " + parsed.pathname);
+} } };
+const singleSourceRequest = { titles: ["Koe no Katachi"],
+  requestedLanguage: "en", coverageEvidenceVersion: 1, editorialEvidenceVersion: 1 };
+const oneReadable = (await fireReader.lookup(singleSourceRequest)).items;
+assert.equal(oneReadable.length, 1);
+assert.deepEqual(oneReadable[0].authors, ["Yoshitoki Ooima"]);
+assert.equal(oneReadable[0].coverageOutcome, "OBSERVED",
+  "one verified source HID still needs positive chapter evidence when unified discovery is partial");
+assert.equal(oneReadable[0].coverageObservedCount, 1);
+assert.equal(singleSourcePreviewCalls, 1);
+singleSourceHasChapters = false;
+const oneEmpty = (await fireReader.lookup(singleSourceRequest)).items;
+assert.equal(oneEmpty[0].coverageOutcome, "EMPTY",
+  "a complete-empty source must not be reported as readable");
+assert.equal(oneEmpty[0].coverageObservedCount, 0);
+assert.equal(singleSourcePreviewCalls, 2);
+const withoutPreview = (await fireReader.lookup({ titles: ["Koe no Katachi"],
+  requestedLanguage: "en", editorialEvidenceVersion: 1 })).items;
+assert.equal(withoutPreview[0].coverageOutcome, undefined,
+  "legacy/no-opt-in callers must not perform chapter preview");
+assert.equal(singleSourcePreviewCalls, 2);
+
 // A source may report a versioned, content-free page failure for Host
 // diagnostics. Reject unknown/extra fields instead of leaking upstream text.
 const typedPageRouter = createMangaAllReading({
