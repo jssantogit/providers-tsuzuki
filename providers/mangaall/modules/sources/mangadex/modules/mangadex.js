@@ -3,10 +3,12 @@ import { getMangaDexJson, MANGAALL_USER_AGENT } from "./http.js";
 const SOURCE = "mangadex";
 const ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LANGUAGES = new Set(["en", "pt-br"]);
-// The MangaDex search endpoint supports up to 100 rows. Use 50 to lower
-// pagination round trips while keeping response bodies below our 1 MiB gate.
-// The aggregator retains its independent 48 KiB serialized output bound.
-const SEARCH_PAGE_SIZE = 50;
+// Host-mediated Provider HTTP text reads are capped at 192 KiB, independently
+// of MangaDex's 100-row endpoint limit and this adapter's 1 MiB JSON guard.
+// A54 0.5.0 returned HTTP 200 + RESPONSE_LIMIT on 50-row manga searches.
+// Bound search at 25 rows; never expand the global Host limit, and preserve
+// cursor pagination rather than treating an oversized page as empty.
+const SEARCH_PAGE_SIZE = 25;
 const CHAPTER_PAGE_SIZE = 100;
 const MAX_OFFSET = 9900;
 
