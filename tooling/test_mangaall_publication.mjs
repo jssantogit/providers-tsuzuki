@@ -27,13 +27,13 @@ assert.equal(retirements.replacementProviderId, "app.tsuzuki.mangaall",
   "retirement must be paired with the unified MangaAll package");
 const unified = JSON.parse(fs.readFileSync("providers/mangaall/manifest.json", "utf8"));
 assert.equal(unified.id, retirements.replacementProviderId);
-assert.equal(unified.version.code, 6);
-assert.equal(unified.version.name, "0.5.1");
+assert.equal(unified.version.code, 7);
+assert.equal(unified.version.name, "0.5.2");
 assert.deepEqual(unified.capabilities.map(v => v.id), [
   "reading.lookup", "reading.chapters", "reading.pages",
 ], "only the single unified package exposes Reader functionality");
 assert.equal(JSON.parse(fs.readFileSync("mangaall/product.json", "utf8")).publicationStatus,
-  "preview-ready-for-signing", "preview code6 remains unverified until signed publication and physical smoke");
+  "preview-ready-for-signing", "preview code7 remains unverified until signed publication and physical smoke");
 const published = JSON.parse(fs.readFileSync("providers/mangafire/manifest.json", "utf8"));
 assert.notEqual(published.publication, "development");
 const workflow = fs.readFileSync(".github/workflows/publish.yml", "utf8");
