@@ -44,7 +44,7 @@ globalThis.tsuzuki = { http: { async request(method, url) {
   }
   throw Error("Unexpected API path: " + parsed.pathname);
 }}};
-const { lookup } = await import(pathToFileURL(path.resolve(
+const { lookup, pages } = await import(pathToFileURL(path.resolve(
   "providers/mangaall/modules/sources/mangadex/modules/mangadex.js",
 )).href);
 const request = (requestedLanguage) => ({
@@ -127,4 +127,67 @@ assert.deepEqual(paginationCalls, [[0, 25], [25, 25], [50, 25]]);
 assert.equal(new Set([...firstBroad.items, ...middleBroad.items, ...lastBroad.items].map(row => row.externalWorkId)).size,
   totalWorks, "increasing source page size cannot drop or duplicate source identities");
 
+// Physical A54 0.5.0 saw a generic SCRIPT_ERROR in MangaDex reading.pages.
+// The next provider must report a closed stage without leaking upstream text,
+// while preserving exact chapter/work/language and image-origin policy.
+const pageRequest = {
+  binding: { externalWorkId: "mangadex:" + mangaId, facetId: "en" },
+  providerChapterId: "mangadex:" + chapterId,
+};
+let relatedId = mangaId, deliveryLanguage = "en", externalUrl = null;
+let detailFailed = false, atHomeFailed = false, homeBase = "https://uploads.mangadex.org";
+let atHomeFiles = ["page-one.jpg"];
+const pageRequests = [];
+globalThis.tsuzuki = { http: { async request(method, url) {
+  assert.equal(method, "GET");
+  const route = new URL(url).pathname;
+  pageRequests.push(route);
+  if (route === "/chapter/" + chapterId) {
+    if (detailFailed) throw new Error("upstream token/private body must not leave adapter");
+    return response({ data: {
+      id: chapterId, type: "chapter",
+      attributes: { translatedLanguage: deliveryLanguage, ...(externalUrl ? { externalUrl } : {}) },
+      relationships: [{ type: "manga", id: relatedId }],
+    } });
+  }
+  if (route === "/at-home/server/" + chapterId) {
+    if (atHomeFailed) throw new Error("sensitive MangaDex@Home response");
+    return response({ baseUrl: homeBase, chapter: {
+      hash: "a".repeat(32), data: atHomeFiles,
+    } });
+  }
+  throw new Error("unexpected fixture endpoint");
+} } };
+async function assertPageFailure(stage) {
+  const result = await pages(pageRequest);
+  assert.deepEqual(result, { type: "page_failure", pageFailureStage: stage });
+  assert.equal(JSON.stringify(result).includes("private"), false);
+}
+relatedId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+await assertPageFailure("CHAPTER_WORK_MISMATCH");
+assert.equal(pageRequests.at(-1), "/chapter/" + chapterId,
+  "a foreign work must not reach MangaDex@Home");
+relatedId = mangaId;
+deliveryLanguage = "pt-br";
+await assertPageFailure("CHAPTER_LANGUAGE_MISMATCH");
+deliveryLanguage = "en";
+externalUrl = "https://publisher.example/read";
+await assertPageFailure("EXTERNAL_CHAPTER");
+externalUrl = null;
+detailFailed = true;
+await assertPageFailure("CHAPTER_DETAIL_REQUEST_FAILED");
+detailFailed = false;
+atHomeFailed = true;
+await assertPageFailure("AT_HOME_REQUEST_FAILED");
+atHomeFailed = false;
+homeBase = "https://untrusted.example";
+await assertPageFailure("UNTRUSTED_IMAGE_ORIGIN");
+homeBase = "https://uploads.mangadex.org";
+atHomeFiles = ["../../leak"];
+await assertPageFailure("INVALID_PAGE_METADATA");
+atHomeFiles = ["page-one.jpg"];
+const readyPages = await pages(pageRequest);
+assert.equal(readyPages.type, "page_list");
+assert.equal(readyPages.pages.length, 1);
+assert.equal(readyPages.pages[0].url.startsWith("https://uploads.mangadex.org/data/"), true);
 console.log("MangaDex exact work+author verification and source-language chapter coverage OK");
