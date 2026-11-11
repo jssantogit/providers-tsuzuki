@@ -131,6 +131,7 @@ assert.equal(new Set([...firstBroad.items, ...middleBroad.items, ...lastBroad.it
 // The next provider must report a closed stage without leaking upstream text,
 // while preserving exact chapter/work/language and image-origin policy.
 const pageRequest = {
+  diagnosticsVersion: 2,
   binding: { externalWorkId: "mangadex:" + mangaId, facetId: "en" },
   providerChapterId: "mangadex:" + chapterId,
 };
