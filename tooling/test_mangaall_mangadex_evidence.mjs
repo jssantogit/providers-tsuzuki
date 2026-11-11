@@ -102,25 +102,29 @@ globalThis.tsuzuki = { http: { async request(method, url) {
   assert.equal(parsed.pathname, "/manga");
   const size = Number(parsed.searchParams.get("limit"));
   const offset = Number(parsed.searchParams.get("offset"));
-  assert.equal(size, 50, "MangaDex discovery must use the bounded larger page");
+  assert.equal(size, 25, "MangaDex discovery must fit the Host 192 KiB response cap");
   paginationCalls.push([offset, size]);
   const rows = Array.from({ length: Math.min(size, totalWorks - offset) }, (_, index) => ({
     id: "11111111-2222-4333-8444-" + (offset + index + 1).toString(16).padStart(12, "0"),
-    type: "manga", attributes: { title: { en: "Vagabond" }, altTitles: [] },
+    type: "manga", attributes: { title: { en: "Vagabond" }, altTitles: [], description: { en: "d".repeat(7000) } },
   }));
-  return JSON.stringify({
-    statusCode: 200,
-    body: JSON.stringify({ result: "ok", offset, total: totalWorks, data: rows }),
-  });
+  const body = JSON.stringify({ result: "ok", offset, total: totalWorks, data: rows });
+  if (body.length > 192 * 1024) {
+    throw new Error("Provider HTTP text response exceeds the size limit");
+  }
+  return JSON.stringify({ statusCode: 200, body });
 } } };
 const firstBroad = await lookup({ titles: ["Vagabond"] });
-assert.equal(firstBroad.items.length, 50);
-assert.equal(firstBroad.nextCursor, "50");
-const lastBroad = await lookup({ titles: ["Vagabond"], cursor: firstBroad.nextCursor });
+assert.equal(firstBroad.items.length, 25);
+assert.equal(firstBroad.nextCursor, "25");
+const middleBroad = await lookup({ titles: ["Vagabond"], cursor: firstBroad.nextCursor });
+assert.equal(middleBroad.items.length, 25);
+assert.equal(middleBroad.nextCursor, "50");
+const lastBroad = await lookup({ titles: ["Vagabond"], cursor: middleBroad.nextCursor });
 assert.equal(lastBroad.items.length, 3);
 assert.equal(lastBroad.nextCursor, null);
-assert.deepEqual(paginationCalls, [[0, 50], [50, 50]]);
-assert.equal(new Set([...firstBroad.items, ...lastBroad.items].map(row => row.externalWorkId)).size,
+assert.deepEqual(paginationCalls, [[0, 25], [25, 25], [50, 25]]);
+assert.equal(new Set([...firstBroad.items, ...middleBroad.items, ...lastBroad.items].map(row => row.externalWorkId)).size,
   totalWorks, "increasing source page size cannot drop or duplicate source identities");
 
 console.log("MangaDex exact work+author verification and source-language chapter coverage OK");
