@@ -562,4 +562,27 @@ assert.deepEqual(fireSearches, ["Japanese Original", "Vagabond"],
 assert.deepEqual(fallback.items.map((item) => item.title), ["Vagabond"],
   "unrelated hits must not consume the identity or enrichment budget");
 
+// A source may report a versioned, content-free page failure for Host
+// diagnostics. Reject unknown/extra fields instead of leaking upstream text.
+const typedPageRouter = createMangaAllReading({
+  mangadex: { async pages() {
+    return { type: "page_failure", pageFailureStage: "AT_HOME_REQUEST_FAILED" };
+  } },
+});
+const pageFailureRequest = {
+  binding: { providerId: manifest.id, facetId: "en", externalWorkId: workIds[0] },
+  providerChapterId: "mangadex:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+};
+assert.deepEqual(await typedPageRouter.pages(pageFailureRequest), {
+  type: "page_failure", pageFailureStage: "AT_HOME_REQUEST_FAILED",
+});
+for (const forged of [
+  { type: "page_failure", pageFailureStage: "token=secret" },
+  { type: "page_failure", pageFailureStage: "AT_HOME_REQUEST_FAILED", responseBody: "secret" },
+]) {
+  const untrusted = createMangaAllReading({ mangadex: { async pages() { return forged; } } });
+  await assert.rejects(untrusted.pages(pageFailureRequest), /invalid page failure/,
+    "typed source failure must not become a free-form diagnostic");
+}
+
 console.log("MangaAll single-package contract: passed");
