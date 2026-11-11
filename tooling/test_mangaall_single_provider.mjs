@@ -599,6 +599,10 @@ const singleSourceRequest = { titles: ["Koe no Katachi"],
 const oneReadable = (await fireReader.lookup(singleSourceRequest)).items;
 assert.equal(oneReadable.length, 1);
 assert.deepEqual(oneReadable[0].authors, ["Yoshitoki Ooima"]);
+assert.equal(oneReadable[0].detailOutcome, "VERIFIED_WITH_ALIASES",
+  "single-source coverage requires verified source details");
+assert.equal(singleSourcePreviewCalls, 1,
+  "an explicit preview request should fetch one verified source chapter page");
 assert.equal(oneReadable[0].coverageOutcome, "OBSERVED",
   "one verified source HID still needs positive chapter evidence when unified discovery is partial");
 assert.equal(oneReadable[0].coverageObservedCount, 1);
