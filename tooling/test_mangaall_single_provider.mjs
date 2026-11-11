@@ -595,7 +595,8 @@ globalThis.tsuzuki = { http: { async request(method, url) {
   throw new Error("unexpected single-source coverage request " + parsed.pathname);
 } } };
 const singleSourceRequest = { titles: ["Koe no Katachi"],
-  requestedLanguage: "en", coverageEvidenceVersion: 1, editorialEvidenceVersion: 1 };
+  diagnosticsVersion: 1, requestedLanguage: "en",
+  coverageEvidenceVersion: 1, editorialEvidenceVersion: 1 };
 const oneReadable = (await fireReader.lookup(singleSourceRequest)).items;
 assert.equal(oneReadable.length, 1);
 assert.deepEqual(oneReadable[0].authors, ["Yoshitoki Ooima"]);
@@ -614,7 +615,7 @@ assert.equal(oneEmpty[0].coverageOutcome, "EMPTY",
 assert.equal(oneEmpty[0].coverageObservedCount, 0);
 assert.equal(singleSourcePreviewCalls, 2);
 const withoutPreview = (await fireReader.lookup({ titles: ["Koe no Katachi"],
-  requestedLanguage: "en", editorialEvidenceVersion: 1 })).items;
+  diagnosticsVersion: 1, requestedLanguage: "en", editorialEvidenceVersion: 1 })).items;
 assert.equal(withoutPreview[0].coverageOutcome, undefined,
   "legacy/no-opt-in callers must not perform chapter preview");
 assert.equal(singleSourcePreviewCalls, 2);
