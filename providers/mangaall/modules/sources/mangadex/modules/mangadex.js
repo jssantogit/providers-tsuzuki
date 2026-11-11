@@ -3,10 +3,12 @@ import { getMangaDexJson, MANGAALL_USER_AGENT } from "./http.js";
 const SOURCE = "mangadex";
 const ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LANGUAGES = new Set(["en", "pt-br"]);
-// The MangaDex search endpoint supports up to 100 rows. Use 50 to lower
-// pagination round trips while keeping response bodies below our 1 MiB gate.
-// The aggregator retains its independent 48 KiB serialized output bound.
-const SEARCH_PAGE_SIZE = 50;
+// Host-mediated Provider HTTP text reads are capped at 192 KiB, independently
+// of MangaDex's 100-row endpoint limit and this adapter's 1 MiB JSON guard.
+// A54 0.5.0 returned HTTP 200 + RESPONSE_LIMIT on 50-row manga searches.
+// Bound search at 25 rows; never expand the global Host limit, and preserve
+// cursor pagination rather than treating an oversized page as empty.
+const SEARCH_PAGE_SIZE = 25;
 const CHAPTER_PAGE_SIZE = 100;
 const MAX_OFFSET = 9900;
 
@@ -271,6 +273,8 @@ export async function chapters(input) {
 // Development-only Reader adapter. Publication remains gated by attribution,
 // scanlation-group removal enforcement and physical Android image delivery.
 export async function pages(input) {
+  let pageFailureStage = "INVALID_CHAPTER_ID";
+  try {
   const workId = parseWorkId(input?.binding?.externalWorkId);
   const rawId = input?.providerChapterId;
   if (typeof rawId !== "string" || !rawId.startsWith(SOURCE + ":")) {
@@ -278,9 +282,11 @@ export async function pages(input) {
   }
   const chapterId = rawId.slice(SOURCE.length + 1);
   if (!ID_PATTERN.test(chapterId)) throw new Error("MangaAll invalid chapter ID");
+  pageFailureStage = "CHAPTER_DETAIL_REQUEST_FAILED";
   // At-home delivery metadata does not identify the manga. Check the chapter's
   // actual MangaDex relationship before constructing a Reader URL.
   const entity = await getMangaDexJson("/chapter/" + chapterId);
+  pageFailureStage = "CHAPTER_WORK_MISMATCH";
   const related = entity.data?.relationships;
   if (entity.data?.id?.toLowerCase() !== chapterId.toLowerCase() ||
       !Array.isArray(related) ||
@@ -288,6 +294,7 @@ export async function pages(input) {
         typeof rel.id === "string" && rel.id.toLowerCase() === workId.toLowerCase())) {
     throw new Error("MangaAll work mismatch");
   }
+  pageFailureStage = "CHAPTER_LANGUAGE_MISMATCH";
   // The chapter detail is authoritative for the language of these pages.
   // An indexed chapter in another language cannot be relabelled by a facet.
   const requestedLanguage = input?.binding?.facetId;
@@ -295,13 +302,16 @@ export async function pages(input) {
       entity.data?.attributes?.translatedLanguage !== requestedLanguage) {
     throw new Error("MangaAll chapter language mismatch");
   }
+  pageFailureStage = "EXTERNAL_CHAPTER";
   const externalUrl = entity.data?.attributes?.externalUrl;
   // External releases still contribute chapter evidence to ICE, but MangaDex
   // cannot deliver their pages through MangaDex@Home. Do not fabricate pages.
   if (externalUrl != null && (typeof externalUrl !== "string" || externalUrl.trim())) {
     throw new Error("MangaAll external chapter");
   }
+  pageFailureStage = "AT_HOME_REQUEST_FAILED";
   const response = await getMangaDexJson("/at-home/server/" + chapterId, [["forcePort443", "true"]]);
+  pageFailureStage = "UNTRUSTED_IMAGE_ORIGIN";
   const base = response.baseUrl;
   // A MangaDex@Home node can return https://host:port/ephemeral-token.
   // Validate the authority and path without relying on the URL global in QuickJS.
@@ -320,6 +330,7 @@ export async function pages(input) {
       (host !== "uploads.mangadex.org" && !host.endsWith(".mangadex.network"))) {
     throw new Error("MangaAll untrusted image origin");
   }
+  pageFailureStage = "INVALID_PAGE_METADATA";
   const chapter = response.chapter;
   const hash = chapter?.hash;
   const files = chapter?.data;
@@ -335,4 +346,14 @@ export async function pages(input) {
     return { url: base + "/data/" + hash + "/" + file, headers: { "User-Agent": MANGAALL_USER_AGENT } };
   });
   return { type: "page_list", pages };
+  } catch {
+    // Versioned, closed failure stage. Never expose upstream exception text,
+    // chapter tokens, source URLs or network bodies through the SCRIPT result.
+    if (input?.diagnosticsVersion === 2) {
+      return { type: "page_failure", pageFailureStage };
+    }
+    // Old Hosts cannot decode page_failure. Keep their legacy SCRIPT_ERROR
+    // until they opt into this strictly versioned Reader diagnostic envelope.
+    throw new Error("MangaAll reading.pages failed");
+  }
 }

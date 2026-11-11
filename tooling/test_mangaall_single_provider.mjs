@@ -7,7 +7,7 @@ const dir = path.resolve("providers/mangaall");
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
 assert.equal(manifest.id, "app.tsuzuki.mangaall");
 assert.equal(manifest.name, "MangaAll");
-assert.equal(manifest.publication, "preview", "MangaAll 0.5.0 uses the persistent signed repository, not a fresh smoke root");
+assert.equal(manifest.publication, "preview", "MangaAll 0.5.1 continues the permanent signed update channel");
 assert.deepEqual(manifest.capabilities.map((cap) => cap.id), [
   "reading.lookup", "reading.chapters", "reading.pages",
 ]);
@@ -517,19 +517,25 @@ assert.deepEqual(dexRequests, [
 ]);
 detailLanguage = "en";
 const beforeWrongLanguage = dexRequests.length;
-await assert.rejects(actual.reading.pages({
+assert.deepEqual(await actual.reading.pages({
+  diagnosticsVersion: 2,
   binding: exactDexBinding, providerChapterId: "mangadex:" + dexChapterId,
-}), /chapter language mismatch/i, "MangaDex cannot serve English pages under a Portuguese facet");
+}), { type: "page_failure", pageFailureStage: "CHAPTER_LANGUAGE_MISMATCH" },
+  "MangaDex cannot serve English pages under a Portuguese facet");
 assert.equal(dexRequests.length, beforeWrongLanguage + 1,
   "wrong-language chapter must stop before MangaDex@Home");
 detailLanguage = "pt-br";
 detailWork = "ffffffff-ffff-4fff-8fff-ffffffffffff";
-await assert.rejects(actual.reading.pages({
+assert.deepEqual(await actual.reading.pages({
+  diagnosticsVersion: 2,
   binding: exactDexBinding, providerChapterId: "mangadex:" + dexChapterId,
-}), /work mismatch/i, "foreign MangaDex chapter must be rejected");
-await assert.rejects(actual.reading.pages({
+}), { type: "page_failure", pageFailureStage: "CHAPTER_WORK_MISMATCH" },
+  "foreign MangaDex chapter must be rejected");
+assert.deepEqual(await actual.reading.pages({
+  diagnosticsVersion: 2,
   binding: exactDexBinding, providerChapterId: "mangadex:invalid",
-}), /invalid chapter ID/i, "invalid MangaDex chapter ID must fail before network");
+}), { type: "page_failure", pageFailureStage: "INVALID_CHAPTER_ID" },
+  "invalid MangaDex chapter ID must fail before network");
 
 // A fuzzy MangaFire hit on the first canonical spelling must not prevent an
 // explicitly supplied alternative title from reaching a real exact source HID.
@@ -561,5 +567,28 @@ assert.deepEqual(fireSearches, ["Japanese Original", "Vagabond"],
   "fuzzy first-title responses must not suppress exact alternative-title search");
 assert.deepEqual(fallback.items.map((item) => item.title), ["Vagabond"],
   "unrelated hits must not consume the identity or enrichment budget");
+
+// A source may report a versioned, content-free page failure for Host
+// diagnostics. Reject unknown/extra fields instead of leaking upstream text.
+const typedPageRouter = createMangaAllReading({
+  mangadex: { async pages() {
+    return { type: "page_failure", pageFailureStage: "AT_HOME_REQUEST_FAILED" };
+  } },
+});
+const pageFailureRequest = {
+  binding: { providerId: manifest.id, facetId: "en", externalWorkId: workIds[0] },
+  providerChapterId: "mangadex:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+};
+assert.deepEqual(await typedPageRouter.pages(pageFailureRequest), {
+  type: "page_failure", pageFailureStage: "AT_HOME_REQUEST_FAILED",
+});
+for (const forged of [
+  { type: "page_failure", pageFailureStage: "token=secret" },
+  { type: "page_failure", pageFailureStage: "AT_HOME_REQUEST_FAILED", responseBody: "secret" },
+]) {
+  const untrusted = createMangaAllReading({ mangadex: { async pages() { return forged; } } });
+  await assert.rejects(untrusted.pages(pageFailureRequest), /invalid page failure/,
+    "typed source failure must not become a free-form diagnostic");
+}
 
 console.log("MangaAll single-package contract: passed");
