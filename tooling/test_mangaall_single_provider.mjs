@@ -518,6 +518,7 @@ assert.deepEqual(dexRequests, [
 detailLanguage = "en";
 const beforeWrongLanguage = dexRequests.length;
 assert.deepEqual(await actual.reading.pages({
+  diagnosticsVersion: 2,
   binding: exactDexBinding, providerChapterId: "mangadex:" + dexChapterId,
 }), { type: "page_failure", pageFailureStage: "CHAPTER_LANGUAGE_MISMATCH" },
   "MangaDex cannot serve English pages under a Portuguese facet");
@@ -526,10 +527,12 @@ assert.equal(dexRequests.length, beforeWrongLanguage + 1,
 detailLanguage = "pt-br";
 detailWork = "ffffffff-ffff-4fff-8fff-ffffffffffff";
 assert.deepEqual(await actual.reading.pages({
+  diagnosticsVersion: 2,
   binding: exactDexBinding, providerChapterId: "mangadex:" + dexChapterId,
 }), { type: "page_failure", pageFailureStage: "CHAPTER_WORK_MISMATCH" },
   "foreign MangaDex chapter must be rejected");
 assert.deepEqual(await actual.reading.pages({
+  diagnosticsVersion: 2,
   binding: exactDexBinding, providerChapterId: "mangadex:invalid",
 }), { type: "page_failure", pageFailureStage: "INVALID_CHAPTER_ID" },
   "invalid MangaDex chapter ID must fail before network");
