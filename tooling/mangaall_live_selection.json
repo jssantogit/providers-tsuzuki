@@ -1,0 +1,5 @@
+{
+  "suite": "manga",
+  "batch": 1,
+  "reason": "First additional bounded manga discovery sample; PR #64 only, no publication"
+}
