@@ -1,5 +1,5 @@
 {
   "suite": "prose",
-  "batch": 1,
-  "reason": "Opt-in light-novel boundary discovery only: Overlord, Mushoku Tensei, Re:Zero, Classroom of the Elite; no claim of prose Reader support."
+  "batch": 3,
+  "reason": "Opt-in web-novel boundary discovery: Shadow Slave, Omniscient Reader's Viewpoint, The Beginning After the End, Solo Leveling; do not infer prose Reader support."
 }
