@@ -7,10 +7,22 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createHttpBridge } from './mangaall_live_probe_core.mjs';
 
-const cases = [
-  { id: 'punpun', names: ['Oyasumi Punpun', 'Goodnight Punpun'], work: 'mangafire:zk12' },
-  { id: 'koe', names: ['Koe no Katachi', 'A Silent Voice'], work: 'mangafire:7p56' },
-];
+const catalog = JSON.parse(fs.readFileSync('tooling/mangaall_case_matrix.json', 'utf8'));
+const selectedSuite = process.env.MANGAALL_SUITE || 'core';
+if (!['core', 'manga', 'manhwa', 'webtoon', 'manhua', 'prose'].includes(selectedSuite)) {
+  throw Error('MangaAll unknown live probe suite');
+}
+// Full catalog is tested deterministically in Provider CI. The live probe
+// deliberately uses a small rotating sample: never fan out 65 titles at once.
+const cases = (selectedSuite === 'core'
+  ? catalog.cases.filter((item) => item.probe === 'source_metadata')
+  : catalog.cases.filter((item) => item.suite === selectedSuite &&
+      item.probe === 'discovery_only').slice(0, 4)
+).map((item) => ({
+  id: item.id, names: [item.title, ...item.aliases], work: item.knownWorkId ?? null,
+  format: item.format, probe: item.probe, tags: item.tags,
+}));
+assert.ok(cases.length > 0);
 const origins = {
   'https://api.mangadex.org': 'MANGADEX',
   'https://mangadot.net': 'MANGADOT',
@@ -20,7 +32,8 @@ function normalize(v) {
   return typeof v === 'string' ? v.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase() : '';
 }
 function exactWork(row, spec) {
-  return row?.externalWorkId === spec.work &&
+  return typeof row?.externalWorkId === 'string' &&
+    (spec.work == null || row.externalWorkId === spec.work) &&
     [row.title, ...(Array.isArray(row.aliases) ? row.aliases : [])]
       .some((value) => spec.names.some((name) => normalize(name) === normalize(value)));
 }
@@ -52,7 +65,8 @@ function granted(url, grants) {
   } catch { return false; }
 }
 async function probe(reading, spec, grants) {
-  const result = { case: spec.id, expectedWork: spec.work, evidence: 'API_LIVE',
+  const result = { case: spec.id, format: spec.format, probe: spec.probe,
+    expectedWork: spec.work, evidence: 'API_LIVE',
     lookup: 'UNKNOWN', chapters: 'UNKNOWN', pages: 'NOT_PROBED' };
   let found = null;
   let incomplete = false;
@@ -85,8 +99,9 @@ async function probe(reading, spec, grants) {
     }
     result.sourcesSeen = [...sourceNames].filter((v) => ['mangafire', 'mangadex', 'mangadot'].includes(v)).sort();
     result.lookupComplete = !incomplete;
-    if (result.lookup !== 'INVALID_CONTRACT') result.lookup = found ? 'EXACT_WORK' :
-      incomplete ? 'PARTIAL_NO_MATCH' : 'NO_MATCH';
+    if (result.lookup !== 'INVALID_CONTRACT') result.lookup = found
+      ? (spec.work ? 'EXACT_WORK' : 'DISCOVERY_OBSERVED')
+      : incomplete ? 'PARTIAL_NO_MATCH' : 'NO_MATCH';
     if (found) {
       result.authorsPresent = Array.isArray(found.authors) && found.authors.some((v) => normalize(v));
       result.detailVerified = ['VERIFIED_WITH_ALIASES', 'VERIFIED_NO_ALIASES'].includes(found.detailOutcome);
@@ -101,6 +116,13 @@ async function probe(reading, spec, grants) {
     result.lookupError = errorCode(error);
   }
 
+  // Unknown IDs and non-comic formats must NOT be inferred from
+  // title matches. Never issue chapter/page reads for discovery-only works.
+  if (!spec.work) {
+    result.chapters = 'NOT_TESTED';
+    result.pages = 'NOT_TESTED';
+    return result;
+  }
   // The HIDs are independently known from the A54 capture. A read-only
   // chapters request is NOT a persisted Host edition binding.
   const binding = { providerId: 'app.tsuzuki.mangaall', externalWorkId: spec.work, facetId: 'en' };
@@ -149,6 +171,9 @@ async function probe(reading, spec, grants) {
 function verdict(v) {
   if ([v.lookup, v.chapters, v.pages].includes('INVALID_CONTRACT') || v.pageOriginsAllowed === false) {
     return 'FAIL_CONTRACT';
+  }
+  if (v.probe === 'discovery_only') {
+    return v.lookup === 'DISCOVERY_OBSERVED' ? 'OBSERVED_API_DISCOVERY' : 'INCONCLUSIVE';
   }
   return v.lookup === 'EXACT_WORK' && v.authorsPresent && v.detailVerified &&
     v.coverage === 'OBSERVED' && v.coverageCount > 0 &&
@@ -254,7 +279,8 @@ for (const spec of cases) {
 }
 const report = { schema: 1, provider: manifest.id, version: manifest.version.name,
   headSha: process.env.GITHUB_SHA || 'local', observedAt: new Date().toISOString(),
-  scope: 'LIVE_SOURCE_METADATA_ONLY_NOT_ANDROID_NOT_CANONICAL_RECONCILIATION',
+  selectedSuite, catalogSize: catalog.cases.length, selectedCaseCount: cases.length,
+  scope: 'LIVE_SOURCE_METADATA_ONLY_NO_FORMAT_PROOF_NOT_ANDROID_NOT_CANONICAL_RECONCILIATION',
   requests, cases: results };
 fs.writeFileSync(process.argv[4], JSON.stringify(report, null, 2) + '\n');
 for (const value of results) {
