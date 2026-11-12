@@ -173,6 +173,7 @@ for (const f of fixtures) {
     sourceWorkId: "mangafire:" + f.hid,
     sourceChapterId: "mangafire:" + f.chapterId,
     lookup: legacy,
+    richLookup: lookup,
     chapters: inventory,
     pages,
   });
