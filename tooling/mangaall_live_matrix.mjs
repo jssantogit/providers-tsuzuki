@@ -8,9 +8,12 @@ import { pathToFileURL } from 'node:url';
 import { createHttpBridge } from './mangaall_live_probe_core.mjs';
 
 const catalog = JSON.parse(fs.readFileSync('tooling/mangaall_case_matrix.json', 'utf8'));
+// This opt-in selector is usable while the workflow exists only on a feature
+// branch. GitHub's workflow_dispatch UI requires a default-branch workflow.
+const selection = JSON.parse(fs.readFileSync('tooling/mangaall_live_selection.json', 'utf8'));
 const selfTest = process.argv.includes('--self-test');
-const selectedSuite = selfTest ? 'core' : (process.env.MANGAALL_SUITE || 'core');
-const selectedBatch = selfTest ? 1 : Number(process.env.MANGAALL_BATCH || '1');
+const selectedSuite = selfTest ? 'core' : (process.env.MANGAALL_SUITE || selection.suite);
+const selectedBatch = selfTest ? 1 : Number(process.env.MANGAALL_BATCH || selection.batch);
 if (!['core', 'manga', 'manhwa', 'webtoon', 'manhua', 'prose'].includes(selectedSuite) ||
     !Number.isInteger(selectedBatch) || selectedBatch < 1 || selectedBatch > 7 ||
     (selectedSuite === 'core' && selectedBatch !== 1)) {
