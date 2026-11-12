@@ -78,6 +78,7 @@ async function probe(reading, spec, grants) {
   let found = null;
   let incomplete = false;
   const sourceNames = new Set();
+  const matchingWorkIds = new Set();
   try {
     for (const title of spec.names) {
       let cursor = null;
@@ -93,7 +94,10 @@ async function probe(reading, spec, grants) {
         }
         for (const row of response.items) {
           if (typeof row.externalWorkId === 'string') sourceNames.add(row.externalWorkId.split(':')[0]);
-          if (exactWork(row, spec)) found = row;
+          if (exactWork(row, spec)) {
+            found = row;
+            matchingWorkIds.add(row.externalWorkId);
+          }
         }
         cursor = response.nextCursor;
         if (!cursor || found) {
@@ -105,6 +109,12 @@ async function probe(reading, spec, grants) {
       if (found || result.lookup === 'INVALID_CONTRACT') break;
     }
     result.sourcesSeen = [...sourceNames].filter((v) => ['mangafire', 'mangadex', 'mangadot'].includes(v)).sort();
+    result.matchingWorkCount = matchingWorkIds.size;
+    result.matchingSources = [...new Set([...matchingWorkIds].map((id) => id.split(':')[0]))]
+      .filter((v) => ['mangafire', 'mangadex', 'mangadot'].includes(v)).sort();
+    // The publication format is not attested by V1 reading.lookup. The
+    // presence of a comic candidate with a novel title is NOT novel support.
+    result.publicationFormatVerified = false;
     result.lookupComplete = !incomplete;
     if (result.lookup !== 'INVALID_CONTRACT') result.lookup = found
       ? (spec.work ? 'EXACT_WORK' : 'DISCOVERY_OBSERVED')
@@ -315,7 +325,9 @@ for (const value of results) {
   console.log(JSON.stringify({ case: value.case, verdict: value.verdict, lookup: value.lookup,
     coverage: value.coverage || 'N/A', chapters: value.chapters, pages: value.pages,
     lookupError: value.lookupError || null, chaptersError: value.chaptersError || null,
-    pagesError: value.pagesError || null, pageFailureStage: value.pageFailureStage || null }));
+    pagesError: value.pagesError || null, pageFailureStage: value.pageFailureStage || null,
+    matchingWorkCount: value.matchingWorkCount ?? 0,
+    matchingSources: value.matchingSources || [] }));
 }
 const counts = Object.create(null);
 for (const value of requests) {
