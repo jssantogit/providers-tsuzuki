@@ -231,7 +231,25 @@ if (!provider?.reading || !['lookup', 'chapters', 'pages']
 }
 const results = [];
 for (const spec of cases) {
+  const before = requests.length;
   const value = await probe(provider.reading, spec, grants);
+  const observed = requests.slice(before);
+  value.httpBySource = Object.fromEntries(['MANGADEX', 'MANGADOT', 'MANGAFIRE'].map((source) => {
+    const sample = observed.filter((item) => item.source === source);
+    return [source, {
+      requests: sample.length,
+      ok: sample.filter((item) => item.status === 200).length,
+      blocked403: sample.filter((item) => item.status === 403).length,
+      transportFailed: sample.filter((item) => item.status == null).length,
+    }];
+  }));
+  // A blocked internal MangaFire source makes a unified NO_MATCH inconclusive,
+  // even when the competing sources returned HTTP 200. Never assert no chapters.
+  if (['NO_MATCH', 'PARTIAL_NO_MATCH'].includes(value.lookup) &&
+      value.httpBySource.MANGAFIRE.blocked403 > 0) {
+    value.lookup = 'MANGAFIRE_CHALLENGE_BLOCKED';
+    value.lookupError = 'HTTP_403';
+  }
   results.push({ ...value, verdict: verdict(value) });
 }
 const report = { schema: 1, provider: manifest.id, version: manifest.version.name,
