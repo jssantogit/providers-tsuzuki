@@ -241,7 +241,15 @@ const report = { schema: 1, provider: manifest.id, version: manifest.version.nam
 fs.writeFileSync(process.argv[4], JSON.stringify(report, null, 2) + '\n');
 for (const value of results) {
   console.log(JSON.stringify({ case: value.case, verdict: value.verdict, lookup: value.lookup,
-    coverage: value.coverage || 'N/A', chapters: value.chapters, pages: value.pages }));
+    coverage: value.coverage || 'N/A', chapters: value.chapters, pages: value.pages,
+    lookupError: value.lookupError || null, chaptersError: value.chaptersError || null,
+    pagesError: value.pagesError || null, pageFailureStage: value.pageFailureStage || null }));
 }
-console.log('MangaAll metadata requests=' + requests.length);
+const counts = Object.create(null);
+for (const value of requests) {
+  const key = value.source + ':' + (value.status == null ? 'TRANSPORT' : value.status);
+  counts[key] = (counts[key] || 0) + 1;
+}
+console.log('MangaAll metadata requests=' + requests.length + ' by_source_status=' +
+  JSON.stringify(Object.fromEntries(Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)))));
 if (results.some((value) => value.verdict === 'FAIL_CONTRACT')) process.exitCode = 1;
