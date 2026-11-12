@@ -16,6 +16,12 @@ assert.deepEqual(manifest.capabilities.map(({ id }) => id), [
   "reading.lookup", "reading.chapters", "reading.pages",
 ]);
 assert.ok(manifest.permissions.network.origins.includes("https://mfcdn.cc"));
+const exportPath = process.argv.length === 4 && process.argv[2] === "--export"
+  ? process.argv[3] : null;
+if (process.argv.length !== 2 && !exportPath) {
+  throw Error("Usage: node tooling/test_mangaall_code7_host_contract_replay.mjs [--export /path/to/output.json]");
+}
+const replayVectors = [];
 const fixtures = [
   { id: "punpun", title: "Oyasumi Punpun", sourceTitle: "Goodnight Punpun",
     hid: "zk12", alias: "Oyasumi Punpun", author: "Inio Asano",
@@ -158,6 +164,18 @@ for (const f of fixtures) {
     pages: [{ url: f.image, headers: { Referer: "https://mangafire.to" } }] });
   assert.equal(requests.some((v) => v.origin === "https://mfcdn.cc"), false,
     "source returns page metadata; image download remains Host-owned");
+  // These are the exact objects emitted by the real code7 JS adapters.
+  // Android Host tests consume the generated outputs as a transport-replay
+  // boundary. They do not execute the original code7 JavaScript on Android.
+  replayVectors.push({
+    caseId: f.id,
+    requestedTitle: f.title,
+    sourceWorkId: "mangafire:" + f.hid,
+    sourceChapterId: "mangafire:" + f.chapterId,
+    lookup: legacy,
+    chapters: inventory,
+    pages,
+  });
   const foreign = fixtures.find((v) => v.hid !== f.hid);
   await assert.rejects(reading.pages({
     binding: binding(f), providerChapterId: "mangafire:" + foreign.chapterId,
@@ -194,4 +212,21 @@ assert.ok(blockedLookup.nextCursor,
 assert.ok(blockedLookup.nextCursor.length <= 512);
 blockedPath = null;
 console.log("CODE7_REPLAY|case=koe|upstream403=INCONCLUSIVE|completedEmpty=FORBIDDEN");
+if (exportPath) {
+  // No live requests, cookies, tokens, actual chapter/page bytes or user data.
+  // Test fixtures only; the Host must treat these as synthetic observations.
+  const output = {
+    schemaVersion: 1,
+    provenance: "real_code7_js_with_synthetic_http_fixtures_not_live_source",
+    providerId: manifest.id,
+    providerVersionCode: manifest.version.code,
+    cases: replayVectors,
+    preferredEmpty: { source: "mangadex", itemCount: preferredDex.items.length,
+      complete: preferredDex.nextCursor === null },
+    challenge: { source: "mangafire", outcome: "CHALLENGE_BLOCKED",
+      complete: blockedLookup.nextCursor === null },
+  };
+  fs.writeFileSync(exportPath, JSON.stringify(output, null, 2) + "\n");
+  console.log("CODE7_REPLAY|export=HOST_CONTRACT_FIXTURE|cases=" + replayVectors.length);
+}
 console.log("MangaAll real code7 offline source/Host-V1 contract replay PASS; Host canonical/Reader/published package NOT tested");
