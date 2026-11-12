@@ -8,16 +8,20 @@ import { pathToFileURL } from 'node:url';
 import { createHttpBridge } from './mangaall_live_probe_core.mjs';
 
 const catalog = JSON.parse(fs.readFileSync('tooling/mangaall_case_matrix.json', 'utf8'));
-const selectedSuite = process.argv.includes('--self-test') ? 'core' : (process.env.MANGAALL_SUITE || 'core');
-if (!['core', 'manga', 'manhwa', 'webtoon', 'manhua', 'prose'].includes(selectedSuite)) {
-  throw Error('MangaAll unknown live probe suite');
+const selfTest = process.argv.includes('--self-test');
+const selectedSuite = selfTest ? 'core' : (process.env.MANGAALL_SUITE || 'core');
+const selectedBatch = selfTest ? 1 : Number(process.env.MANGAALL_BATCH || '1');
+if (!['core', 'manga', 'manhwa', 'webtoon', 'manhua', 'prose'].includes(selectedSuite) ||
+    !Number.isInteger(selectedBatch) || selectedBatch < 1 || selectedBatch > 7 ||
+    (selectedSuite === 'core' && selectedBatch !== 1)) {
+  throw Error('MangaAll invalid live probe suite/batch');
 }
 // Full catalog is tested deterministically in Provider CI. The live probe
 // deliberately uses a small rotating sample: never fan out 65 titles at once.
 const cases = (selectedSuite === 'core'
   ? catalog.cases.filter((item) => item.probe === 'source_metadata')
   : catalog.cases.filter((item) => item.suite === selectedSuite &&
-      item.probe === 'discovery_only').slice(0, 4)
+      item.probe === 'discovery_only').slice((selectedBatch - 1) * 4, selectedBatch * 4)
 ).map((item) => ({
   id: item.id, names: [item.title, ...item.aliases], work: item.knownWorkId ?? null,
   format: item.format, probe: item.probe, tags: item.tags,
@@ -284,7 +288,7 @@ for (const spec of cases) {
 }
 const report = { schema: 1, provider: manifest.id, version: manifest.version.name,
   headSha: process.env.GITHUB_SHA || 'local', observedAt: new Date().toISOString(),
-  selectedSuite, catalogSize: catalog.cases.length, selectedCaseCount: cases.length,
+  selectedSuite, selectedBatch, catalogSize: catalog.cases.length, selectedCaseCount: cases.length,
   scope: 'LIVE_SOURCE_METADATA_ONLY_NO_FORMAT_PROOF_NOT_ANDROID_NOT_CANONICAL_RECONCILIATION',
   requests, cases: results };
 fs.writeFileSync(process.argv[4], JSON.stringify(report, null, 2) + '\n');
