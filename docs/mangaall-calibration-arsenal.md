@@ -29,9 +29,11 @@ All other titles have **no verified Provider work ID**. Their suite makes title/
 
 ## Running
 
-Open GitHub Actions → **MangaAll 0.5.2 live API matrix** → **Run workflow** on the PR #64 branch. Select one `suite` (core, manga, manhwa, webtoon, manhua, prose), and one `batch` (1–7; core requires 1). The output `mangaall-code7-live-api-matrix` contains case IDs, status per stage, bounded request counts/latency, and closed error families. No raw URLs, request bodies, cookies or headers are logged. Scripts can also be run locally in a reviewed environment with the same opt-in and `MANGAALL_SUITE` / `MANGAALL_BATCH` environment variables.
+**While the workflow lives only on PR #64:** change `tooling/mangaall_live_selection.json` (suite: core/manga/manhwa/webtoon/manhua/prose; batch: 1–7, core requires 1) and commit to the branch. A `push` path filter fires the live workflow. This is intentional opt-in: editing an arbitrary source file will not fan out the 65 cases. GitHub's `workflow_dispatch` button requires the workflow file to exist on the **default branch**; it is **not available for this unmerged feature workflow** (see [GitHub's dispatch requirements](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch)). Once separately reviewed and merged, the Actions UI can use the `suite` and `batch` inputs directly.
 
-The branch's push workflow only runs the 2-case core sample, not the full 65-case live matrix. The broader runs require explicit selection. There are no scheduled probes. Keep requests low and respect upstream policies.
+The output `mangaall-code7-live-api-matrix` contains case IDs, status per stage, bounded request counts/latency, and closed error families. No raw URLs, request bodies, cookies or headers are logged. Locally, run `node tooling/mangaall_live_matrix.mjs --self-test` or, only after opt-in, `node tooling/mangaall_live_matrix.mjs --live --output mangaall-live-matrix.json` with optional `MANGAALL_SUITE` / `MANGAALL_BATCH` overrides.
+
+The branch push job runs **only the selected bounded sample** (core = 2 cases; other suites = up to four per batch), not all 65 live cases. The whole inventory is gated offline in Provider CI. There are no scheduled probes. Keep requests low and respect upstream policies.
 
 ## Outcomes and gates
 
