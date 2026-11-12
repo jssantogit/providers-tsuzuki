@@ -199,6 +199,22 @@ if (process.argv.length === 3 && process.argv[2] === '--self-test') {
   };
   const result = await probe(fake, cases[0], ['https://*.mfcdn.cc']);
   assert.equal(verdict(result), 'PASS_API');
+  assert.deepEqual(result.matchingSources, ['mangafire'],
+    'live evidence must identify which internal source returned the candidate');
+  assert.equal(result.matchingWorkCount, 1);
+  let prohibitedChapterCalls = 0;
+  const novelResult = await probe({ ...fake,
+    async chapters() { prohibitedChapterCalls++; throw Error('PROSE_READER_NOT_SUPPORTED'); },
+    async pages() { prohibitedChapterCalls++; throw Error('PROSE_READER_NOT_SUPPORTED'); },
+  }, {
+    id: 'novel-boundary', names: ['Goodnight Punpun'], work: null,
+    format: 'web_novel', probe: 'discovery_only',
+  }, ['https://*.mfcdn.cc']);
+  assert.equal(novelResult.lookup, 'DISCOVERY_OBSERVED');
+  assert.equal(novelResult.chapters, 'NOT_TESTED');
+  assert.equal(novelResult.pages, 'NOT_TESTED');
+  assert.equal(prohibitedChapterCalls, 0,
+    'comic discovery cannot authorize a novel chapter or Reader call');
   assert.equal(granted('https://img.mfcdn.cc/1.webp', ['https://*.mfcdn.cc']), true);
   assert.equal(granted('https://evil-mfcdn.cc/1.webp', ['https://*.mfcdn.cc']), false);
   assert.equal(granted('http://img.mfcdn.cc/1.webp', ['https://*.mfcdn.cc']), false);
