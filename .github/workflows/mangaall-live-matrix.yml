@@ -4,6 +4,19 @@ name: MangaAll 0.5.2 live API matrix
 # image downloads, browser challenge bypass or signed publication.
 on:
   workflow_dispatch:
+    inputs:
+      suite:
+        description: 'Small live sample (full 65-case arsenal runs offline in Provider CI)'
+        required: true
+        type: choice
+        default: core
+        options:
+          - core
+          - manga
+          - manhwa
+          - webtoon
+          - manhua
+          - prose
   push:
     branches: ['tsuzuki/mangaall-live-matrix-*']
     paths:
@@ -29,6 +42,8 @@ jobs:
       - name: Offline negative/identity/origin contract
         run: node tooling/mangaall_live_matrix.mjs --self-test
       - name: Real MangaAll unified lookup, chapter and page-metadata checks
+        env:
+          MANGAALL_SUITE: ${{ inputs.suite || 'core' }}
         run: node tooling/mangaall_live_matrix.mjs --live --output mangaall-live-matrix.json
       - name: Upload sanitized public API evidence
         if: always()
