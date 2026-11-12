@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { createHttpBridge } from './mangaall_live_probe_core.mjs';
 
 const catalog = JSON.parse(fs.readFileSync('tooling/mangaall_case_matrix.json', 'utf8'));
-const selectedSuite = process.env.MANGAALL_SUITE || 'core';
+const selectedSuite = process.argv.includes('--self-test') ? 'core' : (process.env.MANGAALL_SUITE || 'core');
 if (!['core', 'manga', 'manhwa', 'webtoon', 'manhua', 'prose'].includes(selectedSuite)) {
   throw Error('MangaAll unknown live probe suite');
 }
@@ -225,13 +225,15 @@ if (!Object.keys(origins).every((origin) => grants.includes(origin))) {
   throw new Error('Missing reviewed API origin');
 }
 const requests = [];
+const blockedOrigins = new Set();
 const bridges = new Map(Object.keys(origins).map((origin) => [origin, createHttpBridge({
-  origin, maxRequests: origins[origin] === 'MANGAFIRE' ? 24 : 8,
+  origin, maxRequests: origins[origin] === 'MANGAFIRE' ? 12 : 24,
   maxResponseBytes: 192 * 1024, timeoutMs: 12000,
   fetchImpl: async (url, options) => {
     const start = performance.now();
     try {
       const response = await fetch(url, options);
+      if (response.status === 403 && origins[origin] === 'MANGAFIRE') blockedOrigins.add(origin);
       requests.push({ source: origins[origin], status: response.status,
         elapsedMs: Math.round(performance.now() - start) });
       return response;
@@ -247,6 +249,9 @@ globalThis.tsuzuki = { http: { async request(method, url, headers, body) {
   try { origin = new URL(url).origin; } catch { throw Error('Invalid API destination'); }
   const bridge = bridges.get(origin);
   if (!bridge) throw Error('Unauthorized API origin');
+  // Stop re-requesting an upstream that already challenged this runner.
+  // No bypass or retry, and do not invent a completed empty result.
+  if (blockedOrigins.has(origin)) throw Error('MangaFire challenge required');
   return bridge.request(method, url, headers, body);
 } } };
 const provider = (await import(pathToFileURL(path.join(root, 'main.js')).href)).default;
@@ -271,7 +276,7 @@ for (const spec of cases) {
   // A blocked internal MangaFire source makes a unified NO_MATCH inconclusive,
   // even when the competing sources returned HTTP 200. Never assert no chapters.
   if (['NO_MATCH', 'PARTIAL_NO_MATCH'].includes(value.lookup) &&
-      value.httpBySource.MANGAFIRE.blocked403 > 0) {
+      (value.httpBySource.MANGAFIRE.blocked403 > 0 || blockedOrigins.has('https://mangafire.to'))) {
     value.lookup = 'MANGAFIRE_CHALLENGE_BLOCKED';
     value.lookupError = 'HTTP_403';
   }
