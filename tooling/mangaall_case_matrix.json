@@ -1,0 +1,902 @@
+{
+  "schemaVersion": 1,
+  "curatedAt": "2026-11-12",
+  "scope": "hypotheses_and_two_device_observed_source_ids_not_catalog_ground_truth",
+  "notes": [
+    "Japanese manga/light novel canonical names use romanization; Korean and Chinese titles use English.",
+    "Webtoon and manhwa overlap as concepts; buckets here test different publishing shapes, not exclusive origin taxonomy.",
+    "Light novels and web novels are discovery/boundary checks ONLY: MangaAll does not claim prose Reader support.",
+    "Only Punpun and Koe have physically observed source-scoped MangaFire HIDs; do not manufacture IDs or chapter totals.",
+    "Discovery-only matches are metadata observations, never authorized edition bindings or Reader evidence."
+  ],
+  "cases": [
+    {
+      "id": "punpun",
+      "title": "Oyasumi Punpun",
+      "aliases": [
+        "Goodnight Punpun"
+      ],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "device_source_id",
+      "knownWorkId": "mangafire:zk12",
+      "probe": "source_metadata",
+      "tags": [
+        "empty_preferred",
+        "alias_recovery",
+        "verified_source"
+      ]
+    },
+    {
+      "id": "koe",
+      "title": "Koe no Katachi",
+      "aliases": [
+        "A Silent Voice"
+      ],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "device_source_id",
+      "knownWorkId": "mangafire:7p56",
+      "probe": "source_metadata",
+      "tags": [
+        "singleton_coverage",
+        "verified_source",
+        "edition_binding"
+      ]
+    },
+    {
+      "id": "one-piece",
+      "title": "One Piece",
+      "aliases": [],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "pagination",
+        "chapter_zero",
+        "volume_conflation"
+      ]
+    },
+    {
+      "id": "naruto",
+      "title": "Naruto",
+      "aliases": [],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "pagination",
+        "ambiguous_editions"
+      ]
+    },
+    {
+      "id": "bleach",
+      "title": "Bleach",
+      "aliases": [],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "edition_binding",
+        "reader"
+      ]
+    },
+    {
+      "id": "chainsaw-man",
+      "title": "Chainsaw Man",
+      "aliases": [],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "multisource",
+        "ambiguity",
+        "reader"
+      ]
+    },
+    {
+      "id": "one-punch-man",
+      "title": "One Punch-Man",
+      "aliases": [
+        "One Punch Man"
+      ],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "chapter_zero",
+        "volume_conflation",
+        "edition_binding"
+      ]
+    },
+    {
+      "id": "vagabond",
+      "title": "Vagabond",
+      "aliases": [],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "pagination",
+        "alternate_editions"
+      ]
+    },
+    {
+      "id": "monster",
+      "title": "Monster",
+      "aliases": [],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "false_positive",
+        "alternate_editions"
+      ]
+    },
+    {
+      "id": "dragon-ball",
+      "title": "Dragon Ball",
+      "aliases": [],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "false_positive",
+        "series_collision"
+      ]
+    },
+    {
+      "id": "dragon-ball-super",
+      "title": "Dragon Ball Super",
+      "aliases": [],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "series_collision"
+      ]
+    },
+    {
+      "id": "kimetsu",
+      "title": "Kimetsu no Yaiba",
+      "aliases": [
+        "Demon Slayer"
+      ],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "aliases",
+        "canonical_inventory"
+      ]
+    },
+    {
+      "id": "boku-hero",
+      "title": "Boku no Hero Academia",
+      "aliases": [
+        "My Hero Academia"
+      ],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "aliases",
+        "canonical_inventory"
+      ]
+    },
+    {
+      "id": "fullmetal",
+      "title": "Fullmetal Alchemist",
+      "aliases": [
+        "Hagane no Renkinjutsushi"
+      ],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "canonical_inventory",
+        "reader"
+      ]
+    },
+    {
+      "id": "yakusoku",
+      "title": "Yakusoku no Neverland",
+      "aliases": [
+        "The Promised Neverland"
+      ],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "aliases",
+        "canonical_inventory"
+      ]
+    },
+    {
+      "id": "death-note",
+      "title": "Death Note",
+      "aliases": [],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "source_overlap"
+      ]
+    },
+    {
+      "id": "kaguya-sama",
+      "title": "Kaguya-sama wa Kokurasetai",
+      "aliases": [
+        "Kaguya-sama: Love Is War"
+      ],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "aliases",
+        "reader"
+      ]
+    },
+    {
+      "id": "jujutsu",
+      "title": "Jujutsu Kaisen",
+      "aliases": [],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "page_metadata",
+        "source_failure"
+      ]
+    },
+    {
+      "id": "grand-blue",
+      "title": "Grand Blue",
+      "aliases": [
+        "Grand Blue Dreaming"
+      ],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "mapped_source",
+        "reader"
+      ]
+    },
+    {
+      "id": "spy-family",
+      "title": "Spy x Family",
+      "aliases": [
+        "Spy × Family"
+      ],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "punctuation",
+        "aliases"
+      ]
+    },
+    {
+      "id": "berserk",
+      "title": "Berserk",
+      "aliases": [],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "edition_variants",
+        "chapter_zero"
+      ]
+    },
+    {
+      "id": "dandadan",
+      "title": "Dandadan",
+      "aliases": [
+        "Dan Da Dan"
+      ],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "aliases",
+        "chapter_metadata"
+      ]
+    },
+    {
+      "id": "yotsuba",
+      "title": "Yotsuba to!",
+      "aliases": [
+        "Yotsuba&!"
+      ],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "punctuation",
+        "aliases"
+      ]
+    },
+    {
+      "id": "jojo-part7",
+      "title": "JoJo no Kimyou na Bouken Part 7: Steel Ball Run",
+      "aliases": [
+        "Steel Ball Run"
+      ],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "series_collision",
+        "edition_variants"
+      ]
+    },
+    {
+      "id": "made-in-abyss",
+      "title": "Made in Abyss",
+      "aliases": [],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "pagination",
+        "chapter_zero"
+      ]
+    },
+    {
+      "id": "shingeki",
+      "title": "Shingeki no Kyojin",
+      "aliases": [
+        "Attack on Titan"
+      ],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "aliases",
+        "completed_series"
+      ]
+    },
+    {
+      "id": "nanatsu",
+      "title": "Nanatsu no Taizai",
+      "aliases": [
+        "The Seven Deadly Sins"
+      ],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "aliases",
+        "canonical_inventory"
+      ]
+    },
+    {
+      "id": "solo-leveling",
+      "title": "Solo Leveling",
+      "aliases": [
+        "Na Honjaman Level Up"
+      ],
+      "format": "manhwa",
+      "suite": "manhwa",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "chapter_identity",
+        "source_overlap"
+      ]
+    },
+    {
+      "id": "the-breaker",
+      "title": "The Breaker",
+      "aliases": [],
+      "format": "manhwa",
+      "suite": "manhwa",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "series_collision",
+        "print_vs_web"
+      ]
+    },
+    {
+      "id": "legend-northern-blade",
+      "title": "Legend of the Northern Blade",
+      "aliases": [],
+      "format": "manhwa",
+      "suite": "manhwa",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "pagination"
+      ]
+    },
+    {
+      "id": "the-horizon",
+      "title": "The Horizon",
+      "aliases": [],
+      "format": "manhwa",
+      "suite": "manhwa",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "completed_series"
+      ]
+    },
+    {
+      "id": "the-boxer",
+      "title": "The Boxer",
+      "aliases": [],
+      "format": "manhwa",
+      "suite": "manhwa",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "completed_series"
+      ]
+    },
+    {
+      "id": "sweet-home",
+      "title": "Sweet Home",
+      "aliases": [],
+      "format": "manhwa",
+      "suite": "manhwa",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "title_collision"
+      ]
+    },
+    {
+      "id": "return-mount-hua",
+      "title": "Return of the Mount Hua Sect",
+      "aliases": [
+        "Return of the Blossoming Blade"
+      ],
+      "format": "manhwa",
+      "suite": "manhwa",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "aliases"
+      ]
+    },
+    {
+      "id": "the-world-after-fall",
+      "title": "The World After the Fall",
+      "aliases": [
+        "The World After the End"
+      ],
+      "format": "manhwa",
+      "suite": "manhwa",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "aliases"
+      ]
+    },
+    {
+      "id": "tower-of-god",
+      "title": "Tower of God",
+      "aliases": [],
+      "format": "webtoon",
+      "suite": "webtoon",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "seasons",
+        "pagination"
+      ]
+    },
+    {
+      "id": "omniscient-reader-webtoon",
+      "title": "Omniscient Reader's Viewpoint",
+      "aliases": [
+        "Omniscient Reader"
+      ],
+      "format": "webtoon",
+      "suite": "webtoon",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "prose_vs_comic",
+        "aliases"
+      ]
+    },
+    {
+      "id": "eleceed",
+      "title": "Eleceed",
+      "aliases": [],
+      "format": "webtoon",
+      "suite": "webtoon",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "long_running"
+      ]
+    },
+    {
+      "id": "true-beauty",
+      "title": "True Beauty",
+      "aliases": [],
+      "format": "webtoon",
+      "suite": "webtoon",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "seasons",
+        "completed_series"
+      ]
+    },
+    {
+      "id": "noblesse",
+      "title": "Noblesse",
+      "aliases": [],
+      "format": "webtoon",
+      "suite": "webtoon",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "long_running",
+        "completed_series"
+      ]
+    },
+    {
+      "id": "god-of-high-school",
+      "title": "The God of High School",
+      "aliases": [],
+      "format": "webtoon",
+      "suite": "webtoon",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "completed_series"
+      ]
+    },
+    {
+      "id": "greatest-estate",
+      "title": "The Greatest Estate Developer",
+      "aliases": [],
+      "format": "webtoon",
+      "suite": "webtoon",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "aliases"
+      ]
+    },
+    {
+      "id": "lookism",
+      "title": "Lookism",
+      "aliases": [],
+      "format": "webtoon",
+      "suite": "webtoon",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "long_running",
+        "title_collision"
+      ]
+    },
+    {
+      "id": "unordinary",
+      "title": "unOrdinary",
+      "aliases": [],
+      "format": "webtoon",
+      "suite": "webtoon",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "capitalization",
+        "seasons"
+      ]
+    },
+    {
+      "id": "lore-olympus",
+      "title": "Lore Olympus",
+      "aliases": [],
+      "format": "webtoon",
+      "suite": "webtoon",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "western_webtoon"
+      ]
+    },
+    {
+      "id": "martial-peak",
+      "title": "Martial Peak",
+      "aliases": [],
+      "format": "manhua",
+      "suite": "manhua",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "pagination",
+        "long_running"
+      ]
+    },
+    {
+      "id": "tales-demons",
+      "title": "Tales of Demons and Gods",
+      "aliases": [],
+      "format": "manhua",
+      "suite": "manhua",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "pagination"
+      ]
+    },
+    {
+      "id": "soul-land",
+      "title": "Soul Land",
+      "aliases": [
+        "Douluo Dalu"
+      ],
+      "format": "manhua",
+      "suite": "manhua",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "aliases",
+        "series_collision"
+      ]
+    },
+    {
+      "id": "battle-through",
+      "title": "Battle Through the Heavens",
+      "aliases": [
+        "Doupo Cangqiong"
+      ],
+      "format": "manhua",
+      "suite": "manhua",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "aliases",
+        "series_collision"
+      ]
+    },
+    {
+      "id": "kings-avatar-manhua",
+      "title": "The King's Avatar",
+      "aliases": [
+        "Quan Zhi Gao Shou"
+      ],
+      "format": "manhua",
+      "suite": "manhua",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "prose_vs_comic"
+      ]
+    },
+    {
+      "id": "release-that-witch-manhua",
+      "title": "Release That Witch",
+      "aliases": [],
+      "format": "manhua",
+      "suite": "manhua",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "prose_vs_comic"
+      ]
+    },
+    {
+      "id": "ravages-time",
+      "title": "The Ravages of Time",
+      "aliases": [],
+      "format": "manhua",
+      "suite": "manhua",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "long_running"
+      ]
+    },
+    {
+      "id": "overlord-ln",
+      "title": "Overlord",
+      "aliases": [],
+      "format": "light_novel",
+      "suite": "prose",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "prose_vs_comic",
+        "format_boundary"
+      ]
+    },
+    {
+      "id": "mushoku-ln",
+      "title": "Mushoku Tensei",
+      "aliases": [
+        "Mushoku Tensei: Jobless Reincarnation"
+      ],
+      "format": "light_novel",
+      "suite": "prose",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "prose_vs_comic",
+        "format_boundary"
+      ]
+    },
+    {
+      "id": "rezero-ln",
+      "title": "Re:Zero kara Hajimeru Isekai Seikatsu",
+      "aliases": [
+        "Re:Zero"
+      ],
+      "format": "light_novel",
+      "suite": "prose",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "prose_vs_comic",
+        "punctuation"
+      ]
+    },
+    {
+      "id": "classroom-elite-ln",
+      "title": "Youkoso Jitsuryoku Shijou Shugi no Kyoushitsu e",
+      "aliases": [
+        "Classroom of the Elite"
+      ],
+      "format": "light_novel",
+      "suite": "prose",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "format_boundary"
+      ]
+    },
+    {
+      "id": "bookworm-ln",
+      "title": "Honzuki no Gekokujou",
+      "aliases": [
+        "Ascendance of a Bookworm"
+      ],
+      "format": "light_novel",
+      "suite": "prose",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "format_boundary"
+      ]
+    },
+    {
+      "id": "apothecary-ln",
+      "title": "Kusuriya no Hitorigoto",
+      "aliases": [
+        "The Apothecary Diaries"
+      ],
+      "format": "light_novel",
+      "suite": "prose",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "prose_vs_comic"
+      ]
+    },
+    {
+      "id": "spice-wolf-ln",
+      "title": "Ookami to Koushinryou",
+      "aliases": [
+        "Spice and Wolf"
+      ],
+      "format": "light_novel",
+      "suite": "prose",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "prose_vs_comic"
+      ]
+    },
+    {
+      "id": "lord-mysteries-wn",
+      "title": "Lord of Mysteries",
+      "aliases": [],
+      "format": "web_novel",
+      "suite": "prose",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "format_boundary"
+      ]
+    },
+    {
+      "id": "shadow-slave-wn",
+      "title": "Shadow Slave",
+      "aliases": [],
+      "format": "web_novel",
+      "suite": "prose",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "format_boundary"
+      ]
+    },
+    {
+      "id": "omniscient-reader-wn",
+      "title": "Omniscient Reader's Viewpoint",
+      "aliases": [
+        "Omniscient Reader"
+      ],
+      "format": "web_novel",
+      "suite": "prose",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "prose_vs_comic",
+        "format_boundary"
+      ]
+    },
+    {
+      "id": "tbate-wn",
+      "title": "The Beginning After the End",
+      "aliases": [],
+      "format": "web_novel",
+      "suite": "prose",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "prose_vs_comic",
+        "format_boundary"
+      ]
+    },
+    {
+      "id": "solo-leveling-wn",
+      "title": "Solo Leveling",
+      "aliases": [],
+      "format": "web_novel",
+      "suite": "prose",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "prose_vs_comic",
+        "format_boundary"
+      ]
+    },
+    {
+      "id": "kings-avatar-wn",
+      "title": "The King's Avatar",
+      "aliases": [],
+      "format": "web_novel",
+      "suite": "prose",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "prose_vs_comic",
+        "format_boundary"
+      ]
+    }
+  ]
+}
