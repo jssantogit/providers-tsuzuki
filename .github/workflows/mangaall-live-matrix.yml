@@ -28,6 +28,7 @@ on:
     paths:
       - '.github/workflows/mangaall-live-matrix.yml'
       - 'tooling/mangaall_live_matrix.mjs'
+      - 'tooling/mangaall_live_selection.json'
 
 permissions:
   contents: read
@@ -49,8 +50,8 @@ jobs:
         run: node tooling/mangaall_live_matrix.mjs --self-test
       - name: Real MangaAll unified lookup, chapter and page-metadata checks
         env:
-          MANGAALL_SUITE: ${{ inputs.suite || 'core' }}
-          MANGAALL_BATCH: ${{ inputs.batch || '1' }}
+          MANGAALL_SUITE: ${{ inputs.suite || '' }}
+          MANGAALL_BATCH: ${{ inputs.batch || '' }}
         run: node tooling/mangaall_live_matrix.mjs --live --output mangaall-live-matrix.json
       - name: Upload sanitized public API evidence
         if: always()
