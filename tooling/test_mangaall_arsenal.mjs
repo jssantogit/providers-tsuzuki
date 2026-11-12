@@ -52,6 +52,19 @@ assert.deepEqual(totals,{
   manga:27,manhwa:8,webtoon:10,manhua:7,light_novel:7,web_novel:6,
 });
 assert.equal(knownCount,2);
+// Every scenario is addressable by the manual, bounded CI suite+batch selector.
+// Never leave untested tail entries hidden behind a permanent .slice(0,4).
+const selected = new Set(matrix.cases.filter(item=>item.probe==='source_metadata').map(item=>item.id));
+for(const suite of suites) {
+  const items = matrix.cases.filter(item=>item.suite===suite&&item.probe==='discovery_only');
+  for(let batch=1;batch<=7;batch++) {
+    for(const item of items.slice((batch-1)*4,batch*4)) {
+      assert.ok(!selected.has(item.id),'duplicate live scenario '+item.id);
+      selected.add(item.id);
+    }
+  }
+}
+assert.equal(selected.size,matrix.cases.length,'CI live sampling must cover every indexed case');
 assert.equal(matrix.cases.find(x=>x.id==='punpun').knownWorkId,'mangafire:zk12');
 assert.equal(matrix.cases.find(x=>x.id==='koe').knownWorkId,'mangafire:7p56');
 assert.ok(matrix.cases.some(x=>x.id==='omniscient-reader-webtoon'));
