@@ -17,6 +17,12 @@ on:
           - webtoon
           - manhua
           - prose
+      batch:
+        description: 'Four discovery cases per batch; select 1 for core'
+        required: true
+        type: choice
+        default: '1'
+        options: ['1', '2', '3', '4', '5', '6', '7']
   push:
     branches: ['tsuzuki/mangaall-live-matrix-*']
     paths:
@@ -44,6 +50,7 @@ jobs:
       - name: Real MangaAll unified lookup, chapter and page-metadata checks
         env:
           MANGAALL_SUITE: ${{ inputs.suite || 'core' }}
+          MANGAALL_BATCH: ${{ inputs.batch || '1' }}
         run: node tooling/mangaall_live_matrix.mjs --live --output mangaall-live-matrix.json
       - name: Upload sanitized public API evidence
         if: always()
