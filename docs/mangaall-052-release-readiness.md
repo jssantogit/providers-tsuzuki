@@ -1,20 +1,34 @@
 # MangaAll 0.5.2 / code7 — controlled release readiness
 
-Status: **PREPARED, NOT APPROVED FOR PUBLICATION** (2026-11-13). This is
-a release plan and a read-only CI audit, not a signed code7 release or a
-physical-device fix.
+Status: **OFFICIALLY SIGNED AND PUBLISHED** (2026-11-13).
+The [official publisher #43500638681](https://github.com/jssantogit/providers-tsuzuki/actions/runs/43500638681)
+completed successfully. The signed index is **sequence 33** at
+[commit `27c4507`](https://github.com/jssantogit/providers-tsuzuki/commit/27c4507c67df2df2a890487ff395c83f75370e6f),
+using the **existing** signing root `tsuzuki-provider-root-2026-02`.
+Only `app.tsuzuki.mangaall` advanced from 0.5.1/code6 to
+**0.5.2/code7**; the signed code7 SHA-256 is
+`cbc7e890fda26138a20358a332c8a700b3aec19ba14c47c53834dc35001673f0`.
+The other three published providers, signatures' trust identity,
+revocation list and code6 rollback archive were preserved.
+The publisher verified the actual new signature and all referenced archives.
 
-## Immutable facts
+This document retains the **historical, before-publication safety audit**
+below for traceability. **Physical Galaxy A54/real MangaFire-CDN validation
+is still pending.** The [physical acceptance handoff](https://github.com/jssantogit/tsuzuki/blob/main/docs/mangaall-host-journey-emulator-20261112.md)
+and the [signed Host APK build #43501002407](https://github.com/jssantogit/tsuzuki/actions/runs/43501002407)
+cover the next step.
+
+## Historical preflight baseline — retained evidence
 
 | Contract | Audited value |
 | --- | --- |
 | Official signed repository | `app.tsuzuki.providers` |
 | Official signing key ID | `tsuzuki-provider-root-2026-02` |
 | Official P-256 SPKI SHA-256 fingerprint | `20875348d95649ff0009e329f0d43de1b84ccf8af7966c215d5e0f449e697159` |
-| Official signed baseline | sequence **32**, `main@3e0b0bc813910929c2215ad26bc46ff5a6a73706` |
-| Already published MangaAll | `app.tsuzuki.mangaall` **0.5.1/code6**, SHA-256 `aa9c101e0764019bc0d09774aeea1600e6bb9f02e12e9c9096f37d0549720320` |
-| Candidate package | **0.5.2/code7**, SHA-256 `cbc7e890fda26138a20358a332c8a700b3aec19ba14c47c53834dc35001673f0` |
-| Exact next publication **if explicitly authorized** | **sequence 33**, exactly one changed descriptor, no signing-key rotation, no repository ID change |
+| Previous signed baseline | sequence **32**, `main@3e0b0bc813910929c2215ad26bc46ff5a6a73706` |
+| Previously published MangaAll | `app.tsuzuki.mangaall` **0.5.1/code6**, SHA-256 `aa9c101e0764019bc0d09774aeea1600e6bb9f02e12e9c9096f37d0549720320` |
+| Published code7 package | **0.5.2/code7**, SHA-256 `cbc7e890fda26138a20358a332c8a700b3aec19ba14c47c53834dc35001673f0` |
+| Planned (now completed) publication | **sequence 33**, exactly one changed descriptor, no signing-key rotation, no repository ID change |
 
 The code7 distributable bytes were built by `tooling/build_provider.py` from
 the actual MangaAll Provider source, with its `publication` source-only
@@ -25,7 +39,7 @@ tests pin the same SHA and execute the original isolated JS modules.
 
 The new read-only workflow [MangaAll 0.5.2 signed-release dry run
 (no signing)](../.github/workflows/mangaall-release-preflight.yml) runs on
-the code7 calibration Draft branch. It checks out the current official
+the code7 calibration feature branch as of the pre-release test. It checked out the then-official
 `main` into a separate **read-only input**, and refuses to proceed if its
 commit is no longer the known sequence-32 baseline.
 
@@ -65,22 +79,24 @@ the official private key. Real MangaFire, its anti-bot browser challenge,
 remote CDN bytes, official code7 update and physical Galaxy A54 preservation
 remain unverified.
 
-## Human-authorized production sequence (not executed)
+## Production sequence — merge and signed publication completed, physical acceptance pending
 
-**Do not merge or publish automatically.** After an explicit release decision:
+The merge/release steps 1–3 below **were completed** on 2026-11-13 via
+consolidated Host PR #197 and Provider PR #64. Interim stacked PRs #196/#63
+were closed as superseded (not merged separately). Step 4 onward is
+**pending physical device acceptance**:
 
-1. Review/merge Host Draft [#196](https://github.com/jssantogit/tsuzuki/pull/196)
-   followed by [#197](https://github.com/jssantogit/tsuzuki/pull/197),
-   confirm final Format/CI and a compatible Host APK. Preserve app data.
-2. Review/merge Provider Draft
-   [#63](https://github.com/jssantogit/providers-tsuzuki/pull/63)
-   followed by [#64](https://github.com/jssantogit/providers-tsuzuki/pull/64).
-   Re-run the release preflight if the official repo baseline has moved.
-   The unified provider remains `app.tsuzuki.mangaall`; no second feed or key.
-3. Only with explicit authorization, invoke the existing official
-   **Publish repository** workflow on `main`. Its existing-key ECDSA
-   signature and SHA validations must succeed. Expect the signed descriptor
-   code7 and sequence 33 **only if sequence 32 is still current**.
+1. **DONE:** Host consolidated [#197](https://github.com/jssantogit/tsuzuki/pull/197)
+   squash-merged as `22db2bdd`, including the superseded #196. Host main
+   [CI #43459906595](https://github.com/jssantogit/tsuzuki/actions/runs/43459906595) PASS.
+2. **DONE:** Provider consolidated [#64](https://github.com/jssantogit/providers-tsuzuki/pull/64)
+   squash-merged as `fd2d133`, including superseded #63. The unified
+   provider remains `app.tsuzuki.mangaall`; no second feed or key.
+3. **DONE:** Existing official **Publish repository** workflow
+   [#43500638681](https://github.com/jssantogit/providers-tsuzuki/actions/runs/43500638681)
+   signed code7 and advanced the index exactly 32→33 without root rotation.
+   [Provider CI #43500638809](https://github.com/jssantogit/providers-tsuzuki/actions/runs/43500638809)
+   also PASS after the publication request.
 4. On the Galaxy A54, update the Host **in place**, refresh the already
    enrolled official repository, and update MangaAll **6 → 7** in Installed.
    Do not remove app data, re-enroll the same key or install an alternate ID.
@@ -94,6 +110,6 @@ remain unverified.
    typed failure before planning another release. Never republish altered
    bytes under code7 or downgrade a signed sequence.
 
-**Release decision remains separate from CI readiness.** Green offline
-checks are useful gates, not a claim that the upstream MangaFire environment
-or user-visible issues are physically resolved.
+**Official release now exists; physical acceptance does not.** Green offline
+checks and a cryptographically verified release are not evidence that MangaFire
+anti-bot/CDN works on Galaxy A54 or that Punpun/Koe chapter bugs are fixed.
