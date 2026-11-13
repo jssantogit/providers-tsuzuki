@@ -1,6 +1,12 @@
-sequence=32
-reason=mangaall-0.5.1-code6-bounded-mangadex-and-reader-failure-stages
-source_prs=62
+sequence=33
+reason=mangaall-0.5.2-code7-unified-coverage-canonical-and-reader
+source_provider_pr=64
+source_host_pr=197
 guard=atomic-signed-publication-preserve-root-and-immutable-artifacts
 signed_repository_id=app.tsuzuki.providers
 signing_key_id=tsuzuki-provider-root-2026-02
+previous_version=0.5.1-code6
+previous_sha256=aa9c101e0764019bc0d09774aeea1600e6bb9f02e12e9c9096f37d0549720320
+release_version=0.5.2-code7
+expected_sha256=cbc7e890fda26138a20358a332c8a700b3aec19ba14c47c53834dc35001673f0
+validation=provider-ci-main-43459955767-host-ci-main-43459906595-android-43454459767-preflight-43453252680
