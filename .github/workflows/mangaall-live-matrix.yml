@@ -1,0 +1,63 @@
+name: MangaAll 0.5.2 live API matrix
+
+# One-shot opt-in only; no scheduled polling, PR fanout, cookies,
+# image downloads, browser challenge bypass or signed publication.
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: 'Small live sample (full 65-case arsenal runs offline in Provider CI)'
+        required: true
+        type: choice
+        default: core
+        options:
+          - core
+          - manga
+          - manhwa
+          - webtoon
+          - manhua
+          - prose
+      batch:
+        description: 'Four discovery cases per batch; select 1 for core'
+        required: true
+        type: choice
+        default: '1'
+        options: ['1', '2', '3', '4', '5', '6', '7']
+  push:
+    branches: ['tsuzuki/mangaall-live-matrix-*']
+    paths:
+      - '.github/workflows/mangaall-live-matrix.yml'
+      - 'tooling/mangaall_live_matrix.mjs'
+      - 'tooling/mangaall_live_selection.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mangaall-live-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live-provider-metadata:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Offline negative/identity/origin contract
+        run: node tooling/mangaall_live_matrix.mjs --self-test
+      - name: Real MangaAll unified lookup, chapter and page-metadata checks
+        env:
+          MANGAALL_SUITE: ${{ inputs.suite || '' }}
+          MANGAALL_BATCH: ${{ inputs.batch || '' }}
+        run: node tooling/mangaall_live_matrix.mjs --live --output mangaall-live-matrix.json
+      - name: Upload sanitized public API evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mangaall-code7-live-api-matrix
+          path: mangaall-live-matrix.json
+          if-no-files-found: warn
+          retention-days: 14

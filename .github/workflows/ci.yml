@@ -34,6 +34,10 @@ jobs:
         run: node tooling/test_mangaall_image_origin_contract.mjs
       - name: MangaAll single signed Provider contract
         run: node tooling/test_mangaall_single_provider.mjs
+      - name: MangaAll cross-format arsenal, identity and novel-boundary matrix
+        run: node tooling/test_mangaall_arsenal.mjs
+      - name: MangaAll 0.5.2 actual-JS code7 offline Host contract replay
+        run: node tooling/test_mangaall_code7_host_contract_replay.mjs
       - name: MangaDex verified author and facet coverage fixtures
         run: node tooling/test_mangaall_mangadex_evidence.mjs
       - name: MangaAll three-source contract

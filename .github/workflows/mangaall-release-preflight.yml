@@ -1,0 +1,55 @@
+name: MangaAll 0.5.2 signed-release dry run (no signing)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - tsuzuki/mangaall-live-matrix-20261112
+    paths:
+      - .github/workflows/mangaall-release-preflight.yml
+      - providers/mangaall/**
+      - tooling/mangaall_release_preflight.py
+      - tooling/test_mangaall_release_preflight.py
+
+permissions:
+  contents: read
+
+jobs:
+  candidate-immutability:
+    name: Code6 signed baseline to code7 index-33 dry run (read-only)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: jssantogit/providers-tsuzuki
+          ref: main
+          path: published-code6
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Guard exact previously signed official snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C published-code6 rev-parse HEAD)" = '3e0b0bc813910929c2215ad26bc46ff5a6a73706'
+          test "$(python3 -c "import json; print(json.load(open('published-code6/repository/config.json'))['sequence'])")" = '32'
+          (cd published-code6 && node tooling/verify_index.mjs)
+      - name: Mutation regressions — forbid additional providers, modified root or wider grants
+        run: python3 -m unittest -v tooling/test_mangaall_release_preflight.py
+      - name: Simulate exact next official publication without signing or pushing
+        run: python3 tooling/mangaall_release_preflight.py --candidate . --published published-code6
+      - name: Assert official signing is impossible in the preview lane
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e .keys/repository-private.pem
+          test -z "${TSUZUKI_PROVIDER_SIGNING_KEY_PEM:-}"
+          echo 'MANGAALL_RELEASE_SIGNING|officialCode7=NOT_SIGNED|main=UNCHANGED|published=NO'
