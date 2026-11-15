@@ -28,6 +28,7 @@ on:
     branches: ['tsuzuki/mangaall-live-matrix-*', 'test/mangaall-live-full-journey-*']
     paths:
       - '.github/workflows/mangaall-live-matrix.yml'
+      - 'tooling/mangaall_case_matrix.json'
       - 'tooling/mangaall_live_matrix.mjs'
       - 'tooling/mangaall_live_journey_core.mjs'
       - 'tooling/test_mangaall_live_journey.mjs'
@@ -43,7 +44,7 @@ concurrency:
 jobs:
   live-provider-metadata:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
