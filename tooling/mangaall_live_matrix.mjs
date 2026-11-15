@@ -17,20 +17,29 @@ const selectedSuite = selfTest ? 'core' : (process.env.MANGAALL_SUITE || selecti
 const selectedBatch = selfTest ? 1 : Number(process.env.MANGAALL_BATCH || selection.batch);
 if (!['core', 'cross-format', 'manga', 'manhwa', 'webtoon', 'manhua', 'prose'].includes(selectedSuite) ||
     !Number.isInteger(selectedBatch) || selectedBatch < 1 || selectedBatch > 7 ||
-    (selectedSuite === 'core' && selectedBatch !== 1)) {
+    (['core', 'cross-format'].includes(selectedSuite) && selectedBatch !== 1)) {
   throw Error('MangaAll invalid live probe suite/batch');
 }
 // Full catalog is tested deterministically in Provider CI. The live probe
 // deliberately uses a small rotating sample: never fan out 65 titles at once.
+// Cross-format is a deliberately bounded real upstream sample (seven works),
+// not the 65-title deterministic regression suite. Non-comic titles stay lookup-only.
+const CROSS_FORMAT_IDS = new Set([
+  'punpun', 'koe', 'chainsaw-man', 'the-horizon', 'tower-of-god',
+  'tales-demons', 'shadow-slave',
+]);
 const cases = (selectedSuite === 'core'
   ? catalog.cases.filter((item) => item.probe === 'source_metadata')
-  : catalog.cases.filter((item) => item.suite === selectedSuite &&
-      item.probe === 'discovery_only').slice((selectedBatch - 1) * 4, selectedBatch * 4)
+  : selectedSuite === 'cross-format'
+    ? catalog.cases.filter((item) => CROSS_FORMAT_IDS.has(item.id))
+    : catalog.cases.filter((item) => item.suite === selectedSuite &&
+        item.probe === 'discovery_only').slice((selectedBatch - 1) * 4, selectedBatch * 4)
 ).map((item) => ({
   id: item.id, names: [item.title, ...item.aliases], work: item.knownWorkId ?? null,
   format: item.format, probe: item.probe, tags: item.tags,
 }));
 assert.ok(cases.length > 0);
+if (selectedSuite === 'cross-format') assert.equal(cases.length, 7);
 const origins = {
   'https://api.mangadex.org': 'MANGADEX',
   'https://mangadot.net': 'MANGADOT',
