@@ -275,8 +275,39 @@ const boundedFailure = createMangaAllReading({
 });
 const firstPartial = await boundedFailure.lookup({ titles: ["Example"] });
 const secondPartial = await boundedFailure.lookup({ titles: ["Example"], cursor: firstPartial.nextCursor });
-assert.equal(secondPartial.nextCursor, null, "retry budget must not create endless pagination");
+// Exhausted retries are not an exhaustive work/edition lookup. A completed
+// cursor after two failed source attempts would falsely certify a missing
+// MangaFire (or other internal source) as an empty source inventory.
+assert.deepEqual(secondPartial, {
+  items: [], nextCursor: null, lookupFailureCode: "UNCLASSIFIED_ERROR",
+}, "exhausted source must fail closed even when another source succeeds");
 assert.equal(alwaysFails, 2, "failed source gets exactly one retry");
+
+// In the real A54 capture Enen no Shouboutai had a MangaFire/en original HID
+// (z1r3l), but the English lookup only surfaced Fan Colored alternatives.
+// This models the *transport-failure possibility*, not an assertion that the
+// physical source actually failed: do not invent candidate identities.
+let fireAttempts = 0;
+const enenUnavailable = createMangaAllReading({
+  mangadex: { async lookup() { return { items: [], nextCursor: null }; } },
+  mangadot: { async lookup() { return { items: [], nextCursor: null }; } },
+  mangafire: { async lookup() {
+    fireAttempts++;
+    throw new Error("MangaAll HTTP 503");
+  } },
+});
+const firstEnen = await enenUnavailable.lookup({
+  titles: ["Enen no Shouboutai"], requestedLanguage: "en",
+});
+assert.deepEqual(firstEnen.items, []);
+assert.ok(firstEnen.nextCursor, "failed MangaFire source requires bounded retry");
+const exhaustedEnen = await enenUnavailable.lookup({
+  titles: ["Enen no Shouboutai"], requestedLanguage: "en", cursor: firstEnen.nextCursor,
+});
+assert.deepEqual(exhaustedEnen, {
+  items: [], nextCursor: null, lookupFailureCode: "HTTP_ERROR", lookupHttpStatus: 503,
+}, "MangaFire HTTP 503 cannot become a completed zero-chapter edition lookup");
+assert.equal(fireAttempts, 2, "MangaFire retry remains bounded");
 
 const down = createMangaAllReading({
   mangadex: { lookup: fail }, mangadot: { lookup: fail }, mangafire: { lookup: fail },
