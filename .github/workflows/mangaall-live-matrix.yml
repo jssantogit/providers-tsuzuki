@@ -1,4 +1,4 @@
-name: MangaAll code7 live API journey matrix
+name: MangaAll code8 live API journey matrix
 
 # One-shot opt-in only; no scheduled polling, PR fanout, cookies,
 # image downloads, browser challenge bypass or signed publication.
@@ -62,7 +62,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mangaall-code7-live-journey-matrix
+          name: mangaall-code8-live-journey-matrix
           path: mangaall-live-matrix.json
           if-no-files-found: warn
           retention-days: 14

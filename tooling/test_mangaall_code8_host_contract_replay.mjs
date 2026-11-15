@@ -1,4 +1,4 @@
-// Offline replay using the EXACT production MangaAll 0.5.2/code7 entrypoint.
+// Offline replay using the EXACT release-candidate MangaAll 0.5.3/code8 entrypoint.
 // HTTP bodies are intentionally synthetic fixtures, NOT captured source truth.
 // The Host canonical reconciliation, signed delivery and Reader pixels are
 // separate gates and cannot be inferred from this script.
@@ -10,8 +10,8 @@ import { pathToFileURL } from "node:url";
 const root = path.resolve("providers/mangaall");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 assert.equal(manifest.id, "app.tsuzuki.mangaall");
-assert.equal(manifest.version.code, 7);
-assert.equal(manifest.version.name, "0.5.2");
+assert.equal(manifest.version.code, 8);
+assert.equal(manifest.version.name, "0.5.3");
 assert.deepEqual(manifest.capabilities.map(({ id }) => id), [
   "reading.lookup", "reading.chapters", "reading.pages",
 ]);
@@ -19,7 +19,7 @@ assert.ok(manifest.permissions.network.origins.includes("https://mfcdn.cc"));
 const exportPath = process.argv.length === 4 && process.argv[2] === "--export"
   ? process.argv[3] : null;
 if (process.argv.length !== 2 && !exportPath) {
-  throw Error("Usage: node tooling/test_mangaall_code7_host_contract_replay.mjs [--export /path/to/output.json]");
+  throw Error("Usage: node tooling/test_mangaall_code8_host_contract_replay.mjs [--export /path/to/output.json]");
 }
 const replayVectors = [];
 const fixtures = [
@@ -125,7 +125,7 @@ for (const f of fixtures) {
   assert.deepEqual(matched.authors, [f.author]);
   assert.equal(matched.detailOutcome, "VERIFIED_WITH_ALIASES");
   assert.equal(matched.coverageOutcome, "OBSERVED",
-    "code7 singleton HID must have first-page coverage preview when opt-in is verified");
+    "code8 singleton HID must have first-page coverage preview when opt-in is verified");
   assert.equal(matched.coverageObservedCount, 1);
   assert.equal(matched.coverageHasMore, false);
   assert.equal(matched.coverageMinMilli, 1000);
@@ -164,9 +164,9 @@ for (const f of fixtures) {
     pages: [{ url: f.image, headers: { Referer: "https://mangafire.to" } }] });
   assert.equal(requests.some((v) => v.origin === "https://mfcdn.cc"), false,
     "source returns page metadata; image download remains Host-owned");
-  // These are the exact objects emitted by the real code7 JS adapters.
+  // These are the exact objects emitted by the real code8 candidate JS adapters.
   // Android Host tests consume the generated outputs as a transport-replay
-  // boundary. They do not execute the original code7 JavaScript on Android.
+  // boundary. They do not execute the original code8 JavaScript on Android.
   replayVectors.push({
     caseId: f.id,
     requestedTitle: f.title,
@@ -181,7 +181,7 @@ for (const f of fixtures) {
   await assert.rejects(reading.pages({
     binding: binding(f), providerChapterId: "mangafire:" + foreign.chapterId,
   }), /work identity mismatch/i);
-  console.log("CODE7_REPLAY|case=" + f.id +
+  console.log("CODE8_REPLAY|case=" + f.id +
     "|source=REAL_JS_MOCK_HTTP|coverage=OBSERVED_FIRST_PAGE|chapters=1|pageMetadata=PASS|foreignWork=REJECTED");
 }
 
@@ -196,9 +196,9 @@ assert.deepEqual(preferredDex, { items: [], nextCursor: null });
 const afterEmpty = await reading.lookup(lookupRequest(active));
 assert.equal(afterEmpty.items.find((v) => v.externalWorkId === "mangafire:zk12")?.coverageOutcome,
   "OBSERVED");
-console.log("CODE7_REPLAY|case=punpun|mangadex=COMPLETE_EMPTY|mangafire=PROVISIONAL_COVERAGE|autoRebind=NOT_TESTED");
+console.log("CODE8_REPLAY|case=punpun|mangadex=COMPLETE_EMPTY|mangafire=PROVISIONAL_COVERAGE|autoRebind=NOT_TESTED");
 
-// Real code7 source challenge paths MUST NOT convert 403 to complete zero.
+// Real code8 source challenge paths MUST NOT convert 403 to complete zero.
 active = fixtures[1];
 blockedPath = "chapters";
 const challenged = await reading.lookup(lookupRequest(active));
@@ -212,13 +212,13 @@ assert.ok(blockedLookup.nextCursor,
   "403 must remain an incomplete retryable lookup, not a complete empty source");
 assert.ok(blockedLookup.nextCursor.length <= 512);
 blockedPath = null;
-console.log("CODE7_REPLAY|case=koe|upstream403=INCONCLUSIVE|completedEmpty=FORBIDDEN");
+console.log("CODE8_REPLAY|case=koe|upstream403=INCONCLUSIVE|completedEmpty=FORBIDDEN");
 if (exportPath) {
   // No live requests, cookies, tokens, actual chapter/page bytes or user data.
   // Test fixtures only; the Host must treat these as synthetic observations.
   const output = {
     schemaVersion: 1,
-    provenance: "real_code7_js_with_synthetic_http_fixtures_not_live_source",
+    provenance: "real_code8_js_with_synthetic_http_fixtures_not_live_source",
     providerId: manifest.id,
     providerVersionCode: manifest.version.code,
     cases: replayVectors,
@@ -228,6 +228,6 @@ if (exportPath) {
       complete: blockedLookup.nextCursor === null },
   };
   fs.writeFileSync(exportPath, JSON.stringify(output, null, 2) + "\n");
-  console.log("CODE7_REPLAY|export=HOST_CONTRACT_FIXTURE|cases=" + replayVectors.length);
+  console.log("CODE8_REPLAY|export=HOST_CONTRACT_FIXTURE|cases=" + replayVectors.length);
 }
-console.log("MangaAll real code7 offline source/Host-V1 contract replay PASS; Host canonical/Reader/published package NOT tested");
+console.log("MangaAll real code8 offline source/Host-V1 contract replay PASS; Host canonical/Reader/signed publication NOT tested");

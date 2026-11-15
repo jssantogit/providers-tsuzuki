@@ -234,6 +234,12 @@ export function createMangaAllReading(adapters) {
       }));
       const successful = replies.filter((r) => !r.failure);
       if (!successful.length) return allSourcesFailed(replies);
+      // A source that failed both bounded attempts is not an exhaustively
+      // searched empty source. Keep healthy candidates from earlier pages in
+      // the Host's partial salvage path by returning an existing typed failure
+      // envelope instead of a completed null cursor. No third upstream retry.
+      const exhausted = replies.filter((reply) => reply.failure && reply.retried);
+      if (exhausted.length) return allSourcesFailed(exhausted);
       const remaining = Object.create(null);
       const items = [];
       const seen = new Set();
