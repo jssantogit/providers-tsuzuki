@@ -130,7 +130,7 @@ test = await run({ async lookup() {
   return { items: [candidate(base)], nextCursor: 'unseen-candidate-page-' + requests };
 }});
 assert.equal(test.result.lookupComplete, false);
-assert.equal(test.result.lookupPages, 2 * base.names.length,
+assert.equal(test.result.lookupPages, 3 * base.names.length,
   'each alias has its own bounded cursor chain; stop before declaring complete');
 assert.equal(test.stats.chapters, 0);
 assert.equal(journeyVerdict(test.result), 'INCONCLUSIVE');
