@@ -31,10 +31,10 @@ Regular Provider CI:
 node tooling/test_mangaall_arsenal.mjs
 node tooling/test_mangaall_live_journey.mjs
 node tooling/test_mangaall_code8_host_contract_replay.mjs
-
-> The original code7 was signed and remains immutable at index sequence 33. This command now runs the current **code8 candidate** actual-JS replay; it does not alter or republish the signed code7 archive. See [code8 incomplete-source lookup diagnosis](mangaall-code8-incomplete-source-lookup-20261115.md).
 node tooling/mangaall_live_matrix.mjs --self-test
 ```
+
+The original code7 was signed and remains immutable at index sequence 33. This command now runs the current **code8 candidate** actual-JS replay; it does not alter or republish the signed code7 archive. See [code8 incomplete-source lookup diagnosis](mangaall-code8-incomplete-source-lookup-20261115.md).
 
 Opt-in live run: [MangaAll live journey workflow](../.github/workflows/mangaall-live-matrix.yml). Select `core` (two previously verified HIDs), `cross-format` (seven representative cases from manga, manhwa, webtoon, manhua and prose), or a specific format and batch. All requests use a 12-minute workflow ceiling, guarded origins, capped pages and request budgets; there is no scheduling or automatic all-65 network fanout. The output artifact `mangaall-code7-live-journey-matrix` contains case IDs, closed outcomes, numerical counters, source-family summaries and request status classes, but not raw URLs/HIDs.
 
