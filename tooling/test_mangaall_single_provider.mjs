@@ -379,6 +379,13 @@ assert.deepEqual(enenEnglish.items.map((v) => [v.externalWorkId, v.language]),
   "same source-attested HID remains discoverable for English without auto-binding");
 assert.deepEqual(enenLookups, ["mangadex", "mangadot", "mangafire"]);
 assert.equal(enenEnglish.nextCursor, null);
+await assert.rejects(enenByFacet.lookup({
+  titles: ["Enen no Shouboutai"], requestedLanguage: "pt-br",
+  cursor: JSON.stringify({ v: 1, remaining: { mangafire: "2" } }),
+}), /invalid cursor/i, "an English MangaFire cursor must not be reused in Portuguese");
+await assert.rejects(enenByFacet.lookup({
+  titles: ["Enen no Shouboutai"], requestedLanguage: "fr",
+}), /unsupported lookup language/i, "unsupported language is not an exhaustive empty lookup");
 
 // Language is a reading facet, not a provider identity. Enforce it before
 // invoking upstream modules and never relabel a chapter from another language.
