@@ -24,6 +24,8 @@ jobs:
         run: node tooling/test_mangaall.mjs
       - name: MangaAll opt-in live probe boundary tests (offline fixtures)
         run: node tooling/test_mangaall_live_probe.mjs
+      - name: MangaAll complete-source journey across 65 works (offline adversarial fixtures)
+        run: node tooling/test_mangaall_live_journey.mjs
       - name: MangaAll experimental publication safety
         run: node tooling/test_mangaall_publication.mjs
       - name: MangaAll aggregator identity and reader-routing contract

@@ -1,5 +1,5 @@
 {
-  "suite": "prose",
-  "batch": 3,
-  "reason": "Opt-in web-novel boundary discovery: Shadow Slave, Omniscient Reader's Viewpoint, The Beginning After the End, Solo Leveling; do not infer prose Reader support."
+  "suite": "cross-format",
+  "batch": 1,
+  "reason": "Bounded, opt-in real-API journey across Punpun, Koe, Chainsaw Man, The Horizon, Tower of God, Tales of Demons and Gods and Shadow Slave (prose boundary). Never infer canonical chapters or Reader pixels."
 }
