@@ -62,7 +62,7 @@ function chapterValid(item, source) {
   return typeof item?.providerChapterId === "string" &&
     item.providerChapterId.startsWith(source + ":") &&
     Number.isFinite(item.rawNumber) && item.rawNumber >= 0 &&
-    (item.language == null || ["en", "pt-br"].includes(item.language));
+    (item.language == null || item.language === "en");
 }
 function closedPageFailure(stage) {
   return typeof stage === "string" && /^[A-Z_]{1,60}$/.test(stage) ? stage : "UNCLASSIFIED";
