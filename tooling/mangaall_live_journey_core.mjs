@@ -150,10 +150,12 @@ export async function probeJourney(reading, spec, grants, options = {}) {
   result.unresolvedCandidates = matched.length > 1;
   // An author disagreement between different source records is a diagnostic,
   // not independent proof of which canonical work/edition either record is.
-  const authors = new Set(matched.flatMap((row) =>
-    (Array.isArray(row.authors) ? row.authors : []).map((v) =>
-      normalize(v).split(/\s+/).filter(Boolean).sort().join(" ")).filter(Boolean)));
-  result.sourceAuthorDisagreement = authors.size > 1;
+  const authorSets = matched.map((row) =>
+    (Array.isArray(row.authors) ? row.authors : [])
+      .map((v) => normalize(v).split(/\s+/).filter(Boolean).sort().join(" "))
+      .filter(Boolean).sort().join("|"),
+  ).filter(Boolean);
+  result.sourceAuthorDisagreement = new Set(authorSets).size > 1;
   result.publicationFormatVerified = false;
   if (result.lookup !== "INVALID_CONTRACT") {
     result.lookup = result.lookupError
