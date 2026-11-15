@@ -148,6 +148,12 @@ export async function probeJourney(reading, spec, grants, options = {}) {
   result.sameSourceRivals = result.matchingSources.some((source) =>
     matched.filter((v) => sourceName(v.externalWorkId) === source).length > 1);
   result.unresolvedCandidates = matched.length > 1;
+  // An author disagreement between different source records is a diagnostic,
+  // not independent proof of which canonical work/edition either record is.
+  const authors = new Set(matched.flatMap((row) =>
+    (Array.isArray(row.authors) ? row.authors : []).map((v) =>
+      normalize(v).split(/\\s+/).filter(Boolean).sort().join(" ")).filter(Boolean)));
+  result.sourceAuthorDisagreement = authors.size > 1;
   result.publicationFormatVerified = false;
   if (result.lookup !== "INVALID_CONTRACT") {
     result.lookup = result.lookupError
@@ -278,9 +284,13 @@ export async function probeJourney(reading, spec, grants, options = {}) {
 export function journeyVerdict(result) {
   if (result.lookup === "INVALID_CONTRACT" || result.chapters === "INVALID_CONTRACT" ||
       result.pages === "INVALID_CONTRACT" || result.pageOriginsAllowed === false) return "FAIL_CONTRACT";
-  if (result.unresolvedCandidates) return "AMBIGUOUS_EDITION";
+  // Incomplete source discovery must not become a complete editorial decision.
+  // Preserve the candidate conflict signal without claiming all rivals were seen.
   if (result.lookup === "UPSTREAM_ERROR" || result.lookup === "PARTIAL_NO_MATCH" ||
-      result.lookup === "NO_MATCH" || !result.lookupComplete) return "INCONCLUSIVE";
+      result.lookup === "NO_MATCH" || !result.lookupComplete) {
+    return result.unresolvedCandidates ? "PARTIAL_CANDIDATE_CONFLICT" : "INCONCLUSIVE";
+  }
+  if (result.unresolvedCandidates) return "AMBIGUOUS_EDITION";
   if (result.chapters.startsWith("PARTIAL")) return "PARTIAL_CHAPTER_INVENTORY";
   if (result.chapters === "COMPLETE_EMPTY") return "EMPTY_SOURCE_INVENTORY";
   if (result.chapters === "NOT_TESTED" || result.chapters === "AMBIGUOUS_NOT_AUTHORIZED" ||
