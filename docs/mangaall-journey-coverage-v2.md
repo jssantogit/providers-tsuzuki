@@ -30,7 +30,9 @@ Regular Provider CI:
 ```sh
 node tooling/test_mangaall_arsenal.mjs
 node tooling/test_mangaall_live_journey.mjs
-node tooling/test_mangaall_code7_host_contract_replay.mjs
+node tooling/test_mangaall_code8_host_contract_replay.mjs
+
+> The original code7 was signed and remains immutable at index sequence 33. This command now runs the current **code8 candidate** actual-JS replay; it does not alter or republish the signed code7 archive. See [code8 incomplete-source lookup diagnosis](mangaall-code8-incomplete-source-lookup-20261115.md).
 node tooling/mangaall_live_matrix.mjs --self-test
 ```
 
