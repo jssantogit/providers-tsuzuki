@@ -19,7 +19,7 @@ The production MangaAll 0.5.2/code7 VRF transform was compared with the [current
 
 The MangaAll adapter's `apiJson` first uses the Provider's signed HTTP route. For a 403 or HTML challenge it requests the **Android Browser Host Service** and accepts only parsed JSON. The opt-in `tooling/mangaall_live_matrix.mjs` uses the Node HTTP bridge, which **does not provide that Android Browser service**. Therefore its MangaFire 403 measures one runner's raw HTTP reachability, **not the full Android Provider code7 flow**.
 
-In the Host the `AndroidProviderBrowserHostService` is a bounded, isolated WebView-based text read. It does not provide an interactive UI to complete a source challenge. Its existence alone cannot guarantee that protected content loads. Browser challenges or inaccessible subresources must never be interpreted as successful page reads.
+In the Host the `AndroidProviderBrowserHostService` is a bounded, isolated WebView-based text read. It does not provide an interactive UI to complete a source challenge. The MangaAll manifest grants browser-origin access only to `https://mangafire.to` and its subdomains; the broker validates each subresource against this grant, so third-party challenge dependencies may be blocked. This is **architectural evidence of a limitation, not proof that it caused any particular on-device failure**. Browser challenges or inaccessible subresources must never be interpreted as successful page reads.
 
 Separately, the latest physical Galaxy A54 smoke recorded several MangaFire **Reader READY** sessions (resolved page URLs), which is useful evidence that the source can sometimes be reached from the device, but does **not** prove CDN bytes or pixels were rendered.
 
