@@ -15,7 +15,7 @@ const selection = JSON.parse(fs.readFileSync('tooling/mangaall_live_selection.js
 const selfTest = process.argv.includes('--self-test');
 const selectedSuite = selfTest ? 'core' : (process.env.MANGAALL_SUITE || selection.suite);
 const selectedBatch = selfTest ? 1 : Number(process.env.MANGAALL_BATCH || selection.batch);
-if (!['core', 'manga', 'manhwa', 'webtoon', 'manhua', 'prose'].includes(selectedSuite) ||
+if (!['core', 'cross-format', 'manga', 'manhwa', 'webtoon', 'manhua', 'prose'].includes(selectedSuite) ||
     !Number.isInteger(selectedBatch) || selectedBatch < 1 || selectedBatch > 7 ||
     (selectedSuite === 'core' && selectedBatch !== 1)) {
   throw Error('MangaAll invalid live probe suite/batch');
