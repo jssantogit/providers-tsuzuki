@@ -157,12 +157,17 @@ for (const spec of cases) {
       transportFailed: sample.filter((item) => item.status == null).length,
     }];
   }));
-  // A blocked internal MangaFire source makes a unified NO_MATCH inconclusive,
-  // even when the competing sources returned HTTP 200. Never assert no chapters.
-  if (['NO_MATCH', 'PARTIAL_NO_MATCH'].includes(value.lookup) &&
-      (value.httpBySource.MANGAFIRE.blocked403 > 0 || blockedOrigins.has('https://mangafire.to'))) {
-    value.lookup = 'MANGAFIRE_CHALLENGE_BLOCKED';
-    value.lookupError = 'HTTP_403';
+  // A known blocked internal source invalidates any claim of exhaustive
+  // unified discovery, even if MangaDex/MangaDot completed and chapter/page
+  // metadata from one of them is sound. Never report a terminal no-match or
+  // definitive editorial edition choice while MangaFire was unavailable.
+  if (blockedOrigins.has('https://mangafire.to')) {
+    value.sourceUnavailable = 'MANGAFIRE_CHALLENGE_BLOCKED';
+    value.lookupComplete = false;
+    if (['NO_MATCH', 'PARTIAL_NO_MATCH'].includes(value.lookup)) {
+      value.lookup = 'MANGAFIRE_CHALLENGE_BLOCKED';
+    }
+    if (value.httpBySource.MANGAFIRE.blocked403 > 0) value.lookupError = 'HTTP_403';
   }
   results.push({ ...value, verdict: verdict(value) });
 }
@@ -179,6 +184,8 @@ for (const value of results) {
     chapterPages: value.chapterPages, chapterCount: value.chapterCount,
     chapterHasMore: value.chapterHasMore, chapterOnePresent: value.chapterOnePresent,
     sameSourceRivals: value.sameSourceRivals, numberingGapObserved: value.numberingGapObserved,
+    sourceAuthorDisagreement: value.sourceAuthorDisagreement,
+    sourceUnavailable: value.sourceUnavailable || null,
     lookupError: value.lookupError || null, chaptersError: value.chaptersError || null,
     pagesError: value.pagesError || null, pageFailureStage: value.pageFailureStage || null,
     matchingWorkCount: value.matchingWorkCount ?? 0,
