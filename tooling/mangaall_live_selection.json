@@ -1,5 +1,5 @@
 {
-  "suite": "cross-format",
+  "suite": "identity",
   "batch": 1,
-  "reason": "Bounded, opt-in real-API journey across Punpun, Koe, Chainsaw Man, The Horizon, Tower of God, Tales of Demons and Gods and Shadow Slave (prose boundary). Never infer canonical chapters or Reader pixels."
+  "reason": "Opt-in public API source-identity diagnostic for A54 failure cases Akame ga Kill and Ao no Hako, with control cases Punpun and Koe. Metadata-only; never bind editions or infer canonical totals."
 }
