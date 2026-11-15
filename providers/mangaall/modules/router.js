@@ -194,7 +194,25 @@ export function createMangaAllReading(adapters) {
       if (!Array.isArray(input?.titles) || !input.titles.some((x) => typeof x === "string" && x.trim())) {
         throw new Error("MangaAll missing title");
       }
-      const pending = lookupState(input?.cursor);
+      const rawLanguage = input?.requestedLanguage;
+      const language = rawLanguage == null ? null
+        : typeof rawLanguage === "string" && rawLanguage.trim()
+          ? rawLanguage.trim().toLowerCase()
+          : null;
+      if (rawLanguage != null && (!language ||
+          !Object.values(SOURCE_LANGUAGES).some((languages) => languages.has(language)))) {
+        throw new Error("MangaAll unsupported lookup language");
+      }
+      const allPending = lookupState(input?.cursor);
+      // Source cursors are not exchangeable between language facets. Never
+      // resume an English-only HID inside a Portuguese lookup; nor call a
+      // source which expressly does not publish the requested language.
+      if (input?.cursor != null && language &&
+          allPending.some(([source]) => !SOURCE_LANGUAGES[source].has(language))) {
+        invalidCursor();
+      }
+      const pending = language == null ? allPending
+        : allPending.filter(([source]) => SOURCE_LANGUAGES[source].has(language));
       // Do not allow an upstream to prevent other independent source lookups.
       const replies = await Promise.all(pending.map(async ([source, cursor, retried, offset]) => {
         try {
