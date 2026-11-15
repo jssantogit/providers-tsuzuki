@@ -26,7 +26,7 @@ if (!['core', 'cross-format', 'manga', 'manhwa', 'webtoon', 'manhua', 'prose'].i
 // not the 65-title deterministic regression suite. Non-comic titles stay lookup-only.
 const CROSS_FORMAT_IDS = new Set([
   'punpun', 'koe', 'chainsaw-man', 'the-horizon', 'tower-of-god',
-  'tales-demons', 'shadow-slave',
+  'tales-demons', 'shadow-slave-wn',
 ]);
 const cases = (selectedSuite === 'core'
   ? catalog.cases.filter((item) => item.probe === 'source_metadata')
