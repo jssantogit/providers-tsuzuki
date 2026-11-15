@@ -345,6 +345,41 @@ assert.deepEqual(await allInvalid.lookup({ titles: ["Example"] }), {
 }, "invalid JSON across all sources must not be hidden as SCRIPT_ERROR");
 
 
+// Reproduce a REAL A54 cross-facet leak, without fabricating rival HIDs:
+// Fire Force / Enen no Shouboutai had MangaFire HID z1r3l tagged "en"
+// on the Portuguese work lookup and Host rejected FACET_MISMATCH.
+// English-only MangaFire must not be called for pt-br at all.
+const enenLookups = [];
+const enenByFacet = createMangaAllReading({
+  mangadex: { async lookup() {
+    enenLookups.push("mangadex"); return { items: [], nextCursor: null };
+  } },
+  mangadot: { async lookup() {
+    enenLookups.push("mangadot"); return { items: [], nextCursor: null };
+  } },
+  mangafire: { async lookup() {
+    enenLookups.push("mangafire");
+    return { items: [{ externalWorkId: "z1r3l", title: "Enen no Shouboutai",
+      aliases: ["Fire Force"], language: "en" }], nextCursor: null };
+  } },
+});
+const enenPortuguese = await enenByFacet.lookup({
+  titles: ["Enen no Shouboutai"], requestedLanguage: "pt-br",
+});
+assert.deepEqual(enenPortuguese, { items: [], nextCursor: null },
+  "MangaFire en is not Portuguese search evidence, even if ranked highly");
+assert.deepEqual(enenLookups, ["mangadex", "mangadot"],
+  "do not request English-only MangaFire while searching pt-br");
+enenLookups.length = 0;
+const enenEnglish = await enenByFacet.lookup({
+  titles: ["Enen no Shouboutai"], requestedLanguage: "en",
+});
+assert.deepEqual(enenEnglish.items.map((v) => [v.externalWorkId, v.language]),
+  [["mangafire:z1r3l", "en"]],
+  "same source-attested HID remains discoverable for English without auto-binding");
+assert.deepEqual(enenLookups, ["mangadex", "mangadot", "mangafire"]);
+assert.equal(enenEnglish.nextCursor, null);
+
 // Language is a reading facet, not a provider identity. Enforce it before
 // invoking upstream modules and never relabel a chapter from another language.
 const languages = [];
