@@ -108,7 +108,10 @@ let test = await run({ async lookup() {
 }}, unknown);
 assert.equal(test.result.unresolvedCandidates, true);
 assert.equal(test.result.sameSourceRivals, true);
+assert.equal(test.result.sourceAuthorDisagreement, true);
 assert.equal(journeyVerdict(test.result), 'AMBIGUOUS_EDITION');
+assert.equal(journeyVerdict({ ...test.result, lookupComplete: false }), 'PARTIAL_CANDIDATE_CONFLICT',
+  'blocked rival sources cannot establish a complete edition decision');
 assert.equal(test.stats.chapters, 0);
 assert.equal(test.stats.pages, 0);
 
