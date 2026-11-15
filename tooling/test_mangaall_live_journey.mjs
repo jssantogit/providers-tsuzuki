@@ -89,7 +89,7 @@ for (const item of catalog.cases) {
 assert.deepEqual([...observedFormats].sort(),
   ['light_novel', 'manga', 'manhua', 'manhwa', 'web_novel', 'webtoon']);
 assert.equal(proseCases, 13);
-assert.equal(comicCases, 52);
+assert.equal(comicCases, 54);
 
 const base = specFor(catalog.cases.find((x) => x.id === 'punpun'));
 const run = async (override, spec = base, options) => {
