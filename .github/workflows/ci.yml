@@ -20,6 +20,8 @@ jobs:
           python-version: '3.13'
       - name: MangaFire contract fixtures
         run: node tooling/test_mangafire.mjs
+      - name: MangaFire HTTP transport classification (offline, no candidate fixtures)
+        run: node tooling/test_mangafire_access_probe.mjs
       - name: MangaAll source and chapter evidence fixtures
         run: node tooling/test_mangaall.mjs
       - name: MangaAll opt-in live probe boundary tests (offline fixtures)
