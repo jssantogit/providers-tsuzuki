@@ -210,6 +210,40 @@ assert.equal(granted('https://img.mfcdn.cc/1.png', grants), true);
 assert.equal(granted('https://evil-mfcdn.cc/1.png', grants), false);
 assert.equal(granted('http://img.mfcdn.cc/1.png', grants), false);
 
+// A54 regression: Blue Box (Oneshot) can share a title alias and author with
+// the serialized Ao no Hako. Shared author/alias is NOT edition equivalence.
+const ao = specFor(catalog.cases.find((x) => x.id === 'ao-no-hako'));
+test = await run({ async lookup() {
+  return { items: [
+    { ...candidate(ao), authors: ['Kouji Miura'] },
+    { ...candidate(ao), title: 'Blue Box (Oneshot)', aliases: ['Ao no Hako'],
+      externalWorkId: 'mangafire:oneshot-fixture', authors: ['Kouji Miura'] },
+  ], nextCursor: null };
+} }, ao);
+assert.equal(test.result.matchingWorkCount, 2);
+assert.equal(test.result.sameSourceRivals, true);
+assert.equal(test.result.sourceAuthorDisagreement, false);
+assert.equal(journeyVerdict(test.result), 'AMBIGUOUS_EDITION');
+assert.equal(test.stats.chapters, 0, 'same-author oneshot must not authorize edition');
+assert.equal(test.stats.pages, 0);
+
+// A54 regression: a publisher may credit writer and artist separately.
+// Distinct author sets across two otherwise identical Akame candidates never
+// justify promoting either source to an editorial binding automatically.
+const akame = specFor(catalog.cases.find((x) => x.id === 'akame-ga-kill'));
+test = await run({ async lookup() {
+  return { items: [
+    { ...candidate(akame), authors: ['Takahiro'] },
+    { ...candidate(akame), externalWorkId: 'mangadex:11111111-2222-4333-8444-555555555555',
+      authors: ['Tetsuya Tashiro'] },
+  ], nextCursor: null };
+} }, akame);
+assert.equal(test.result.matchingWorkCount, 2);
+assert.equal(test.result.sourceAuthorDisagreement, true);
+assert.equal(journeyVerdict(test.result), 'AMBIGUOUS_EDITION');
+assert.equal(test.stats.chapters, 0);
+assert.equal(test.stats.pages, 0);
+
 console.log('MangaAll FULL-JOURNEY OFFLINE PASS | curated=' + catalog.cases.length +
   ' | comics=' + comicCases + ' | prose-boundary=' + proseCases +
   ' | pagination/conflict/partial/missing/403/Reader-url: CHECKED | network=SYNTHETIC');
