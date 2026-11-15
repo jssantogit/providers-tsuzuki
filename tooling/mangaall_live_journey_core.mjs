@@ -152,7 +152,7 @@ export async function probeJourney(reading, spec, grants, options = {}) {
   // not independent proof of which canonical work/edition either record is.
   const authors = new Set(matched.flatMap((row) =>
     (Array.isArray(row.authors) ? row.authors : []).map((v) =>
-      normalize(v).split(/\\s+/).filter(Boolean).sort().join(" ")).filter(Boolean)));
+      normalize(v).split(/\s+/).filter(Boolean).sort().join(" ")).filter(Boolean)));
   result.sourceAuthorDisagreement = authors.size > 1;
   result.publicationFormatVerified = false;
   if (result.lookup !== "INVALID_CONTRACT") {
