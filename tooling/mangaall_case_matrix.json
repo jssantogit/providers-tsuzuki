@@ -1,13 +1,14 @@
 {
   "schemaVersion": 1,
-  "curatedAt": "2026-11-12",
+  "curatedAt": "2026-11-15",
   "scope": "hypotheses_and_two_device_observed_source_ids_not_catalog_ground_truth",
   "notes": [
     "Japanese manga/light novel canonical names use romanization; Korean and Chinese titles use English.",
     "Webtoon and manhwa overlap as concepts; buckets here test different publishing shapes, not exclusive origin taxonomy.",
     "Light novels and web novels are discovery/boundary checks ONLY: MangaAll does not claim prose Reader support.",
     "Only Punpun and Koe have physically observed source-scoped MangaFire HIDs; do not manufacture IDs or chapter totals.",
-    "Discovery-only matches are metadata observations, never authorized edition bindings or Reader evidence."
+    "Discovery-only matches are metadata observations, never authorized edition bindings or Reader evidence.",
+    "Akame ga Kill and Ao no Hako are A54-confirmed failure scenarios, but their exact source IDs remain unpromoted until independent work/edition verification."
   ],
   "cases": [
     {
@@ -42,6 +43,40 @@
         "singleton_coverage",
         "verified_source",
         "edition_binding"
+      ]
+    },
+    {
+      "id": "akame-ga-kill",
+      "title": "Akame ga Kill!",
+      "aliases": [
+        "Akame ga Kiru!"
+      ],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "author_conflict",
+        "multiple_primary_identities",
+        "writer_artist_credits",
+        "edition_binding"
+      ]
+    },
+    {
+      "id": "ao-no-hako",
+      "title": "Ao no Hako",
+      "aliases": [
+        "Blue Box"
+      ],
+      "format": "manga",
+      "suite": "manga",
+      "evidenceLevel": "hypothesis",
+      "probe": "discovery_only",
+      "tags": [
+        "oneshot_collision",
+        "ambiguous_editions",
+        "metadata_timeout",
+        "source_overlap"
       ]
     },
     {

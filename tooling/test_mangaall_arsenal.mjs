@@ -6,7 +6,7 @@ const matrix = JSON.parse(fs.readFileSync('tooling/mangaall_case_matrix.json', '
 assert.equal(matrix.schemaVersion, 1);
 assert.equal(matrix.scope, 'hypotheses_and_two_device_observed_source_ids_not_catalog_ground_truth');
 assert.ok(Array.isArray(matrix.cases));
-assert.ok(matrix.cases.length >= 60);
+assert.ok(matrix.cases.length >= 67);
 const formats = new Set(['manga','manhwa','webtoon','manhua','light_novel','web_novel']);
 const suites = new Set(['manga','manhwa','webtoon','manhua','prose']);
 const probes = new Set(['source_metadata','discovery_only']);
@@ -49,9 +49,11 @@ for (const item of matrix.cases) {
   totals[item.format]++;
 }
 assert.deepEqual(totals,{
-  manga:27,manhwa:8,webtoon:10,manhua:7,light_novel:7,web_novel:6,
+  manga:29,manhwa:8,webtoon:10,manhua:7,light_novel:7,web_novel:6,
 });
 assert.equal(knownCount,2);
+assert.ok(matrix.cases.some(x=>x.id==='akame-ga-kill' && x.tags.includes('author_conflict')));
+assert.ok(matrix.cases.some(x=>x.id==='ao-no-hako' && x.tags.includes('oneshot_collision')));
 // Every scenario is addressable by the manual, bounded CI suite+batch selector.
 // Never leave untested tail entries hidden behind a permanent .slice(0,4).
 const selected = new Set(matrix.cases.filter(item=>item.probe==='source_metadata').map(item=>item.id));

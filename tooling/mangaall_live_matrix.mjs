@@ -15,23 +15,26 @@ const selection = JSON.parse(fs.readFileSync('tooling/mangaall_live_selection.js
 const selfTest = process.argv.includes('--self-test');
 const selectedSuite = selfTest ? 'core' : (process.env.MANGAALL_SUITE || selection.suite);
 const selectedBatch = selfTest ? 1 : Number(process.env.MANGAALL_BATCH || selection.batch);
-if (!['core', 'cross-format', 'manga', 'manhwa', 'webtoon', 'manhua', 'prose'].includes(selectedSuite) ||
+if (!['core', 'cross-format', 'identity', 'manga', 'manhwa', 'webtoon', 'manhua', 'prose'].includes(selectedSuite) ||
     !Number.isInteger(selectedBatch) || selectedBatch < 1 || selectedBatch > 7 ||
-    (['core', 'cross-format'].includes(selectedSuite) && selectedBatch !== 1)) {
+    (['core', 'cross-format', 'identity'].includes(selectedSuite) && selectedBatch !== 1)) {
   throw Error('MangaAll invalid live probe suite/batch');
 }
 // Full catalog is tested deterministically in Provider CI. The live probe
 // deliberately uses a small rotating sample: never fan out 65 titles at once.
 // Cross-format is a deliberately bounded real upstream sample (seven works),
-// not the 65-title deterministic regression suite. Non-comic titles stay lookup-only.
+// not the full 67-title deterministic regression suite. Non-comic titles stay lookup-only.
 const CROSS_FORMAT_IDS = new Set([
   'punpun', 'koe', 'chainsaw-man', 'the-horizon', 'tower-of-god',
   'tales-demons', 'shadow-slave-wn',
 ]);
+const IDENTITY_IDS = new Set(['punpun', 'koe', 'akame-ga-kill', 'ao-no-hako']);
 const cases = (selectedSuite === 'core'
   ? catalog.cases.filter((item) => item.probe === 'source_metadata')
   : selectedSuite === 'cross-format'
     ? catalog.cases.filter((item) => CROSS_FORMAT_IDS.has(item.id))
+    : selectedSuite === 'identity'
+      ? catalog.cases.filter((item) => IDENTITY_IDS.has(item.id))
     : catalog.cases.filter((item) => item.suite === selectedSuite &&
         item.probe === 'discovery_only').slice((selectedBatch - 1) * 4, selectedBatch * 4)
 ).map((item) => ({
@@ -40,6 +43,7 @@ const cases = (selectedSuite === 'core'
 }));
 assert.ok(cases.length > 0);
 if (selectedSuite === 'cross-format') assert.equal(cases.length, 7);
+if (selectedSuite === 'identity') assert.equal(cases.length, 4);
 const origins = {
   'https://api.mangadex.org': 'MANGADEX',
   'https://mangadot.net': 'MANGADOT',
