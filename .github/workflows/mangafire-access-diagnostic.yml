@@ -1,0 +1,42 @@
+name: MangaFire public HTTP access diagnostic
+
+# Diagnostic only; no scheduled checks, user cookies, browser session, or
+# challenge solving. A CI-runner 403 does not prove Android MangaAll is broken.
+on:
+  workflow_dispatch:
+  push:
+    branches: ['diagnostic/mangafire-ci-403-origin-*']
+    paths:
+      - 'tooling/mangafire_access_probe_core.mjs'
+      - 'tooling/test_mangafire_access_probe.mjs'
+      - 'tooling/mangafire_access_diagnostic.mjs'
+      - '.github/workflows/mangafire-access-diagnostic.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mangafire-access-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-availability:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate transport-only closed classification
+        run: node tooling/test_mangafire_access_probe.mjs
+      - name: Diagnose site and signed API from same runner without Browser Host
+        run: node tooling/mangafire_access_diagnostic.mjs --output mangafire-access.json
+      - name: Save bounded HTTP status evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mangafire-access-diagnostic
+          path: mangafire-access.json
+          if-no-files-found: warn
+          retention-days: 14
