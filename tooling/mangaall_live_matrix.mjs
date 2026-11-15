@@ -92,7 +92,7 @@ if (process.argv.length === 3 && process.argv[2] === '--self-test') {
   assert.equal(unavailable.lookupError, 'CHALLENGE_BLOCKED');
   assert.equal(verdict(unavailable), 'INCONCLUSIVE');
   assert.equal(JSON.stringify(unavailable).includes('private.example'), false);
-  console.log('MangaAll 0.5.2 live-matrix offline contract: PASS');
+  console.log('MangaAll code8 live-matrix offline contract: PASS');
   process.exit(0);
 }
 if (process.argv.length !== 5 || process.argv[2] !== '--live' || process.argv[3] !== '--output' ||
@@ -102,9 +102,9 @@ if (process.argv.length !== 5 || process.argv[2] !== '--live' || process.argv[3]
 }
 const root = path.resolve('providers/mangaall');
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
-if (manifest.id !== 'app.tsuzuki.mangaall' || manifest.version.code < 7 ||
+if (manifest.id !== 'app.tsuzuki.mangaall' || manifest.version.code < 8 ||
     !['preview', 'development'].includes(manifest.publication)) {
-  throw new Error('Expected unpublished, single-provider MangaAll code7+');
+  throw new Error('Expected unpublished, single-provider MangaAll code8+');
 }
 const grants = manifest.permissions.network.origins;
 if (!Object.keys(origins).every((origin) => grants.includes(origin))) {
