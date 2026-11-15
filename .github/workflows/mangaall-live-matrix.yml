@@ -12,6 +12,7 @@ on:
         default: core
         options:
           - core
+          - cross-format
           - manga
           - manhwa
           - webtoon
