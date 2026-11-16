@@ -28,6 +28,8 @@ jobs:
         run: node tooling/test_mangaall_live_probe.mjs
       - name: MangaAll arbitrary title selection parser and shard contract (offline, no source replay)
         run: node tooling/test_mangaall_generic_works.mjs
+      - name: MangaAll source-to-Host real envelope provenance contract
+        run: node tooling/test_mangaall_real_envelope_capture.mjs
       - name: MangaAll existing live CLI source-verdict contract (offline only)
         run: node tooling/mangaall_live_matrix.mjs --self-test
       - name: MangaAll complete-source journey across 65 works (offline adversarial fixtures)
