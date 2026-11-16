@@ -40,11 +40,9 @@ const allCases = (selectedSuite === 'custom'
       ? catalog.cases.filter((item) => IDENTITY_IDS.has(item.id))
     : catalog.cases.filter((item) => item.suite === selectedSuite &&
         item.probe === 'discovery_only').slice((selectedBatch - 1) * 4, selectedBatch * 4)
-).map((item) => ({
-  ...item.names ? { ...item } : {
-    id: item.id, names: [item.title, ...item.aliases], work: item.knownWorkId ?? null,
-    format: item.format, probe: item.probe, tags: item.tags,
-  },
+).map((item) => item.names ? item : ({
+  id: item.id, names: [item.title, ...item.aliases], work: item.knownWorkId ?? null,
+  format: item.format, probe: item.probe, tags: item.tags,
 }));
 const shardIndex = Number(process.env.MANGAALL_SHARD_INDEX ?? 0);
 const shardCount = Number(process.env.MANGAALL_SHARD_COUNT ?? 1);
