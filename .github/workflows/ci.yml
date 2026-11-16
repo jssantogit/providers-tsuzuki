@@ -34,6 +34,8 @@ jobs:
         run: node tooling/test_mangaall_live_journey.mjs
       - name: MangaAll experimental publication safety
         run: node tooling/test_mangaall_publication.mjs
+      - name: MangaAll real signed code8 source-byte parity (no network)
+        run: python3 tooling/test_mangaall_signed_source_parity.py
       - name: MangaAll aggregator identity and reader-routing contract
         run: node tooling/test_mangaall_identity.mjs
       - name: MangaAll Reader page metadata and URL policy fixtures
