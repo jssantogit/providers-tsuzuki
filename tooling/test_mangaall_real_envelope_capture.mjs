@@ -22,7 +22,8 @@ const actual = {
     requests.push(['chapters', input]);
     return { items: [
       { providerChapterId: 'mangafire:chapter-100', rawLabel: 'Vol. 5 Ch. 25',
-        rawNumber: 25, volume: 5, language: 'en' },
+        rawNumber: 25, volume: 5, language: 'en',
+        scanlationGroup: 'Official', releaseDateMillis: 1730500000000 },
     ], nextCursor: null };
   },
   async pages(input) {
@@ -65,6 +66,9 @@ assert.equal(result.records[0].response.items[0].url,
 assert.equal(result.records[0].response.nextCursor, first.nextCursor);
 assert.equal(result.records[1].response.items[0].rawNumber, 25);
 assert.equal(result.records[1].response.items[0].volume, 5);
+assert.equal(result.records[1].response.items[0].scanlationGroup, 'Official');
+assert.equal(result.records[1].response.items[0].releaseDateMillis, 1730500000000);
+assert.equal(result.replayCompleteness, 'LOOKUP_CHAPTERS_ONLY');
 assert.equal(result.records[2].response.pageCount, 1);
 assert.equal(result.records[2].replayability, 'READER_URLS_REDACTED');
 const serialized = JSON.stringify(result);
