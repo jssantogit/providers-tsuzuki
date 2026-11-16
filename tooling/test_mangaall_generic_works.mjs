@@ -71,4 +71,18 @@ assert.deepEqual(inspected.cases.map(x => x.title), ['Enen no Shouboutai', "The 
 assert.equal(inspected.authority, 'NO_SOURCE_OR_CANONICAL_EVIDENCE_COLLECTED');
 assert.equal(inspected.cases.every(x => x.sourceWorkId === null), true);
 
+// 1-2 work runs still create three job shards. Empty shards must report
+// a genuine NO_WORK_ASSIGNED status, not fail the entire generic workflow.
+const emptyShard = spawnSync(process.execPath,
+  ['tooling/mangaall_live_matrix.mjs', '--plan'], {
+    encoding: 'utf8', timeout: 10000,
+    env: { ...process.env,
+      MANGAALL_SUITE: 'custom', MANGAALL_BATCH: '1',
+      MANGAALL_WORKS: 'Dungeon Meshi',
+      MANGAALL_SHARD_INDEX: '2', MANGAALL_SHARD_COUNT: '3',
+    },
+  });
+assert.equal(emptyShard.status, 0, emptyShard.stderr);
+assert.equal(JSON.parse(emptyShard.stdout).selectedCaseCount, 0);
+
 console.log('MangaAll arbitrary work selection: PASS (input contracts, format boundary, shards)');
