@@ -1,6 +1,7 @@
 // Opt-in, read-only live matrix for the single MangaAll provider.
-// Probes exact observed works; no image downloads, trust-root changes,
-// cookies, Browser challenge bypass, Reader authorization or publication.
+// Probes actual upstream data for operator-supplied works or legacy curated
+// suites; no image downloads, trust-root changes, cookies, browser challenge
+// bypass, Host canonical authority or Reader/pixel guarantees.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
