@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 
 const ID = /^(?:mangafire|mangadex|mangadot):[A-Za-z0-9._-]{1,128}$/u;
 const CHAPTER_ID = /^(?:mangafire|mangadex|mangadot):[A-Za-z0-9._:-]{1,200}$/u;
-const PUBLIC_STATUS = /^(?:VERIFIED_WITH_ALIASES|VERIFIED_NO_ALIASES|BUDGET_EXHAUSTED|NOT_NEEDED|DETAIL_FAILED|IDENTITY_MISMATCH|INVALID_RESPONSE|CHALLENGE_BLOCKED|OBSERVED|EMPTY|UNKNOWN|HTTP_ERROR|UNCLASSIFIED_ERROR|SOURCE_DETAIL_UNVERIFIED)$/u;
+const PUBLIC_STATUS = /^(?:VERIFIED_WITH_ALIASES|VERIFIED_NO_ALIASES|BUDGET_EXHAUSTED|NOT_NEEDED|SKIPPED_IRRELEVANT|DETAIL_FAILED|IDENTITY_MISMATCH|INVALID_RESPONSE|CHALLENGE_BLOCKED|OBSERVED|EMPTY|UNKNOWN|FAILED|HTTP_ERROR|UNCLASSIFIED_ERROR|SOURCE_DETAIL_UNVERIFIED)$/u;
 const SIMPLE_LANGUAGE = /^(?:en|pt-br|ja|zh|ko)$/u;
 const CURSOR_LIMIT = 8192;
 const SAFE_BYTES = 2_500_000;
@@ -23,7 +23,7 @@ const WORK_FIELDS = new Set([
 ]);
 const CHAPTER_FIELDS = new Set([
   'providerChapterId', 'rawLabel', 'rawNumber', 'volume', 'title', 'language',
-  'scanlator', 'group', 'releaseDate', 'publishedAt',
+  'scanlationGroup', 'releaseDateMillis',
 ]);
 
 function publicText(value, length = 256) {
@@ -120,7 +120,7 @@ function work(item, invalid) {
 function chapter(item, invalid) {
   if (!safeFields(item, CHAPTER_FIELDS, invalid)) return null;
   const providerChapterId = identity(item.providerChapterId, CHAPTER_ID);
-  const rawLabel = publicText(item.rawLabel, 240);
+  const rawLabel = publicText(item.rawLabel, 4000);
   if (!providerChapterId || rawLabel == null) { invalid(); return null; }
   const result = { providerChapterId, rawLabel };
   if (item.rawNumber != null) {
@@ -131,9 +131,9 @@ function chapter(item, invalid) {
     const v = number(item.volume, 10_000);
     if (v == null || !Number.isInteger(v)) invalid(); else result.volume = v;
   }
-  for (const key of ['title', 'scanlator', 'group']) {
+  for (const key of ['title', 'scanlationGroup']) {
     if (item[key] != null) {
-      const v = publicText(item[key], 240);
+      const v = publicText(item[key], key === 'title' ? 4000 : 256);
       if (v == null) invalid(); else result[key] = v;
     }
   }
@@ -141,11 +141,12 @@ function chapter(item, invalid) {
     if (!SIMPLE_LANGUAGE.test(item.language)) invalid();
     else result.language = item.language;
   }
-  for (const key of ['releaseDate', 'publishedAt']) {
+  for (const key of ['releaseDateMillis']) {
     if (item[key] != null) {
       const v = typeof item[key] === 'number'
         ? number(item[key], 1_000_000_000_000_000)
-        : publicText(item[key], 80);
+        : null;
+      if (v != null && !Number.isInteger(v)) invalid();
       if (v == null) invalid(); else result[key] = v;
     }
   }
