@@ -11,7 +11,7 @@ export function normalize(value) {
     : "";
 }
 export function errorCode(error) {
-  if (["CHALLENGE_BLOCKED", "HTTP_ERROR", "INVALID_RESPONSE"].includes(error?.lookupFailureCode)) {
+  if (["CHALLENGE_BLOCKED", "HTTP_ERROR", "INVALID_RESPONSE", "UNCLASSIFIED_ERROR"].includes(error?.lookupFailureCode)) {
     return error.lookupFailureCode;
   }
   const message = typeof error?.message === "string" ? error.message : "";
@@ -53,6 +53,27 @@ function validPage(page, itemLimit) {
   return page && Array.isArray(page.items) && page.items.length <= itemLimit &&
     (page.nextCursor == null || (typeof page.nextCursor === "string" &&
       page.nextCursor.length > 0 && page.nextCursor.length <= 512));
+}
+// Closed, length-bounded public fields in the opt-in CI result; never include
+// upstream URL, authentication material or unbounded arbitrary metadata.
+function safePublicText(input, limit) {
+  if (typeof input !== "string") return null;
+  const text = input.normalize("NFKC").replace(/\s+/gu, " ").trim();
+  if (!text || /https?:\/\/|[<>\x00-\x1F\x7F]/iu.test(text)) return null;
+  return text.slice(0, limit);
+}
+function safePublicWorkId(input) {
+  return typeof input === "string" &&
+    /^(?:mangadex|mangadot|mangafire):[A-Za-z0-9._-]{1,128}$/.test(input)
+    ? input : null;
+}
+function safePublicCode(input) {
+  return typeof input === "string" && /^[A-Z_]{1,45}$/.test(input)
+    ? input : null;
+}
+function safeNumber(input) {
+  return Number.isSafeInteger(input) && input >= 0 && input <= 1_000_000_000
+    ? input : null;
 }
 function sourceName(externalWorkId) {
   const prefix = typeof externalWorkId === "string" ? externalWorkId.split(":")[0] : "";
@@ -108,6 +129,18 @@ export async function probeJourney(reading, spec, grants, options = {}) {
         break;
       }
       result.lookupPages++;
+      // MangaAll code8's bounded exhausted-retry response is an explicit
+      // failed lookup, even though its strict Host-V1 envelope has an empty
+      // items array and a null cursor. Never certify a complete empty source.
+      if (typeof response?.lookupFailureCode === "string") {
+        if (!validPage(response, 500) || response.items.length > 0) {
+          result.lookup = "INVALID_CONTRACT";
+        } else {
+          result.lookupError = errorCode(response);
+          lookupComplete = false;
+        }
+        break;
+      }
       if (!validPage(response, 500)) {
         result.lookup = "INVALID_CONTRACT";
         break;
@@ -138,6 +171,34 @@ export async function probeJourney(reading, spec, grants, options = {}) {
       if (pageIndex === lookupPageLimit - 1) lookupComplete = false;
     }
     if (result.lookup === "INVALID_CONTRACT") break;
+  }
+  if (options.includeCandidates === true) {
+    // Bounded, source-attested public metadata only. No raw URLs, page bytes,
+    // cookies, response bodies or upstream error text enters the CI artifact.
+    // This reveals genuine rival HIDs rather than manufacturing test rivals.
+    const observed = [...candidates.values()].sort((a, b) =>
+      a.externalWorkId.localeCompare(b.externalWorkId));
+    result.candidateCount = observed.length;
+    result.candidateSummariesTruncated = observed.length > 24;
+    result.candidateSummaries = observed.slice(0, 24).map((row) => ({
+      source: sourceName(row.externalWorkId),
+      workId: safePublicWorkId(row.externalWorkId),
+      title: safePublicText(row.title, 160),
+      aliases: (Array.isArray(row.aliases) ? row.aliases : [])
+        .map((x) => safePublicText(x, 120)).filter(Boolean).slice(0, 5),
+      authors: (Array.isArray(row.authors) ? row.authors : [])
+        .map((x) => safePublicText(x, 120)).filter(Boolean).slice(0, 5),
+      language: safePublicText(row.language, 20),
+      detailOutcome: safePublicCode(row.detailOutcome),
+      coverageOutcome: safePublicCode(row.coverageOutcome),
+      coverageObservedCount: Number.isInteger(row.coverageObservedCount) &&
+        row.coverageObservedCount >= 0 ? row.coverageObservedCount : null,
+      coverageHasMore: typeof row.coverageHasMore === "boolean" ?
+        row.coverageHasMore : null,
+      coverageMinMilli: safeNumber(row.coverageMinMilli),
+      coverageMaxMilli: safeNumber(row.coverageMaxMilli),
+      exactMatch: exact(row, titles),
+    }));
   }
   const matched = [...candidates.values()].filter((v) => exact(v, titles));
   const known = spec.work ? matched.find((v) => v.externalWorkId === spec.work) : null;
