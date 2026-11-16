@@ -6,11 +6,12 @@ on:
   workflow_dispatch:
     inputs:
       suite:
-        description: 'Bounded live source journey (all 67 titles run offline in Provider CI)'
+        description: 'Preset or custom list of arbitrary real works (custom input below)'
         required: true
         type: choice
         default: core
         options:
+          - custom
           - core
           - cross-format
           - identity
@@ -19,8 +20,13 @@ on:
           - webtoon
           - manhua
           - prose
+      works:
+        description: 'For custom: 1-30 titles, one per line; optional manga :: Title, web_novel :: Title, etc. No fixture cases.'
+        required: false
+        type: string
+        default: ''
       batch:
-        description: 'Four discovery cases per batch; select 1 for core'
+        description: 'Preset suite only; select 1 for custom/core'
         required: true
         type: choice
         default: '1'
@@ -45,24 +51,34 @@ concurrency:
 jobs:
   live-provider-metadata:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        shard: ${{ fromJSON(inputs.suite == 'custom' && '[0,1,2]' || '[0]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Offline generic input/shard contract (no source fixtures)
+        run: node tooling/test_mangaall_generic_works.mjs
       - name: Offline negative/identity/origin contract
         run: node tooling/mangaall_live_matrix.mjs --self-test
-      - name: Real MangaAll unified lookup, paginated chapter inventory and Reader page-metadata checks
+      - name: Real MangaAll JS against actual upstreams (no canonical Host claim)
         env:
           MANGAALL_SUITE: ${{ inputs.suite || '' }}
           MANGAALL_BATCH: ${{ inputs.batch || '' }}
-        run: node tooling/mangaall_live_matrix.mjs --live --output mangaall-live-matrix.json
+          MANGAALL_WORKS: ${{ inputs.works || '' }}
+          MANGAALL_SHARD_INDEX: ${{ matrix.shard }}
+          MANGAALL_SHARD_COUNT: ${{ inputs.suite == 'custom' && '3' || '1' }}
+        run: node tooling/mangaall_live_matrix.mjs --live --output mangaall-live-matrix-${{ matrix.shard }}.json
       - name: Upload sanitized public API evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mangaall-code8-live-journey-matrix
-          path: mangaall-live-matrix.json
+          name: mangaall-code8-live-journey-matrix-${{ matrix.shard }}
+          path: mangaall-live-matrix-*.json
           if-no-files-found: warn
           retention-days: 14
