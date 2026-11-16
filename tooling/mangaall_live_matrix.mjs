@@ -52,6 +52,19 @@ const cases = selectedSuite === 'custom'
 assert.ok(cases.length > 0, 'each runner must receive at least one work');
 if (selectedSuite === 'cross-format') assert.equal(cases.length, 7);
 if (selectedSuite === 'identity') assert.equal(cases.length, 4);
+// Inspect precisely which operator-supplied works would be queried without
+// making any network request. This is a configuration gate, NOT a live verdict.
+if (process.argv.length === 3 && process.argv[2] === '--plan') {
+  console.log(JSON.stringify({
+    mode: selectedSuite, shardIndex, shardCount, inputCaseCount: allCases.length,
+    selectedCaseCount: cases.length, cases: cases.map((item) => ({
+      id: item.id, title: item.names[0], format: item.format,
+      sourceWorkId: item.work, probe: item.probe,
+    })),
+    authority: 'NO_SOURCE_OR_CANONICAL_EVIDENCE_COLLECTED',
+  }));
+  process.exit(0);
+}
 const origins = {
   'https://api.mangadex.org': 'MANGADEX',
   'https://mangadot.net': 'MANGADOT',
