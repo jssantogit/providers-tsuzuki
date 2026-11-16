@@ -1,4 +1,6 @@
-# MangaAll 0.5.2/code7 — real-source journey calibration v2
+# MangaAll 0.5.2/code7 — historical real-source journey calibration v2
+
+> **Historical design snapshot.** MangaAll 0.5.3/code8 is now signed under index sequence 34. The opt-in [generic live runner](mangaall-generic-real-work-ci-20261116.md) accepts up to 30 arbitrary works without editing a case catalog; it is still the source-API stage, NOT the Kotlin canonical/Reader-pixel stage.
 
 Date: 2026-11-15. **Scope: read-only source diagnostics, NOT a proof of Host canonical chapter creation, Android Reader pixels, or source publication.** The only published provider remains `app.tsuzuki.mangaall` 0.5.2/code7 under the official signed repository sequence 33. This adds *tests only*, not a provider release.
 

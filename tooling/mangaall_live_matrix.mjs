@@ -1,23 +1,28 @@
 // Opt-in, read-only live matrix for the single MangaAll provider.
-// Probes exact observed works; no image downloads, trust-root changes,
-// cookies, Browser challenge bypass, Reader authorization or publication.
+// Probes actual upstream data for operator-supplied works or legacy curated
+// suites; no image downloads, trust-root changes, cookies, browser challenge
+// bypass, Host canonical authority or Reader/pixel guarantees.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createHttpBridge } from './mangaall_live_probe_core.mjs';
+import { parseWorks, shardWorks } from './mangaall_generic_works.mjs';
 import { probeJourney as probe, journeyVerdict as verdict, granted } from './mangaall_live_journey_core.mjs';
 
-const catalog = JSON.parse(fs.readFileSync('tooling/mangaall_case_matrix.json', 'utf8'));
-// This opt-in selector is usable while the workflow exists only on a feature
-// branch. GitHub's workflow_dispatch UI requires a default-branch workflow.
+// Preset data is never read in generic custom mode: no fixed title corpus
+// participates in parsing or evaluating operator-supplied works.
+// The opt-in selector remains for legacy curated compatibility suites.
 const selection = JSON.parse(fs.readFileSync('tooling/mangaall_live_selection.json', 'utf8'));
 const selfTest = process.argv.includes('--self-test');
 const selectedSuite = selfTest ? 'core' : (process.env.MANGAALL_SUITE || selection.suite);
+const catalog = selectedSuite === 'custom'
+  ? { cases: [] }
+  : JSON.parse(fs.readFileSync('tooling/mangaall_case_matrix.json', 'utf8'));
 const selectedBatch = selfTest ? 1 : Number(process.env.MANGAALL_BATCH || selection.batch);
-if (!['core', 'cross-format', 'identity', 'manga', 'manhwa', 'webtoon', 'manhua', 'prose'].includes(selectedSuite) ||
+if (!['custom', 'core', 'cross-format', 'identity', 'manga', 'manhwa', 'webtoon', 'manhua', 'prose'].includes(selectedSuite) ||
     !Number.isInteger(selectedBatch) || selectedBatch < 1 || selectedBatch > 7 ||
-    (['core', 'cross-format', 'identity'].includes(selectedSuite) && selectedBatch !== 1)) {
+    (['custom', 'core', 'cross-format', 'identity'].includes(selectedSuite) && selectedBatch !== 1)) {
   throw Error('MangaAll invalid live probe suite/batch');
 }
 // Full catalog is tested deterministically in Provider CI. The live probe
@@ -29,7 +34,9 @@ const CROSS_FORMAT_IDS = new Set([
   'tales-demons', 'shadow-slave-wn',
 ]);
 const IDENTITY_IDS = new Set(['punpun', 'koe', 'akame-ga-kill', 'ao-no-hako']);
-const cases = (selectedSuite === 'core'
+const allCases = (selectedSuite === 'custom'
+  ? parseWorks(process.env.MANGAALL_WORKS || '')
+  : selectedSuite === 'core'
   ? catalog.cases.filter((item) => item.probe === 'source_metadata')
   : selectedSuite === 'cross-format'
     ? catalog.cases.filter((item) => CROSS_FORMAT_IDS.has(item.id))
@@ -37,13 +44,32 @@ const cases = (selectedSuite === 'core'
       ? catalog.cases.filter((item) => IDENTITY_IDS.has(item.id))
     : catalog.cases.filter((item) => item.suite === selectedSuite &&
         item.probe === 'discovery_only').slice((selectedBatch - 1) * 4, selectedBatch * 4)
-).map((item) => ({
+).map((item) => item.names ? item : ({
   id: item.id, names: [item.title, ...item.aliases], work: item.knownWorkId ?? null,
   format: item.format, probe: item.probe, tags: item.tags,
 }));
-assert.ok(cases.length > 0);
+const shardIndex = Number(process.env.MANGAALL_SHARD_INDEX ?? 0);
+const shardCount = Number(process.env.MANGAALL_SHARD_COUNT ?? 1);
+const cases = selectedSuite === 'custom'
+  ? shardWorks(allCases, shardIndex, shardCount)
+  : allCases;
+assert.ok(cases.length > 0 || selectedSuite === 'custom',
+  'curated runs must receive at least one work; generic idle shards are allowed');
 if (selectedSuite === 'cross-format') assert.equal(cases.length, 7);
 if (selectedSuite === 'identity') assert.equal(cases.length, 4);
+// Inspect precisely which operator-supplied works would be queried without
+// making any network request. This is a configuration gate, NOT a live verdict.
+if (process.argv.length === 3 && process.argv[2] === '--plan') {
+  console.log(JSON.stringify({
+    mode: selectedSuite, shardIndex, shardCount, inputCaseCount: allCases.length,
+    selectedCaseCount: cases.length, cases: cases.map((item) => ({
+      id: item.id, title: item.names[0], format: item.format,
+      sourceWorkId: item.work, probe: item.probe,
+    })),
+    authority: 'NO_SOURCE_OR_CANONICAL_EVIDENCE_COLLECTED',
+  }));
+  process.exit(0);
+}
 const origins = {
   'https://api.mangadex.org': 'MANGADEX',
   'https://mangadot.net': 'MANGADOT',
@@ -113,7 +139,9 @@ if (!Object.keys(origins).every((origin) => grants.includes(origin))) {
 const requests = [];
 const blockedOrigins = new Set();
 const bridges = new Map(Object.keys(origins).map((origin) => [origin, createHttpBridge({
-  origin, maxRequests: origins[origin] === 'MANGAFIRE' ? 20 : 40,
+  origin, maxRequests: selectedSuite === 'custom'
+    ? (origins[origin] === 'MANGAFIRE' ? 80 : 120)
+    : (origins[origin] === 'MANGAFIRE' ? 20 : 40),
   maxResponseBytes: 192 * 1024, timeoutMs: 12000,
   fetchImpl: async (url, options) => {
     const start = performance.now();
@@ -149,7 +177,12 @@ const results = [];
 for (const spec of cases) {
   const before = requests.length;
   const value = await probe(provider.reading, spec, grants, {
-    lookupPageLimit: 2, chapterPageLimit: 4,
+    lookupPageLimit: selectedSuite === 'custom' ? 3 : 2,
+    chapterPageLimit: selectedSuite === 'custom' ? 8 : 4,
+    includeCandidates: selectedSuite === 'custom',
+    includeCandidateCoverage: selectedSuite === 'custom',
+    candidatePreviewLimit: 3, candidateChapterPageLimit: 2,
+  
   });
   const observed = requests.slice(before);
   value.httpBySource = Object.fromEntries(['MANGADEX', 'MANGADOT', 'MANGAFIRE'].map((source) => {
@@ -173,11 +206,23 @@ for (const spec of cases) {
     }
     if (value.httpBySource.MANGAFIRE.blocked403 > 0) value.lookupError = 'HTTP_403';
   }
-  results.push({ ...value, verdict: verdict(value) });
+  results.push({
+    ...value, requestedTitle: selectedSuite === 'custom' ? spec.names[0] : undefined,
+    // This is always upstream evidence, never the real Kotlin canonical
+    // chapter reconciliation or an Android Reader-pixel claim.
+    canonicalStage: 'NOT_EXECUTED_HOST',
+    readerPixelStage: 'NOT_EXECUTED_HOST',
+    verdict: verdict(value),
+  });
 }
 const report = { schema: 1, provider: manifest.id, version: manifest.version.name,
   headSha: process.env.GITHUB_SHA || 'local', observedAt: new Date().toISOString(),
-  selectedSuite, selectedBatch, catalogSize: catalog.cases.length, selectedCaseCount: cases.length,
+  selectedSuite, selectedBatch, selectionSource: selectedSuite === 'custom'
+    ? 'USER_INPUT' : 'CURATED_COMPATIBILITY',
+  shardIndex: selectedSuite === 'custom' ? shardIndex : 0,
+  shardCount: selectedSuite === 'custom' ? shardCount : 1,
+  inputCaseCount: allCases.length, selectedCaseCount: cases.length,
+  shardOutcome: cases.length ? 'REAL_SOURCE_ATTEMPTED' : 'NO_WORK_ASSIGNED',
   scope: 'LIVE_API_LOOKUP_PAGINATED_CHAPTERS_AND_PAGE_METADATA_ONLY_NOT_CANONICAL_NOT_READER_PIXELS',
   requests, cases: results };
 fs.writeFileSync(process.argv[4], JSON.stringify(report, null, 2) + '\n');
@@ -193,7 +238,14 @@ for (const value of results) {
     lookupError: value.lookupError || null, chaptersError: value.chaptersError || null,
     pagesError: value.pagesError || null, pageFailureStage: value.pageFailureStage || null,
     matchingWorkCount: value.matchingWorkCount ?? 0,
-    matchingSources: value.matchingSources || [] }));
+    matchingSources: value.matchingSources || [],
+    candidateCount: value.candidateCount ?? null,
+    candidatePreviews: value.candidateChapterPreviews?.length ?? 0,
+    candidatePreviewsTruncated: value.candidatePreviewsTruncated ?? false,
+    canonicalStage: value.canonicalStage, readerPixelStage: value.readerPixelStage }));
+}
+if (selectedSuite === 'custom' && cases.length === 0) {
+  console.log('MANGAALL_GENERIC_SHARD|outcome=NO_WORK_ASSIGNED|sourceRequests=0');
 }
 const verdictCounts = Object.create(null);
 for (const value of results) verdictCounts[value.verdict] = (verdictCounts[value.verdict] || 0) + 1;

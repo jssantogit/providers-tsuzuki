@@ -160,6 +160,61 @@ assert.equal(test.result.chapterCount, 1);
 assert.equal(journeyVerdict(test.result), 'PARTIAL_CHAPTER_INVENTORY');
 assert.equal(JSON.stringify(test.result).includes('private.example'), false);
 
+// Real signed code8 returns a closed typed lookup failure when an internal
+// source exhausts its retry. An empty result with lookupFailureCode MUST NOT
+// become a complete no-match or a certified zero-chapter inventory.
+test = await run({
+  async lookup() {
+    return {
+      items: [], nextCursor: null, lookupFailureCode: 'HTTP_ERROR',
+      lookupHttpStatus: 503,
+    };
+  },
+});
+assert.equal(test.result.lookupComplete, false);
+assert.equal(test.result.lookupError, 'HTTP_ERROR');
+assert.equal(test.result.lookup, 'UPSTREAM_ERROR');
+assert.equal(journeyVerdict(test.result), 'INCONCLUSIVE');
+assert.equal(test.stats.chapters, 0);
+assert.equal(test.stats.pages, 0);
+
+// Diagnostics expose a REAL A54-observed source ID, never a synthesized
+// rival candidate. Existing adversarial contract tests cover artificial
+// ambiguity separately; the opt-in LIVE run uses only upstream replies.
+test = await run({ async lookup() {
+  return { items: [{
+    ...candidate(base), externalWorkId: 'mangafire:zk12',
+    title: 'Goodnight Punpun', aliases: ['Oyasumi Punpun'],
+    authors: ['Asano Inio'], coverageObservedCount: 200,
+  }], nextCursor: null };
+}}, base, { includeCandidates: true });
+assert.equal(test.result.candidateSummaries.length, 1);
+assert.equal(test.result.candidateSummaries[0].workId, 'mangafire:zk12');
+assert.equal(test.result.candidateSummaries[0].coverageObservedCount, 200);
+assert.equal(JSON.stringify(test.result).includes('https://'), false,
+  'public candidate diagnostics must not export upstream URLs');
+
+// Even with incomplete discovery, inspect chapter pages for the actual
+// known Punpun HID *read-only*. The result remains noncanonical/inconclusive:
+// candidate chapter delivery cannot authorize a preferred edition or Reader.
+test = await run({
+  async lookup() {
+    return { items: [candidate(base)], nextCursor: 'source-next-unknown' };
+  },
+}, base, {
+  lookupPageLimit: 1, includeCandidateCoverage: true,
+  candidateChapterPageLimit: 2,
+});
+assert.equal(test.result.lookupComplete, false);
+assert.equal(test.result.candidateChapterPreviews.length, 1);
+assert.equal(test.result.candidateChapterPreviews[0].workId, 'mangafire:zk12');
+assert.equal(test.result.candidateChapterPreviews[0].chapterCount, 2);
+assert.equal(test.result.candidateChapterPreviews[0].chapterPages, 2);
+assert.equal(test.result.candidateChapterPreviews[0].outcome, 'SOURCE_COMPLETE');
+assert.equal(test.stats.pages, 0, 'candidate previews do not request Reader pages');
+assert.equal(journeyVerdict(test.result), 'INCONCLUSIVE',
+  'a source-level complete chapter sample never turns an incomplete lookup canonical');
+
 test = await run({ async chapters() { return { items: [], nextCursor: null }; } });
 assert.equal(test.result.chapters, 'COMPLETE_EMPTY');
 assert.equal(test.result.pages, 'NO_CHAPTER_FOR_READER');

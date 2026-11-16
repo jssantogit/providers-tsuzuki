@@ -11,7 +11,7 @@ export function normalize(value) {
     : "";
 }
 export function errorCode(error) {
-  if (["CHALLENGE_BLOCKED", "HTTP_ERROR", "INVALID_RESPONSE"].includes(error?.lookupFailureCode)) {
+  if (["CHALLENGE_BLOCKED", "HTTP_ERROR", "INVALID_RESPONSE", "UNCLASSIFIED_ERROR"].includes(error?.lookupFailureCode)) {
     return error.lookupFailureCode;
   }
   const message = typeof error?.message === "string" ? error.message : "";
@@ -54,6 +54,27 @@ function validPage(page, itemLimit) {
     (page.nextCursor == null || (typeof page.nextCursor === "string" &&
       page.nextCursor.length > 0 && page.nextCursor.length <= 512));
 }
+// Closed, length-bounded public fields in the opt-in CI result; never include
+// upstream URL, authentication material or unbounded arbitrary metadata.
+function safePublicText(input, limit) {
+  if (typeof input !== "string") return null;
+  const text = input.normalize("NFKC").replace(/\s+/gu, " ").trim();
+  if (!text || /https?:\/\/|[<>\x00-\x1F\x7F]/iu.test(text)) return null;
+  return text.slice(0, limit);
+}
+function safePublicWorkId(input) {
+  return typeof input === "string" &&
+    /^(?:mangadex|mangadot|mangafire):[A-Za-z0-9._-]{1,128}$/.test(input)
+    ? input : null;
+}
+function safePublicCode(input) {
+  return typeof input === "string" && /^[A-Z_]{1,45}$/.test(input)
+    ? input : null;
+}
+function safeNumber(input) {
+  return Number.isSafeInteger(input) && input >= 0 && input <= 1_000_000_000
+    ? input : null;
+}
 function sourceName(externalWorkId) {
   const prefix = typeof externalWorkId === "string" ? externalWorkId.split(":")[0] : "";
   return SOURCES.has(prefix) ? prefix : null;
@@ -64,6 +85,74 @@ function chapterValid(item, source) {
     Number.isFinite(item.rawNumber) && item.rawNumber >= 0 &&
     (item.language == null || item.language === "en");
 }
+// Read-only, bounded previews of HIDs actually returned by upstream.
+// Comparing real rivals requires observing their separate source inventories,
+// but it does NOT authorize Host binding, canonical publication or Reader use.
+async function sourceChapterPreview(reading, candidate, pageLimit) {
+  const source = sourceName(candidate.externalWorkId);
+  const result = {
+    source, workId: safePublicWorkId(candidate.externalWorkId),
+    authority: "SOURCE_METADATA_ONLY",
+    chapterPages: 0, chapterCount: 0, firstNumber: null, lastNumber: null,
+    chapterOnePresent: false, hasMore: true, outcome: "NOT_INSPECTED",
+  };
+  if (!source || !result.workId ||
+      !DETAILS.has(candidate.detailOutcome) ||
+      candidate.coverageOutcome !== "OBSERVED") {
+    result.outcome = "SOURCE_DETAIL_OR_COVERAGE_UNVERIFIED";
+    return result;
+  }
+  let cursor = null;
+  const seenCursors = new Set();
+  const seenIds = new Set();
+  const numbers = [];
+  for (let pageIndex = 0; pageIndex < pageLimit; pageIndex++) {
+    let page;
+    try {
+      page = await reading.chapters({
+        binding: {
+          providerId: "app.tsuzuki.mangaall",
+          facetId: "en",
+          externalWorkId: candidate.externalWorkId,
+        },
+        cursor,
+      });
+    } catch (error) {
+      result.errorCode = errorCode(error);
+      result.outcome = "SOURCE_UPSTREAM_ERROR";
+      break;
+    }
+    result.chapterPages++;
+    if (!validPage(page, 16000) ||
+        page.items.some((item) => !chapterValid(item, source)) ||
+        page.items.some((item) => seenIds.has(item.providerChapterId))) {
+      result.outcome = "SOURCE_INVALID_CONTRACT";
+      break;
+    }
+    for (const item of page.items) {
+      seenIds.add(item.providerChapterId);
+      numbers.push(item.rawNumber);
+    }
+    if (page.nextCursor == null) {
+      result.outcome = numbers.length ? "SOURCE_COMPLETE" : "SOURCE_COMPLETE_EMPTY";
+      result.hasMore = false;
+      break;
+    }
+    if (page.nextCursor === cursor || seenCursors.has(page.nextCursor)) {
+      result.outcome = "SOURCE_INVALID_CONTRACT";
+      break;
+    }
+    seenCursors.add(page.nextCursor);
+    cursor = page.nextCursor;
+    result.outcome = "SOURCE_PARTIAL_PAGE_LIMIT";
+  }
+  result.chapterCount = numbers.length;
+  result.firstNumber = numbers.length ? Math.min(...numbers) : null;
+  result.lastNumber = numbers.length ? Math.max(...numbers) : null;
+  result.chapterOnePresent = numbers.includes(1);
+  return result;
+}
+
 function closedPageFailure(stage) {
   return typeof stage === "string" && /^[A-Z_]{1,60}$/.test(stage) ? stage : "UNCLASSIFIED";
 }
@@ -108,6 +197,18 @@ export async function probeJourney(reading, spec, grants, options = {}) {
         break;
       }
       result.lookupPages++;
+      // MangaAll code8's bounded exhausted-retry response is an explicit
+      // failed lookup, even though its strict Host-V1 envelope has an empty
+      // items array and a null cursor. Never certify a complete empty source.
+      if (typeof response?.lookupFailureCode === "string") {
+        if (!validPage(response, 500) || response.items.length > 0) {
+          result.lookup = "INVALID_CONTRACT";
+        } else {
+          result.lookupError = errorCode(response);
+          lookupComplete = false;
+        }
+        break;
+      }
       if (!validPage(response, 500)) {
         result.lookup = "INVALID_CONTRACT";
         break;
@@ -139,6 +240,34 @@ export async function probeJourney(reading, spec, grants, options = {}) {
     }
     if (result.lookup === "INVALID_CONTRACT") break;
   }
+  if (options.includeCandidates === true) {
+    // Bounded, source-attested public metadata only. No raw URLs, page bytes,
+    // cookies, response bodies or upstream error text enters the CI artifact.
+    // This reveals genuine rival HIDs rather than manufacturing test rivals.
+    const observed = [...candidates.values()].sort((a, b) =>
+      a.externalWorkId.localeCompare(b.externalWorkId));
+    result.candidateCount = observed.length;
+    result.candidateSummariesTruncated = observed.length > 24;
+    result.candidateSummaries = observed.slice(0, 24).map((row) => ({
+      source: sourceName(row.externalWorkId),
+      workId: safePublicWorkId(row.externalWorkId),
+      title: safePublicText(row.title, 160),
+      aliases: (Array.isArray(row.aliases) ? row.aliases : [])
+        .map((x) => safePublicText(x, 120)).filter(Boolean).slice(0, 5),
+      authors: (Array.isArray(row.authors) ? row.authors : [])
+        .map((x) => safePublicText(x, 120)).filter(Boolean).slice(0, 5),
+      language: safePublicText(row.language, 20),
+      detailOutcome: safePublicCode(row.detailOutcome),
+      coverageOutcome: safePublicCode(row.coverageOutcome),
+      coverageObservedCount: Number.isInteger(row.coverageObservedCount) &&
+        row.coverageObservedCount >= 0 ? row.coverageObservedCount : null,
+      coverageHasMore: typeof row.coverageHasMore === "boolean" ?
+        row.coverageHasMore : null,
+      coverageMinMilli: safeNumber(row.coverageMinMilli),
+      coverageMaxMilli: safeNumber(row.coverageMaxMilli),
+      exactMatch: exact(row, titles),
+    }));
+  }
   const matched = [...candidates.values()].filter((v) => exact(v, titles));
   const known = spec.work ? matched.find((v) => v.externalWorkId === spec.work) : null;
   result.lookupComplete = lookupComplete && result.lookup !== "INVALID_CONTRACT";
@@ -162,6 +291,25 @@ export async function probeJourney(reading, spec, grants, options = {}) {
       ? "UPSTREAM_ERROR" : matched.length
         ? (spec.work && known ? "EXACT_WORK" : "DISCOVERY_OBSERVED")
         : lookupComplete ? "NO_MATCH" : "PARTIAL_NO_MATCH";
+  }
+  if (options.includeCandidateCoverage === true && !PROSE.has(spec.format) &&
+      result.lookup !== "INVALID_CONTRACT" &&
+      (matched.length > 1 || !result.lookupComplete)) {
+    const previewLimit = options.candidatePreviewLimit ?? 3;
+    const previewPages = options.candidateChapterPageLimit ?? 2;
+    if (!Number.isInteger(previewLimit) || previewLimit < 1 || previewLimit > 3 ||
+        !Number.isInteger(previewPages) || previewPages < 1 || previewPages > 3) {
+      throw Error("Invalid read-only candidate preview budget");
+    }
+    const ordered = matched.slice().sort((a, b) =>
+      a.externalWorkId.localeCompare(b.externalWorkId));
+    result.candidatePreviewsTruncated = ordered.length > previewLimit;
+    result.candidateChapterPreviews = [];
+    for (const candidate of ordered.slice(0, previewLimit)) {
+      result.candidateChapterPreviews.push(await sourceChapterPreview(
+        reading, candidate, previewPages,
+      ));
+    }
   }
   const chosen = spec.work ? known : matched.length === 1 && result.lookupComplete ? matched[0] : null;
   if (chosen) {
@@ -284,6 +432,8 @@ export async function probeJourney(reading, spec, grants, options = {}) {
   return result;
 }
 export function journeyVerdict(result) {
+  if (result.candidateChapterPreviews?.some((item) =>
+    item.outcome === "SOURCE_INVALID_CONTRACT")) return "FAIL_CONTRACT";
   if (result.lookup === "INVALID_CONTRACT" || result.chapters === "INVALID_CONTRACT" ||
       result.pages === "INVALID_CONTRACT" || result.pageOriginsAllowed === false) return "FAIL_CONTRACT";
   // Incomplete source discovery must not become a complete editorial decision.
