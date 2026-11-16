@@ -1,6 +1,7 @@
 // Config parsing only. No fake source candidates or HTTP fixtures: the LIVE
 // workflow receives arbitrary user-supplied works and fetches actual upstreams.
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { parseWorks, shardWorks } from './mangaall_generic_works.mjs';
 
 const input = [
@@ -53,5 +54,21 @@ assert.throws(() => shardWorks(cases, -1, 3));
 assert.throws(() => shardWorks(cases, 3, 3));
 assert.throws(() => shardWorks(cases, 0, 0));
 assert.throws(() => shardWorks(cases, 0, 9));
+
+const plan = spawnSync(process.execPath,
+  ['tooling/mangaall_live_matrix.mjs', '--plan'], {
+    encoding: 'utf8', timeout: 10000,
+    env: { ...process.env,
+      MANGAALL_SUITE: 'custom', MANGAALL_BATCH: '1', MANGAALL_WORKS: input,
+      MANGAALL_SHARD_INDEX: '1', MANGAALL_SHARD_COUNT: '3',
+    },
+  });
+assert.equal(plan.status, 0, plan.stderr);
+const inspected = JSON.parse(plan.stdout);
+assert.equal(inspected.inputCaseCount, 7);
+assert.equal(inspected.selectedCaseCount, 2);
+assert.deepEqual(inspected.cases.map(x => x.title), ['Enen no Shouboutai', "The King's Avatar"]);
+assert.equal(inspected.authority, 'NO_SOURCE_OR_CANONICAL_EVIDENCE_COLLECTED');
+assert.equal(inspected.cases.every(x => x.sourceWorkId === null), true);
 
 console.log('MangaAll arbitrary work selection: PASS (input contracts, format boundary, shards)');
