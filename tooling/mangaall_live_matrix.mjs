@@ -50,7 +50,8 @@ const shardCount = Number(process.env.MANGAALL_SHARD_COUNT ?? 1);
 const cases = selectedSuite === 'custom'
   ? shardWorks(allCases, shardIndex, shardCount)
   : allCases;
-assert.ok(cases.length > 0, 'each runner must receive at least one work');
+assert.ok(cases.length > 0 || selectedSuite === 'custom',
+  'curated runs must receive at least one work; generic idle shards are allowed');
 if (selectedSuite === 'cross-format') assert.equal(cases.length, 7);
 if (selectedSuite === 'identity') assert.equal(cases.length, 4);
 // Inspect precisely which operator-supplied works would be queried without
@@ -218,6 +219,7 @@ const report = { schema: 1, provider: manifest.id, version: manifest.version.nam
   shardIndex: selectedSuite === 'custom' ? shardIndex : 0,
   shardCount: selectedSuite === 'custom' ? shardCount : 1,
   inputCaseCount: allCases.length, selectedCaseCount: cases.length,
+  shardOutcome: cases.length ? 'REAL_SOURCE_ATTEMPTED' : 'NO_WORK_ASSIGNED',
   scope: 'LIVE_API_LOOKUP_PAGINATED_CHAPTERS_AND_PAGE_METADATA_ONLY_NOT_CANONICAL_NOT_READER_PIXELS',
   requests, cases: results };
 fs.writeFileSync(process.argv[4], JSON.stringify(report, null, 2) + '\n');
@@ -238,6 +240,9 @@ for (const value of results) {
     candidatePreviews: value.candidateChapterPreviews?.length ?? 0,
     candidatePreviewsTruncated: value.candidatePreviewsTruncated ?? false,
     canonicalStage: value.canonicalStage, readerPixelStage: value.readerPixelStage }));
+}
+if (selectedSuite === 'custom' && cases.length === 0) {
+  console.log('MANGAALL_GENERIC_SHARD|outcome=NO_WORK_ASSIGNED|sourceRequests=0');
 }
 const verdictCounts = Object.create(null);
 for (const value of results) verdictCounts[value.verdict] = (verdictCounts[value.verdict] || 0) + 1;
