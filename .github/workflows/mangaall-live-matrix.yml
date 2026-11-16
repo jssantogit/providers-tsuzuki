@@ -42,6 +42,8 @@ on:
       - 'tooling/mangaall_live_selection.json'
       - 'tooling/mangaall_generic_works.mjs'
       - 'tooling/test_mangaall_generic_works.mjs'
+      - 'tooling/mangaall_real_envelope_capture.mjs'
+      - 'tooling/test_mangaall_real_envelope_capture.mjs'
 
 permissions:
   contents: read
@@ -101,7 +103,10 @@ jobs:
           MANGAALL_WORKS: ${{ inputs.works || '' }}
           MANGAALL_SHARD_INDEX: ${{ matrix.shard }}
           MANGAALL_SHARD_COUNT: ${{ inputs.suite == 'custom' && '3' || '1' }}
-        run: node tooling/mangaall_live_matrix.mjs --live --output mangaall-live-matrix-${{ matrix.shard }}.json
+        run: |
+          node tooling/mangaall_live_matrix.mjs --live \
+            --output mangaall-live-matrix-${{ matrix.shard }}.json \
+            --real-envelopes mangaall-real-envelopes-${{ matrix.shard }}.json
       - name: Upload sanitized public API evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -110,3 +115,11 @@ jobs:
           path: mangaall-live-matrix-*.json
           if-no-files-found: warn
           retention-days: 14
+      - name: Upload bounded normalized real source envelopes for Host parity
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mangaall-real-source-envelopes-${{ matrix.shard }}
+          path: mangaall-real-envelopes-*.json
+          if-no-files-found: warn
+          retention-days: 3
