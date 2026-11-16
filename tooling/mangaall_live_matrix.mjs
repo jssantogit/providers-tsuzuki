@@ -162,6 +162,8 @@ for (const spec of cases) {
     lookupPageLimit: selectedSuite === 'custom' ? 3 : 2,
     chapterPageLimit: selectedSuite === 'custom' ? 8 : 4,
     includeCandidates: selectedSuite === 'custom',
+    includeCandidateCoverage: selectedSuite === 'custom',
+    candidatePreviewLimit: 3, candidateChapterPageLimit: 2,
   
   });
   const observed = requests.slice(before);
@@ -217,7 +219,11 @@ for (const value of results) {
     lookupError: value.lookupError || null, chaptersError: value.chaptersError || null,
     pagesError: value.pagesError || null, pageFailureStage: value.pageFailureStage || null,
     matchingWorkCount: value.matchingWorkCount ?? 0,
-    matchingSources: value.matchingSources || [] }));
+    matchingSources: value.matchingSources || [],
+    candidateCount: value.candidateCount ?? null,
+    candidatePreviews: value.candidateChapterPreviews?.length ?? 0,
+    candidatePreviewsTruncated: value.candidatePreviewsTruncated ?? false,
+    canonicalStage: value.canonicalStage, readerPixelStage: value.readerPixelStage }));
 }
 const verdictCounts = Object.create(null);
 for (const value of results) verdictCounts[value.verdict] = (verdictCounts[value.verdict] || 0) + 1;
