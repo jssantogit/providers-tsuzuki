@@ -62,6 +62,27 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Confirm published signed package matches the real JS source under test
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tooling/verify_index.mjs
+          python3 tooling/build_provider.py providers/mangaall /tmp/mangaall-live-exact.tsz
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('dist/index.payload.json').read_text())
+          installed = [item for item in payload['providers'] if item['providerId'] == 'app.tsuzuki.mangaall']
+          assert len(installed) == 1 and payload['repositoryId'] == 'app.tsuzuki.providers'
+          entry = installed[0]
+          assert entry['versionCode'] == 8
+          package = Path('/tmp/mangaall-live-exact.tsz')
+          digest = hashlib.sha256(package.read_bytes()).hexdigest()
+          assert digest == entry['sha256'], 'Unpublished JS cannot claim signed-package parity'
+          assert hashlib.sha256(Path('dist/providers/app.tsuzuki.mangaall-8.tsz').read_bytes()).hexdigest() == digest
+          print('MANGAALL_LIVE_PACKAGE_PARITY|sourceJS=SIGNED_CODE8|repositoryRoot=VERIFIED|sequence=' + str(payload['sequence']))
+          PY
       - name: Offline generic input/shard contract (no source fixtures)
         run: node tooling/test_mangaall_generic_works.mjs
       - name: Offline negative/identity/origin contract
