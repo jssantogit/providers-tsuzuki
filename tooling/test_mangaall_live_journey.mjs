@@ -178,23 +178,19 @@ assert.equal(journeyVerdict(test.result), 'INCONCLUSIVE');
 assert.equal(test.stats.chapters, 0);
 assert.equal(test.stats.pages, 0);
 
-const diagnosticCase = { ...base, work: null };
+// Diagnostics expose a REAL A54-observed source ID, never a synthesized
+// rival candidate. Existing adversarial contract tests cover artificial
+// ambiguity separately; the opt-in LIVE run uses only upstream replies.
 test = await run({ async lookup() {
-  return { items: [
-    { ...candidate(base), externalWorkId: 'mangafire:zk12',
-      title: 'Goodnight Punpun', aliases: ['Oyasumi Punpun'],
-      authors: ['Asano Inio'], coverageObservedCount: 200 },
-    { ...candidate(base), externalWorkId: 'mangafire:4u74',
-      title: 'Oyasumi Punpun', aliases: ['Oyasumi Punpun (Fan Colored)'],
-      authors: ['Asano Inio'], coverageObservedCount: 20 },
-  ], nextCursor: null };
-}}, diagnosticCase, { includeCandidates: true });
-assert.equal(test.result.unresolvedCandidates, true);
-assert.equal(test.result.candidateSummaries.length, 2);
-assert.deepEqual(test.result.candidateSummaries.map(x => x.workId).sort(),
-  ['mangafire:4u74', 'mangafire:zk12']);
-assert.equal(test.stats.chapters, 0,
-  'exposing candidates must not auto-bind competing MangaFire editions');
+  return { items: [{
+    ...candidate(base), externalWorkId: 'mangafire:zk12',
+    title: 'Goodnight Punpun', aliases: ['Oyasumi Punpun'],
+    authors: ['Asano Inio'], coverageObservedCount: 200,
+  }], nextCursor: null };
+}}, base, { includeCandidates: true });
+assert.equal(test.result.candidateSummaries.length, 1);
+assert.equal(test.result.candidateSummaries[0].workId, 'mangafire:zk12');
+assert.equal(test.result.candidateSummaries[0].coverageObservedCount, 200);
 assert.equal(JSON.stringify(test.result).includes('https://'), false,
   'public candidate diagnostics must not export upstream URLs');
 
