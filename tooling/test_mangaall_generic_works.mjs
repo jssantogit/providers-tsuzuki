@@ -8,7 +8,7 @@ const input = [
   'manga :: Enen no Shouboutai',
   'manhwa :: Tower of God',
   'webtoon :: Solo Leveling',
-  'manhua :: The King's Avatar',
+  "manhua :: The King's Avatar",
   'web_novel :: Shadow Slave',
   'light_novel :: Spice and Wolf',
 ].join('\n');
@@ -34,7 +34,7 @@ assert.deepEqual(shards.flatMap(x => x.map(y => y.id)).sort(), cases.map(x => x.
   'every work appears in exactly one runner shard');
 assert.deepEqual(shardWorks(cases, 0, 1), cases);
 assert.deepEqual(shardWorks(cases, 2, 3).map(x => x.names[0]),
-  ['manhwa :: invalid'].filter(() => false).concat(['Tower of God', 'Shadow Slave']));
+  ['Tower of God', 'Shadow Slave']);
 
 assert.equal(parseWorks('Ｒｙōｋｏ\nOne Piece').length, 2,
   'non-ASCII manga and creator words are supported');
