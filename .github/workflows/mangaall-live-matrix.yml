@@ -1,4 +1,4 @@
-name: MangaAll code8 live API journey matrix
+name: MangaAll generic signed-provider live source journeys
 
 # One-shot opt-in only; no scheduled polling, PR fanout, cookies,
 # image downloads, browser challenge bypass or signed publication.
@@ -40,6 +40,8 @@ on:
       - 'tooling/mangaall_live_journey_core.mjs'
       - 'tooling/test_mangaall_live_journey.mjs'
       - 'tooling/mangaall_live_selection.json'
+      - 'tooling/mangaall_generic_works.mjs'
+      - 'tooling/test_mangaall_generic_works.mjs'
 
 permissions:
   contents: read
@@ -76,12 +78,17 @@ jobs:
           installed = [item for item in payload['providers'] if item['providerId'] == 'app.tsuzuki.mangaall']
           assert len(installed) == 1 and payload['repositoryId'] == 'app.tsuzuki.providers'
           entry = installed[0]
-          assert entry['versionCode'] == 8
+          assert entry['versionCode'] >= 8
+          source_manifest = json.loads(Path('providers/mangaall/manifest.json').read_text())
+          assert source_manifest['version']['code'] == entry['versionCode'], (
+              'LIVE work runner refuses unsigned source candidate bytes'
+          )
           package = Path('/tmp/mangaall-live-exact.tsz')
           digest = hashlib.sha256(package.read_bytes()).hexdigest()
           assert digest == entry['sha256'], 'Unpublished JS cannot claim signed-package parity'
-          assert hashlib.sha256(Path('dist/providers/app.tsuzuki.mangaall-8.tsz').read_bytes()).hexdigest() == digest
-          print('MANGAALL_LIVE_PACKAGE_PARITY|sourceJS=SIGNED_CODE8|repositoryRoot=VERIFIED|sequence=' + str(payload['sequence']))
+          artifact = Path(f"dist/providers/app.tsuzuki.mangaall-{entry['versionCode']}.tsz")
+          assert hashlib.sha256(artifact.read_bytes()).hexdigest() == digest
+          print('MANGAALL_LIVE_PACKAGE_PARITY|sourceJS=SIGNED|providerCode=' + str(entry['versionCode']) + '|repositoryRoot=VERIFIED|sequence=' + str(payload['sequence']))
           PY
       - name: Offline generic input/shard contract (no source fixtures)
         run: node tooling/test_mangaall_generic_works.mjs
@@ -99,7 +106,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mangaall-code8-live-journey-matrix-${{ matrix.shard }}
+          name: mangaall-live-source-journey-${{ matrix.shard }}
           path: mangaall-live-matrix-*.json
           if-no-files-found: warn
           retention-days: 14
