@@ -3,11 +3,13 @@
 // suites; no image downloads, trust-root changes, cookies, browser challenge
 // bypass, Host canonical authority or Reader/pixel guarantees.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createHttpBridge } from './mangaall_live_probe_core.mjs';
 import { parseWorks, shardWorks } from './mangaall_generic_works.mjs';
+import { createRealEnvelopeCapture } from './mangaall_real_envelope_capture.mjs';
 import { probeJourney as probe, journeyVerdict as verdict, granted } from './mangaall_live_journey_core.mjs';
 
 // Preset data is never read in generic custom mode: no fixed title corpus
@@ -121,9 +123,15 @@ if (process.argv.length === 3 && process.argv[2] === '--self-test') {
   console.log('MangaAll code8 live-matrix offline contract: PASS');
   process.exit(0);
 }
-if (process.argv.length !== 5 || process.argv[2] !== '--live' || process.argv[3] !== '--output' ||
-    !/^[\w./-]+\.json$/.test(process.argv[4]) || process.argv[4].includes('..')) {
-  console.error('Usage: node tooling/mangaall_live_matrix.mjs --live --output mangaall-live.json');
+const captureOutput = process.argv.length === 7 && process.argv[5] === '--real-envelopes'
+  ? process.argv[6] : null;
+if (![5, 7].includes(process.argv.length) || process.argv[2] !== '--live' ||
+    process.argv[3] !== '--output' || (process.argv.length === 7 && !captureOutput) ||
+    !/^[\w./-]+\.json$/.test(process.argv[4]) || process.argv[4].includes('..') ||
+    (captureOutput && (!/^[\w./-]+\.json$/.test(captureOutput) ||
+      captureOutput.includes('..') || captureOutput === process.argv[4]))) {
+  console.error('Usage: node tooling/mangaall_live_matrix.mjs --live --output source.json ' +
+    '[--real-envelopes normalized-source.json]');
   process.exit(2);
 }
 const root = path.resolve('providers/mangaall');
@@ -173,10 +181,36 @@ if (!provider?.reading || !['lookup', 'chapters', 'pages']
   .every((method) => typeof provider.reading[method] === 'function')) {
   throw Error('Unified MangaAll reading contract not found');
 }
+// Real normalized lookup/chapter envelopes can be exported separately for
+// the future Host Kotlin gateway. This captures the actual running Provider,
+// never a summary reconstructed into invented candidates. Page CDN URLs are
+// always redacted and therefore cannot be replayed as Reader pixels.
+const observedAt = new Date().toISOString();
+const signedPayload = captureOutput
+  ? JSON.parse(fs.readFileSync('dist/index.payload.json', 'utf8')) : null;
+const signedEntry = signedPayload?.providers?.find(x => x.providerId === manifest.id);
+if (captureOutput) {
+  if (signedPayload.repositoryId !== 'app.tsuzuki.providers' ||
+      signedEntry?.versionCode !== manifest.version.code ||
+      !/^[a-f0-9]{64}$/u.test(signedEntry?.sha256 || '')) {
+    throw Error('Real source capture requires published signed MangaAll identity');
+  }
+  const artifact = fs.readFileSync(
+    `dist/providers/app.tsuzuki.mangaall-${signedEntry.versionCode}.tsz`);
+  if (createHash('sha256').update(artifact).digest('hex') !== signedEntry.sha256) {
+    throw Error('Real source capture refuses artifact hash mismatch');
+  }
+}
+const realCaptures = [];
 const results = [];
 for (const spec of cases) {
   const before = requests.length;
-  const value = await probe(provider.reading, spec, grants, {
+  const recording = captureOutput
+    ? createRealEnvelopeCapture(provider.reading, {
+      caseId: spec.id, observedAt, providerCode: manifest.version.code,
+      packageSha256: signedEntry.sha256,
+    }) : null;
+  const value = await probe(recording?.reading ?? provider.reading, spec, grants, {
     lookupPageLimit: selectedSuite === 'custom' ? 3 : 2,
     chapterPageLimit: selectedSuite === 'custom' ? 8 : 4,
     includeCandidates: selectedSuite === 'custom',
@@ -185,6 +219,7 @@ for (const spec of cases) {
   
   });
   const observed = requests.slice(before);
+  if (recording) realCaptures.push(recording.finalize());
   value.httpBySource = Object.fromEntries(['MANGADEX', 'MANGADOT', 'MANGAFIRE'].map((source) => {
     const sample = observed.filter((item) => item.source === source);
     return [source, {
@@ -226,6 +261,33 @@ const report = { schema: 1, provider: manifest.id, version: manifest.version.nam
   scope: 'LIVE_API_LOOKUP_PAGINATED_CHAPTERS_AND_PAGE_METADATA_ONLY_NOT_CANONICAL_NOT_READER_PIXELS',
   requests, cases: results };
 fs.writeFileSync(process.argv[4], JSON.stringify(report, null, 2) + '\n');
+if (captureOutput) {
+  const capture = {
+    schemaVersion: 1,
+    captureKind: 'REAL_PROVIDER_NORMALIZED_ENVELOPE_BATCH',
+    origin: 'LIVE_SIGNED_PROVIDER_JS',
+    providerId: manifest.id,
+    providerVersionCode: manifest.version.code,
+    repositoryId: signedPayload.repositoryId,
+    signedIndexSequence: signedPayload.sequence,
+    packageSha256: signedEntry.sha256,
+    observedAt,
+    selectionSource: selectedSuite === 'custom' ? 'USER_INPUT' : 'CURATED_COMPATIBILITY',
+    shardIndex: selectedSuite === 'custom' ? shardIndex : 0,
+    shardCount: selectedSuite === 'custom' ? shardCount : 1,
+    // No independent catalog identity was verified here. Never promote an
+    // apparent unique API candidate into an editorial/canonical Host claim.
+    catalogStage: 'NOT_EXECUTED_HOST',
+    canonicalStage: 'NOT_EXECUTED_HOST',
+    readerPixelStage: 'NOT_EXECUTED_HOST',
+    captureOutcome: cases.length ? 'SOURCE_ATTEMPTS_RECORDED' : 'NO_WORK_ASSIGNED',
+    cases: realCaptures,
+  };
+  const hash = createHash('sha256').update(JSON.stringify(capture)).digest('hex');
+  fs.writeFileSync(captureOutput, JSON.stringify({ ...capture, sha256: hash }, null, 2) + '\n');
+  console.log('MANGAALL_REAL_ENVELOPES|scope=LOOKUP_CHAPTERS_ONLY|cases=' +
+    realCaptures.length + '|catalog=NOT_EXECUTED_HOST|readerPixels=NOT_EXECUTED_HOST');
+}
 for (const value of results) {
   console.log(JSON.stringify({ case: value.case, verdict: value.verdict, lookup: value.lookup,
     coverage: value.coverage || 'N/A', chapters: value.chapters, pages: value.pages,
