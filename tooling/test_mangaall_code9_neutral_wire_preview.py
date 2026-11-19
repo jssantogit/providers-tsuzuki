@@ -39,8 +39,8 @@ class MangaAllNeutralWirePreviewTest(unittest.TestCase):
             self.assertEqual(artifact.name, "app.tsuzuki.mangaall-9-UNSIGNED-NEUTRAL-PREVIEW.tsz")
             self.assertTrue(artifact.is_file())
             self.assertEqual(
-                [p.name for p in output.iterdir()],
-                ["candidate", artifact.name],
+                {p.name for p in output.iterdir()},
+                {"candidate", artifact.name},
                 "No signed index, private key or published repository is produced",
             )
             manifest = json.loads((output / "candidate/manifest.json").read_text(encoding="utf-8"))
