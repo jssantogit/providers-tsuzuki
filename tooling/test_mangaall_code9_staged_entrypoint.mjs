@@ -13,6 +13,11 @@ const manifest = JSON.parse(fs.readFileSync(path.join(folder, "manifest.json"), 
 assert.equal(manifest.id, "app.tsuzuki.mangaall");
 assert.equal(manifest.version.code, 9);
 assert.equal(manifest.publication, "development");
+const expectedMarker = {
+  "0.5.4-dev-unsigned": "UNSIGNED_CANDIDATE_NOT_LIVE",
+  "0.5.4-preview-unsigned": "V2_READONLY_OBSERVATION",
+}[manifest.version.name];
+assert.ok(expectedMarker, "only explicit unsigned code9 modes are testable");
 
 const calls = [];
 const ok = data => JSON.stringify({ statusCode: 200, body: JSON.stringify(data) });
@@ -53,6 +58,9 @@ calls.length = 0;
 const v2 = await reading.lookup({ ...request, diagnosticsVersion: 2 });
 assert.equal(v2.contractVersion, 2);
 assert.equal(v2.providerId, "app.tsuzuki.mangaall");
+assert.equal(v2.provenance, expectedMarker);
+assert.equal(Object.hasOwn(v2, "hostProvenance"), false,
+  "signed installation evidence must originate exclusively from the Host");
 assert.deepEqual(v2.sourceStatuses.map(s => s.source), ["mangadex", "mangadot", "mangafire"]);
 assert.equal(Object.hasOwn(v2, "items"), false, "V2 must never impersonate a V1 page");
 assert.equal(v2.eligibleForReader, false);
@@ -63,4 +71,4 @@ assert.ok(calls.every(origin => origins.has(origin)));
 assert.deepEqual([...new Set(calls)].sort(), [...origins].sort(),
   "all three internal adapters must be contacted within this one MangaAll lookup");
 
-console.log("MANGAALL_CODE9_STAGING|jsEntry=PARSED|v1=V1_PAGE|v2=THREE_SOURCE_READONLY|http=SYNTHETIC_ONLY");
+console.log("MANGAALL_CODE9_STAGING|jsEntry=PARSED|v1=V1_PAGE|v2=THREE_SOURCE_READONLY|http=SYNTHETIC_ONLY|wire=" + expectedMarker);
