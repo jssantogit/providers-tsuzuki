@@ -37,7 +37,9 @@ class MangaAllCode9PublicationGateTest(unittest.TestCase):
             'export default {reading: createMangaAllLookupV2Candidate({})};\n', encoding="utf8",
         )
         (self.provider / "modules/v2-candidate.js").write_text(
-            "export function createMangaAllLookupV2Candidate() { return {}; }\n", encoding="utf8",
+            'export const approvedWire = { provenance: "V2_READONLY_OBSERVATION", };\n'
+            'export function createMangaAllLookupV2Candidate() { return {}; }\n',
+            encoding="utf8",
         )
 
     def write(self, name, value):
@@ -105,6 +107,15 @@ class MangaAllCode9PublicationGateTest(unittest.TestCase):
             'export const provenance = "UNSIGNED_CANDIDATE_NOT_LIVE";\n', encoding="utf8",
         )
         with self.assertRaisesRegex(ValueError, "unsigned provenance"):
+            self.check()
+
+    def test_code9_rejects_non_neutral_wire(self):
+        self.manifest(9, "0.5.4", "release")
+        (self.provider / "modules/v2-candidate.js").write_text(
+            'export function createMangaAllLookupV2Candidate() { return {}; }\n',
+            encoding="utf8",
+        )
+        with self.assertRaisesRegex(ValueError, "neutral V2 wire"):
             self.check()
 
     def test_code9_rejects_mismatched_artifact(self):

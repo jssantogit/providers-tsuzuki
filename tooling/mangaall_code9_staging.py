@@ -21,7 +21,17 @@ WRAPPER_IMPORT = 'from "../providers/mangaall/modules/router.js";'
 STAGED_WRAPPER_IMPORT = 'from "./router.js";'
 
 
-def stage_unsigned_code9(output_root: pathlib.Path) -> pathlib.Path:
+# Preview is intentionally neither a signed artifact nor an installable code9.
+# A separate, explicit mode prevents accidental promotion of the old test wire.
+UNSIGNED_WIRE = 'provenance: "UNSIGNED_CANDIDATE_NOT_LIVE",'
+NEUTRAL_WIRE = 'provenance: "V2_READONLY_OBSERVATION",'
+
+
+def _stage_code9(
+    output_root: pathlib.Path,
+    *,
+    neutral_wire_preview: bool,
+) -> pathlib.Path:
     output_root = output_root.resolve()
     # Explicitly refuse any destination under this repository or dist/.
     if output_root == ROOT or ROOT in output_root.parents:
@@ -46,7 +56,10 @@ def stage_unsigned_code9(output_root: pathlib.Path) -> pathlib.Path:
     staged = output_root / "candidate"
     shutil.copytree(PROVIDER, staged)
     staged_manifest = json.loads((staged / "manifest.json").read_text(encoding="utf-8"))
-    staged_manifest["version"] = {"name": "0.5.4-dev-unsigned", "code": 9}
+    staged_manifest["version"] = {
+        "name": "0.5.4-preview-unsigned" if neutral_wire_preview else "0.5.4-dev-unsigned",
+        "code": 9,
+    }
     staged_manifest["publication"] = "development"
     (staged / "manifest.json").write_text(
         json.dumps(staged_manifest, indent=2, ensure_ascii=False) + "\n",
@@ -69,18 +82,41 @@ def stage_unsigned_code9(output_root: pathlib.Path) -> pathlib.Path:
     wrapper = V2_SOURCE.read_text(encoding="utf-8")
     if wrapper.count(WRAPPER_IMPORT) != 1:
         raise ValueError("Staging candidate's router import is not uniquely anchored")
-    (staged / "modules/v2-candidate.js").write_text(
-        wrapper.replace(WRAPPER_IMPORT, STAGED_WRAPPER_IMPORT),
-        encoding="utf-8",
-    )
+    wrapper = wrapper.replace(WRAPPER_IMPORT, STAGED_WRAPPER_IMPORT)
+    if wrapper.count(UNSIGNED_WIRE) != 1:
+        raise ValueError("V2 source's unsigned wire marker is not uniquely anchored")
+    if neutral_wire_preview:
+        wrapper = wrapper.replace(UNSIGNED_WIRE, NEUTRAL_WIRE)
+        if "UNSIGNED_CANDIDATE_NOT_LIVE" in wrapper:
+            raise ValueError("Unsigned marker cannot survive in neutral preview")
+    (staged / "modules/v2-candidate.js").write_text(wrapper, encoding="utf-8")
 
-    artifact = output_root / "app.tsuzuki.mangaall-9-UNSIGNED.tsz"
+    artifact = output_root / (
+        "app.tsuzuki.mangaall-9-UNSIGNED-NEUTRAL-PREVIEW.tsz"
+        if neutral_wire_preview else "app.tsuzuki.mangaall-9-UNSIGNED.tsz"
+    )
     build(staged, artifact)
     print(
         "MANGAALL_CODE9_STAGING|provider=app.tsuzuki.mangaall"
-        "|code=9|state=UNSIGNED_LOCAL_ONLY|publishedCode8=UNTOUCHED"
+        "|code=9|state="
+        + ("UNSIGNED_NEUTRAL_WIRE_PREVIEW" if neutral_wire_preview else "UNSIGNED_LOCAL_ONLY")
+        + "|publishedCode8=UNTOUCHED"
     )
     return artifact
+
+
+def stage_unsigned_code9(output_root: pathlib.Path) -> pathlib.Path:
+    """Legacy 0.5.4-dev-unsigned fixture; never accepted as signed code9."""
+    return _stage_code9(output_root, neutral_wire_preview=False)
+
+
+def stage_unsigned_code9_neutral_wire_preview(output_root: pathlib.Path) -> pathlib.Path:
+    """Review the neutral V2 wire without changing the source manifest or index.
+
+    The version is deliberately NOT the Host's signed 0.5.4; no production
+    release path consumes this temporary archive or this staging directory.
+    """
+    return _stage_code9(output_root, neutral_wire_preview=True)
 
 
 if __name__ == "__main__":

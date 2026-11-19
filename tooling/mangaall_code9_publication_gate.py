@@ -82,6 +82,8 @@ def check_code9_publication(root, event_name, authorization):
         raise ValueError("Code9 must use the unified three-source V2 router")
     if "UNSIGNED_CANDIDATE_NOT_LIVE" in v2.read_text(encoding="utf-8"):
         raise ValueError("Experimental unsigned provenance cannot be published as code9")
+    if 'provenance: "V2_READONLY_OBSERVATION",' not in v2.read_text(encoding="utf-8"):
+        raise ValueError("Code9 release requires the reviewed neutral V2 wire provenance")
 
     artifact = root / "dist/providers/app.tsuzuki.mangaall-9.tsz"
     if not artifact.is_file():
