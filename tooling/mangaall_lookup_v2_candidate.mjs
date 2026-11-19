@@ -129,6 +129,10 @@ export function createMangaAllLookupV2Candidate(adapters) {
   const router = createMangaAllReading(wrapped);
 
   return Object.freeze({
+    // Source-scoped chapters and pages retain the original router's V1
+    // authorization/identity checks. V2 diagnostics never auto-bind them.
+    chapters: (input) => router.chapters(input),
+    pages: (input) => router.pages(input),
     async lookup(input) {
       if (input?.diagnosticsVersion !== 2) return router.lookup(input);
       if (active !== null) throw Error("MangaAll candidate audit reentry not permitted");
