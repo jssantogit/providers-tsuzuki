@@ -22,6 +22,7 @@ class MangaAllCode9PublicationGateTest(unittest.TestCase):
         (self.root / "dist/providers/app.tsuzuki.mangaall-8.tsz").write_bytes(self.code8)
         self.write("repository/config.json", {
             "repositoryId": "app.tsuzuki.providers", "sequence": 34,
+            "keyId": "tsuzuki-provider-root-2026-02",
         })
         self.write("dist/index.payload.json", {
             "repositoryId": "app.tsuzuki.providers", "sequence": 34,
@@ -82,6 +83,14 @@ class MangaAllCode9PublicationGateTest(unittest.TestCase):
     def test_code10_is_not_implicitly_authorized(self):
         self.manifest(10, "0.5.5", "release")
         with self.assertRaisesRegex(ValueError, "Code10"):
+            self.check()
+
+    def test_code9_rejects_implicit_signing_root_rotation(self):
+        self.manifest(9, "0.5.4", "release")
+        config = json.loads((self.root / "repository/config.json").read_text())
+        config["keyId"] = "unexpected-root"
+        self.write("repository/config.json", config)
+        with self.assertRaisesRegex(ValueError, "signing-root rotation"):
             self.check()
 
     def test_code9_rejects_tampered_previous_artifact(self):
