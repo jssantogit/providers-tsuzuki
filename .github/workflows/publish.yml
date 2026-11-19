@@ -2,6 +2,11 @@ name: Publish repository
 
 on:
   workflow_dispatch:
+    inputs:
+      mangaall_code9_authorization:
+        description: 'For reviewed MangaAll 0.5.4/code9 only, type PUBLISH_MANGAALL_CODE9'
+        required: false
+        type: string
   push:
     branches:
       - main
@@ -51,6 +56,11 @@ jobs:
               output = pathlib.Path('dist/providers') / f"{manifest['id']}-{manifest['version']['code']}.tsz"
               subprocess.run(['python3', 'tooling/build_provider.py', str(manifest_path.parent), str(output)], check=True)
           PY
+      - name: MangaAll code9 promotion authorization (pre-signature fail-closed)
+        env:
+          MANGAALL_RELEASE_EVENT: ${{ github.event_name }}
+          MANGAALL_CODE9_AUTHORIZATION: ${{ inputs.mangaall_code9_authorization || '' }}
+        run: python3 tooling/mangaall_code9_publication_gate.py
       - name: Prepare stable one-link repository bootstrap
         run: node tooling/build_enrollment.mjs
       - name: Plan atomic signed publication
