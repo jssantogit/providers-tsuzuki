@@ -15,6 +15,7 @@ from build_provider import build
 
 PROVIDER_ID = "app.tsuzuki.mangaall"
 REPOSITORY_ID = "app.tsuzuki.providers"
+SIGNING_ROOT_ID = "tsuzuki-provider-root-2026-02"
 CODE9_AUTHORIZATION = "PUBLISH_MANGAALL_CODE9"
 
 
@@ -32,6 +33,8 @@ def check_code9_publication(root, event_name, authorization):
         raise ValueError("MangaAll identity changed")
     if config.get("repositoryId") != REPOSITORY_ID or previous.get("repositoryId") != REPOSITORY_ID:
         raise ValueError("MangaAll release requires the existing trusted repository")
+    if config.get("keyId") != SIGNING_ROOT_ID:
+        raise ValueError("Code9 requires separately reviewed signing-root rotation")
     if config.get("sequence") != previous.get("sequence"):
         raise ValueError("Verify the prior signed publication sequence first")
 
