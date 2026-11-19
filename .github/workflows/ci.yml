@@ -41,7 +41,9 @@ jobs:
       - name: MangaAll code9 UNSIGNED staged package, V1 and V2 contract (offline only)
         run: python3 tooling/test_mangaall_code9_staging.py
       - name: MangaAll code9 signed release authorization gate (offline, no secrets)
-        run: python3 -m unittest discover -s tooling -p 'test_mangaall_code9_publication_gate.py' -v
+        run: |
+          python3 -m unittest discover -s tooling -p 'test_mangaall_code9_publication_gate.py' -v
+          python3 tooling/mangaall_code9_publication_gate.py
       - name: MangaAll UNSIGNED future partial-evidence lookup (single three-source router, offline)
         run: node tooling/test_mangaall_lookup_v2_candidate.mjs
       - name: MangaAll aggregator identity and reader-routing contract
