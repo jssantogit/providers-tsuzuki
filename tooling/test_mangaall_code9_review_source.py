@@ -79,6 +79,7 @@ class MangaAllCode9ReviewSourceTest(unittest.TestCase):
             "dist/index.payload.json",
             "dist/enrollment.json",
             "dist/providers/app.tsuzuki.mangaall-8.tsz",
+            "dist/providers/app.tsuzuki.mangaall-9.tsz",
             "repository/config.json",
         ):
             dst = source / relative
