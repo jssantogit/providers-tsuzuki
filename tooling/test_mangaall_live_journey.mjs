@@ -135,7 +135,8 @@ const run = async (override, spec = base, options) => {
   for (const call of requested.slice(1)) {
     assert.equal(Object.hasOwn(call, 'diagnosticsVersion'), false,
       'V1 call must never include the V2 diagnostic request signal');
-    assert.equal(call.editorialEvidenceVersion, 1);
+    assert.equal(Object.hasOwn(call, 'editorialEvidenceVersion'), false,
+      'Host V1 DTO has no editorialEvidenceVersion field');
     assert.equal(call.coverageEvidenceVersion, 1);
   }
   await assert.rejects(
