@@ -12,6 +12,7 @@ import pathlib
 import tempfile
 
 from build_provider import build
+from mangaall_code9_review_source import materialize_review_code9
 
 PROVIDER_ID = "app.tsuzuki.mangaall"
 REPOSITORY_ID = "app.tsuzuki.providers"
@@ -95,6 +96,17 @@ def check_code9_publication(root, event_name, authorization):
             raise ValueError("Code9 artifact differs from deterministic source rebuild")
     if hashlib.sha256(artifact.read_bytes()).digest() == hashlib.sha256(published_code8.read_bytes()).digest():
         raise ValueError("Code9 cannot reuse signed code8 bytes")
+
+    # String checks and deterministic rebuild alone are NOT sufficient:
+    # code9 release bytes must match the precise three-file source review
+    # over the immutable signed code8 archive. Even a comment, new adapter,
+    # altered permission or new source asset invalidates this comparison.
+    if not (root / "review/mangaall-code9").is_dir():
+        raise ValueError("Code9 release requires the reviewed source overlay")
+    with tempfile.TemporaryDirectory(prefix="mangaall-code9-reviewed-preflight-") as temp:
+        reviewed = materialize_review_code9(pathlib.Path(temp), root=root)
+        if reviewed.read_bytes() != artifact.read_bytes():
+            raise ValueError("Code9 release differs from the reviewed source overlay")
     return "AUTHORIZED_PREFLIGHT_ONLY_NOT_SIGNED"
 
 

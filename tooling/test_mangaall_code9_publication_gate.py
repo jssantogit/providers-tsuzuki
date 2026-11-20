@@ -3,11 +3,13 @@
 import hashlib
 import json
 import pathlib
+import shutil
 import tempfile
 import unittest
 
 from build_provider import build
 from mangaall_code9_publication_gate import check_code9_publication
+from mangaall_code9_review_source import ROOT, materialize_review_code9
 
 
 class MangaAllCode9PublicationGateTest(unittest.TestCase):
@@ -59,6 +61,30 @@ class MangaAllCode9PublicationGateTest(unittest.TestCase):
 
     def build_code9(self):
         build(self.provider, self.root / "dist/providers/app.tsuzuki.mangaall-9.tsz")
+
+    def install_review_fixture_into_isolated_release(self):
+        """Construct exact reviewed 0.5.4 from actual signed code8, never sign."""
+        for relative in (
+            "repository/config.json",
+            "dist/index.payload.json",
+            "dist/enrollment.json",
+            "dist/providers/app.tsuzuki.mangaall-8.tsz",
+        ):
+            dest = self.root / relative
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / relative, dest)
+        shutil.copytree(
+            ROOT / "review/mangaall-code9",
+            self.root / "review/mangaall-code9",
+        )
+        with tempfile.TemporaryDirectory(prefix="mangaall-code9-reviewed-fixture-") as temp:
+            artifact = materialize_review_code9(pathlib.Path(temp) / "generated", root=self.root)
+            shutil.rmtree(self.provider)
+            shutil.copytree(artifact.parent / "candidate", self.provider)
+        current = json.loads((self.provider / "manifest.json").read_text())
+        current["publication"] = "release"
+        self.write("providers/mangaall/manifest.json", current)
+        self.build_code9()
 
     def test_published_code8_is_untouched(self):
         self.assertEqual(self.check(), "NO_CODE9_PROMOTION")
@@ -126,9 +152,37 @@ class MangaAllCode9PublicationGateTest(unittest.TestCase):
             self.check()
 
     def test_approved_first_release_passes_only_preflight(self):
+        self.install_review_fixture_into_isolated_release()
+        self.assertEqual(self.check(), "AUTHORIZED_PREFLIGHT_ONLY_NOT_SIGNED")
+
+    def test_code9_rejects_missing_source_review_even_with_manual_authorization(self):
         self.manifest(9, "0.5.4", "release")
         self.build_code9()
-        self.assertEqual(self.check(), "AUTHORIZED_PREFLIGHT_ONLY_NOT_SIGNED")
+        with self.assertRaisesRegex(ValueError, "requires the reviewed source"):
+            self.check()
+
+    def test_code9_rejects_extra_unreviewed_adapter_bytes(self):
+        self.install_review_fixture_into_isolated_release()
+        source = self.provider / "modules/sources/mangafire/main.js"
+        source.write_text(source.read_text() + "\\n// unreviewed adapter change\\n")
+        self.build_code9()
+        with self.assertRaisesRegex(ValueError, "differs from the reviewed source"):
+            self.check()
+
+    def test_code9_rejects_extra_unreviewed_v2_change(self):
+        self.install_review_fixture_into_isolated_release()
+        source = self.provider / "modules/v2-candidate.js"
+        source.write_text(source.read_text() + "\\n// unrelated source mutation\\n")
+        self.build_code9()
+        with self.assertRaisesRegex(ValueError, "differs from the reviewed source"):
+            self.check()
+
+    def test_code9_rejects_unreviewed_added_file(self):
+        self.install_review_fixture_into_isolated_release()
+        (self.provider / "modules/unreviewed.js").write_text("export default {};\\n")
+        self.build_code9()
+        with self.assertRaisesRegex(ValueError, "differs from the reviewed source"):
+            self.check()
 
     def test_already_published_code9_does_not_block_unrelated_release(self):
         self.manifest(9, "0.5.4", "release")
