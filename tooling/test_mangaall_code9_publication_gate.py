@@ -2,6 +2,7 @@
 """Offline adversarial tests: no secret, signing, network, or publication."""
 import hashlib
 import json
+import os
 import pathlib
 import shutil
 import tempfile
@@ -64,6 +65,14 @@ class MangaAllCode9PublicationGateTest(unittest.TestCase):
 
     def install_review_fixture_into_isolated_release(self):
         """Construct exact reviewed 0.5.4 from actual signed code8, never sign."""
+        # A first-release preflight is a HISTORICAL test after code9 was
+        # really signed. Do not replace its original seq34 ledger with the
+        # CURRENT signed seq35; use the exact pinned snapshot from CI.
+        original_root = pathlib.Path(
+            os.environ.get("MANGAALL_CODE8_ORIGINAL_ROOT", "original-code8")
+        )
+        if not original_root.is_dir():
+            raise ValueError("First-release test requires the immutable signed code8 snapshot")
         for relative in (
             "repository/config.json",
             "dist/index.payload.json",
@@ -72,7 +81,7 @@ class MangaAllCode9PublicationGateTest(unittest.TestCase):
         ):
             dest = self.root / relative
             dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(ROOT / relative, dest)
+            shutil.copyfile(original_root / relative, dest)
         shutil.copytree(
             ROOT / "review/mangaall-code9",
             self.root / "review/mangaall-code9",

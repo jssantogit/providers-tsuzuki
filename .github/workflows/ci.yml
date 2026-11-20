@@ -10,8 +10,17 @@ permissions:
 jobs:
   conformance:
     runs-on: ubuntu-latest
+    env:
+      MANGAALL_CODE8_ORIGINAL_ROOT: original-code8
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout immutable P-256 signed code8 historical snapshot
+        uses: actions/checkout@v4
+        with:
+          repository: jssantogit/providers-tsuzuki
+          ref: 99f3565a1e1edc0d8ed249b7597006c897f02636
+          path: original-code8
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -111,6 +120,27 @@ jobs:
       - name: Verify signed publication
         if: ${{ hashFiles('dist/index.json', 'repository/public-key.pem') != '' }}
         run: node tooling/verify_index.mjs
+
+      # The first official MangaAll code9 was signed through the operator's
+      # verified publication run #44738222894. Recheck the exact P-256
+      # release against the historical sequence 34 on every ordinary CI run.
+      - name: Audit actual P-256 code9 sequence 35 against the reviewed source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C original-code8 rev-parse HEAD)" = 99f3565a1e1edc0d8ed249b7597006c897f02636
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('dist/index.payload.json').read_text())
+          assert payload['sequence'] == 35, "First signed code9 audit pins official sequence 35"
+          provider = [p for p in payload['providers'] if p['providerId'] == 'app.tsuzuki.mangaall']
+          assert len(provider) == 1 and provider[0]['versionCode'] == 9
+          assert provider[0]['sha256'] == 'd9c223146faa9fea0e5b1593711b74836bc0af3c2939b2c6f246dbb2e4646622'
+          PY
+          node tooling/verify_index.mjs
+          python3 tooling/mangaall_code9_signed_release_audit.py --code8-snapshot original-code8
+          echo 'MANGAALL_CODE9_SIGNED_CI|sequence=35|code=9|publisher=P256|archive=REVIEWED|outcome=PASS'
 
       - name: Signed publication dry-run (no signing or upload)
         run: |

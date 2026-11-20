@@ -40,34 +40,64 @@ def _json(path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+# Immutable sequence-34 published code8 digest, verified against the pinned
+# original P-256 signed index by the independent signed-release auditor.
+ORIGINAL_CODE8_SHA256 = "4584482d186f2ddb9d5aeb15f98685df56bfa3d556ced4aa5bd51854a7391bb1"
+FIRST_SIGNED_CODE9_SHA256 = "d9c223146faa9fea0e5b1593711b74836bc0af3c2939b2c6f246dbb2e4646622"
+
+
 def _read_signed_baseline(root):
+    """Recover immutable code8 from sequence34 or from the signed seq35 archive.
+
+    Once the release moved the CURRENT signed index to sequence35, code8
+    deliberately disappeared from the *current* descriptor. Its digest remains
+    pinned to the ORIGINAL P-256 signed sequence34. The full verifier for both
+    signed sequences is in mangaall_code9_signed_release_audit.py / CI.
+    """
     payload = _json(root / "dist/index.payload.json")
     config = _json(root / "repository/config.json")
     enrollment = _json(root / "dist/enrollment.json")
+    sequence = payload.get("sequence")
     if (
         payload.get("repositoryId") != REPOSITORY_ID
         or config.get("repositoryId") != REPOSITORY_ID
         or enrollment.get("repositoryId") != REPOSITORY_ID
-        or config.get("sequence") != 34
-        or payload.get("sequence") != 34
+        or sequence not in (34, 35)
+        or config.get("sequence") != sequence
         or config.get("keyId") != KEY_ID
         or enrollment.get("keyId") != KEY_ID
     ):
-        raise ValueError("Code9 review requires the original indexed code8 trust origin/sequence")
+        raise ValueError("Code9 review requires a pinned signed code8/code9 trust origin/sequence")
     public_key = base64.b64decode(enrollment["publicKeyBase64"], validate=True)
     if hashlib.sha256(public_key).hexdigest() != HOST_PINNED_ROOT_SHA256:
         raise ValueError("Code9 review root must match the Host pinned P-256 key")
-    prior = [e for e in payload["providers"] if e.get("providerId") == PROVIDER_ID]
-    if len(prior) != 1 or prior[0].get("versionCode") != 8 or prior[0].get("versionName") != "0.5.3":
-        raise ValueError("Code9 review requires exactly one indexed MangaAll code8")
+    entries = [e for e in payload["providers"] if e.get("providerId") == PROVIDER_ID]
+    if len(entries) != 1:
+        raise ValueError("Expected exactly one signed MangaAll descriptor")
+    descriptor = entries[0]
+    if sequence == 34:
+        if (descriptor.get("versionCode") != 8 or
+                descriptor.get("versionName") != "0.5.3" or
+                descriptor.get("sha256") != ORIGINAL_CODE8_SHA256):
+            raise ValueError("Original sequence34 code8 digest changed")
+    else:
+        if (descriptor.get("versionCode") != 9 or
+                descriptor.get("versionName") != "0.5.4" or
+                descriptor.get("sha256") != FIRST_SIGNED_CODE9_SHA256):
+            raise ValueError("Published sequence35 code9 digest changed")
+        published_code9 = root / "dist/providers/app.tsuzuki.mangaall-9.tsz"
+        if (not published_code9.is_file() or
+                hashlib.sha256(published_code9.read_bytes()).hexdigest() !=
+                FIRST_SIGNED_CODE9_SHA256):
+            raise ValueError("Published sequence35 code9 archive does not match its signed index")
     archive = root / "dist/providers/app.tsuzuki.mangaall-8.tsz"
-    if not archive.is_file() or hashlib.sha256(archive.read_bytes()).hexdigest() != prior[0]["sha256"]:
-        raise ValueError("Code8 archive must match the existing signed index digest")
-    # Signature verification of this existing index is a separate mandatory
-    # Provider CI job (tooling/verify_index.mjs). This function does not
-    # verify a signature or create a new trusted artifact.
+    if (not archive.is_file() or
+            hashlib.sha256(archive.read_bytes()).hexdigest() != ORIGINAL_CODE8_SHA256):
+        raise ValueError("Historical code8 archive does not match its original signed index digest")
+    # This helper checks pinned digests, NOT P-256 signatures itself.
+    # CI verifies both the archived seq34 signature and current seq35
+    # signature through tooling/verify_index.mjs and the release auditor.
     return archive
-
 
 def _extract_base_archive(archive_path, output):
     with zipfile.ZipFile(archive_path) as bundle:
