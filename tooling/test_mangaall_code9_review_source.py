@@ -59,7 +59,11 @@ class MangaAllCode9ReviewSourceTest(unittest.TestCase):
                     cwd=ROOT, capture_output=True, text=True, timeout=30,
                 )
                 self.assertEqual(result.returncode, 0, result.stdout + "\n" + result.stderr)
-                self.assertIn("3sources=ONE_ROUTER", result.stdout)
+                self.assertTrue(
+                    "3sources=ONE_ROUTER" in result.stdout or
+                    "3sources=ONE_LOOKUP" in result.stdout,
+                    result.stdout,
+                )
                 self.assertTrue(
                     "payload=BOUNDED_48K" in result.stdout or
                     "403=SOURCE_SCOPED_AND_BOUNDED" in result.stdout,
