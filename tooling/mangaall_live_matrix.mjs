@@ -225,6 +225,9 @@ for (const spec of cases) {
       packageSha256: signedEntry.sha256,
     }) : null;
   const value = await probe(recording?.reading ?? provider.reading, spec, grants, {
+    // Code9 diagnosticsVersion=2 yields V2 observations WITHOUT V1 items;
+    // the canonical smoke must use the signed V1 interface explicitly.
+    lookupContract: officialCode9 ? 'v1' : 'legacy',
     lookupPageLimit: selectedSuite === 'custom' ? 3 : 2,
     chapterPageLimit: selectedSuite === 'custom' ? 8 : 4,
     includeCandidates: selectedSuite === 'custom',
