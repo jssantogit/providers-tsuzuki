@@ -1,0 +1,46 @@
+name: MangaAll code9 — verify officially signed release (read-only)
+
+# Only an operator may request this check after the official Publisher has
+# separately signed/indexed code9. Never dispatches signing or promotes files.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-code9:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout current official repository (no write credentials)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Checkout immutable, originally signed code8 sequence 34
+        uses: actions/checkout@v4
+        with:
+          repository: jssantogit/providers-tsuzuki
+          ref: 99f3565a1e1edc0d8ed249b7597006c897f02636
+          path: code8-original
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Verify sequence 34 and sequence 35 P-256 envelopes and exact code9 archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C code8-original rev-parse HEAD)" = 99f3565a1e1edc0d8ed249b7597006c897f02636
+          (cd code8-original && node tooling/verify_index.mjs)
+          node tooling/verify_index.mjs
+          python3 tooling/mangaall_code9_signed_release_audit.py --code8-snapshot code8-original
+      - name: Confirm no signing key or release publishing actions were used
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${TSUZUKI_PROVIDER_SIGNING_KEY_PEM:-}"
+          echo 'MANGAALL_CODE9_SIGNED_RELEASE|audit=READ_ONLY|signing=NOT_PERFORMED|hostInstall=NOT_TESTED|cdn=NOT_TESTED'
