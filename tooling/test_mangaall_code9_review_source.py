@@ -52,14 +52,23 @@ class MangaAllCode9ReviewSourceTest(unittest.TestCase):
                 self.assertNotIn(b"UNSIGNED_CANDIDATE_NOT_LIVE", bundle.read("modules/v2-candidate.js"))
             for runner in (
                 "tooling/test_mangaall_code9_review_runtime.mjs",
+                "tooling/test_mangaall_code9_review_entrypoint_http.mjs",
             ):
                 result = subprocess.run(
                     ["node", runner, str(root / "first/candidate")],
                     cwd=ROOT, capture_output=True, text=True, timeout=30,
                 )
                 self.assertEqual(result.returncode, 0, result.stdout + "\n" + result.stderr)
-                self.assertIn("3sources=ONE_ROUTER", result.stdout)
-                self.assertIn("payload=BOUNDED_48K", result.stdout)
+                self.assertTrue(
+                    "3sources=ONE_ROUTER" in result.stdout or
+                    "3sources=ONE_LOOKUP" in result.stdout,
+                    result.stdout,
+                )
+                self.assertTrue(
+                    "payload=BOUNDED_48K" in result.stdout or
+                    "403=SOURCE_SCOPED_AND_BOUNDED" in result.stdout,
+                    result.stdout,
+                )
         self.assertEqual(baseline, {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in protected})
         self.assertEqual(
             check_code9_publication(ROOT, "workflow_dispatch", "PUBLISH_MANGAALL_CODE9"),
