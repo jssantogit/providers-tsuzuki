@@ -55,6 +55,8 @@ jobs:
         run: python3 -m unittest discover -s tooling -p 'test_mangaall_code9_review_source.py' -v
       - name: MangaAll code9 V2 opt-in live diagnostic safety (offline HTTP mocks only)
         run: node tooling/test_mangaall_code9_live_v2.mjs
+      - name: Prevent implicit PR/push real-upstream probes after one-shot code9 live run
+        run: python3 -m unittest discover -s tooling -p 'test_mangaall_code9_live_workflow_safety.py' -v
       - name: MangaAll code9 isolated unsigned release-plan rehearsal (never signs/publishes)
         run: python3 -m unittest discover -s tooling -p 'test_mangaall_code9_release_rehearsal.py' -v
       - name: MangaAll code9 signed-release audit fails closed until real signature (offline)
