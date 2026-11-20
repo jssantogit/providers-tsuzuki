@@ -46,10 +46,24 @@ jobs:
         run: python3 -m unittest discover -s tooling -p 'test_mangaall_code9_review_source.py' -v
       - name: MangaAll code9 isolated unsigned release-plan rehearsal (never signs/publishes)
         run: python3 -m unittest discover -s tooling -p 'test_mangaall_code9_release_rehearsal.py' -v
-      - name: MangaAll code9 signed release authorization gate (offline, no secrets)
+      - name: MangaAll code9 signed release authorization gate (offline, reject CI promotion)
         run: |
           python3 -m unittest discover -s tooling -p 'test_mangaall_code9_publication_gate.py' -v
-          python3 tooling/mangaall_code9_publication_gate.py
+          python3 - <<'PY'
+          import pathlib
+          from tooling.mangaall_code9_publication_gate import check_code9_publication
+          root = pathlib.Path.cwd()
+          try:
+              result = check_code9_publication(root, "push", "")
+          except ValueError as error:
+              if "manual dispatch" not in str(error):
+                  raise
+              print("MANGAALL_CODE9_RELEASE_GATE|outcome=DENIED_NON_MANUAL_CI")
+          else:
+              if result != "NO_CODE9_PROMOTION":
+                  raise SystemExit("Unexpected code9 promotion without manual authorization: " + result)
+              print("MANGAALL_CODE9_RELEASE_GATE|outcome=NO_CODE9_PROMOTION")
+          PY
       - name: MangaAll UNSIGNED future partial-evidence lookup (single three-source router, offline)
         run: node tooling/test_mangaall_lookup_v2_candidate.mjs
       - name: MangaAll aggregator identity and reader-routing contract
