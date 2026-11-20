@@ -25,7 +25,7 @@ assert manifest["id"] == "app.tsuzuki.mangaall"
 assert manifest["version"] == {"name": "0.5.3", "code": 8}
 `, root], { encoding: "utf8", cwd: process.cwd() });
 assert.equal(unpack.status, 0, unpack.stderr || unpack.stdout);
-fs.writeFileSync(path.join(root, "package.json"), '{"type":"module"}\\n');
+fs.writeFileSync(path.join(root, "package.json"), '{"type":"module"}\n');
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 assert.equal(manifest.id, "app.tsuzuki.mangaall");
 assert.equal(manifest.version.code, 8);
