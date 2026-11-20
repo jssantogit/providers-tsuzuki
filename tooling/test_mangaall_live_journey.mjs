@@ -133,11 +133,12 @@ const run = async (override, spec = base, options) => {
   assert.notEqual(journeyVerdict(proper), 'FAIL_CONTRACT');
   assert.equal(requested[0].diagnosticsVersion, 2);
   for (const call of requested.slice(1)) {
-    assert.equal(Object.hasOwn(call, 'diagnosticsVersion'), false,
-      'V1 call must never include the V2 diagnostic request signal');
-    assert.equal(Object.hasOwn(call, 'editorialEvidenceVersion'), false,
-      'Host V1 DTO has no editorialEvidenceVersion field');
+    assert.equal(call.diagnosticsVersion, 1,
+      'Host V1 wire serializes the default, not the V2 selector');
+    assert.equal(call.editorialEvidenceVersion, 1,
+      'Host JSON encodeDefaults=true emits its internal V1 DTO default');
     assert.equal(call.coverageEvidenceVersion, 1);
+    assert.equal(call.requestedLanguage, 'en');
   }
   await assert.rejects(
     () => probeJourney(reading, spec, grants, { lookupContract: 'v2' }),
