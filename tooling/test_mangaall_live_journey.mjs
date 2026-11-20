@@ -97,6 +97,53 @@ const run = async (override, spec = base, options) => {
   return { result: await probeJourney(reading, spec, grants, options), stats };
 };
 
+// Regression from first official signed code9 live smoke run #44759250361:
+// that run accidentally asked diagnosticsVersion=2 and then treated a real V2
+// observation envelope as a V1 ProviderPage, falsely reporting INVALID_CONTRACT
+// for Naruto, Death Note and Bleach. Canonical/chapter capture must explicitly
+// request the genuine V1 API; the V2 diagnostic must remain a separate protocol.
+{
+  const spec = specFor(catalog.cases.find((item) => item.id === 'punpun'));
+  const live = harness(spec);
+  const requested = [];
+  const reading = {
+    ...live.reading,
+    async lookup(request) {
+      requested.push(request);
+      if (request.diagnosticsVersion === 2) {
+        return {
+          contractVersion: 2, providerId: 'app.tsuzuki.mangaall',
+          state: 'PARTIAL_EVIDENCE', lookupComplete: false,
+          observedCandidates: [], sourceStatuses: [],
+          eligibleForCanonicalBinding: false, eligibleForReader: false,
+        };
+      }
+      return { items: [candidate(spec)], nextCursor: null };
+    },
+  };
+  const wrong = await probeJourney(reading, spec, grants, { lookupContract: 'legacy' });
+  assert.equal(wrong.lookup, 'INVALID_CONTRACT',
+    'V2 envelope cannot be silently treated as V1 source observations');
+  assert.equal(journeyVerdict(wrong), 'FAIL_CONTRACT');
+  const proper = await probeJourney(reading, spec, grants, { lookupContract: 'v1' });
+  assert.equal(proper.lookup, 'EXACT_WORK');
+  assert.equal(proper.lookupComplete, true);
+  assert.equal(proper.chapters, 'COMPLETE');
+  assert.equal(proper.pages, 'METADATA_OBSERVED');
+  assert.notEqual(journeyVerdict(proper), 'FAIL_CONTRACT');
+  assert.equal(requested[0].diagnosticsVersion, 2);
+  for (const call of requested.slice(1)) {
+    assert.equal(Object.hasOwn(call, 'diagnosticsVersion'), false,
+      'V1 call must never include the V2 diagnostic request signal');
+    assert.equal(call.editorialEvidenceVersion, 1);
+    assert.equal(call.coverageEvidenceVersion, 1);
+  }
+  await assert.rejects(
+    () => probeJourney(reading, spec, grants, { lookupContract: 'v2' }),
+    /Invalid MangaAll live lookup contract/,
+  );
+}
+
 // A source response with multiple same-name HIDs, including another
 // apparently popular manga, MUST NOT authorize an unknown edition or Reader.
 const unknown = { ...base, work: null };
