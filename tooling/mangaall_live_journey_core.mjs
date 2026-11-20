@@ -196,8 +196,14 @@ export async function probeJourney(reading, spec, grants, options = {}) {
       try {
         response = await reading.lookup({
           titles: [title], cursor, requestedLanguage: "en",
-          ...(lookupContract === 'legacy' ? { diagnosticsVersion: 2 } : {}),
-          editorialEvidenceVersion: 1, coverageEvidenceVersion: 1,
+          // Host ProviderReadingLookupRequest V1 has coverageEvidenceVersion
+          // but DOES NOT have editorialEvidenceVersion or diagnosticsVersion.
+          // Requesting extra fields creates a different captured call from
+          // the real canonical collector and hides genuine replay gaps.
+          ...(lookupContract === 'legacy'
+            ? { diagnosticsVersion: 2, editorialEvidenceVersion: 1 }
+            : {}),
+          coverageEvidenceVersion: 1,
         });
       } catch (error) {
         result.lookupError = errorCode(error);
