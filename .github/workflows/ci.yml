@@ -42,6 +42,8 @@ jobs:
         run: python3 tooling/test_mangaall_code9_staging.py
       - name: MangaAll code9 neutral V2 wire UNSIGNED preview (offline; never published)
         run: python3 -m unittest discover -s tooling -p 'test_mangaall_code9_neutral_wire_preview.py' -v
+      - name: MangaAll code9 reviewed source over signed code8 with 48KiB Host envelope (offline only)
+        run: python3 -m unittest discover -s tooling -p 'test_mangaall_code9_review_source.py' -v
       - name: MangaAll code9 signed release authorization gate (offline, no secrets)
         run: |
           python3 -m unittest discover -s tooling -p 'test_mangaall_code9_publication_gate.py' -v
