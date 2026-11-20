@@ -49,8 +49,13 @@ def rehearse_code9_publication(source_root=ROOT):
         or original_payload["sequence"] != 34
         or original_manga["versionCode"] != 8
         or original_manga["versionName"] != "0.5.3"
-        or source_manifest["version"] != {"name": "0.5.3", "code": 8}
-        or source_manifest["publication"] != "preview"
+        or source_manifest["version"] not in (
+            {"name": "0.5.3", "code": 8},
+            {"name": "0.5.4", "code": 9},
+        )
+        or source_manifest["publication"] not in ("preview", "release")
+        or (source_manifest["version"]["code"] == 8 and source_manifest["publication"] != "preview")
+        or (source_manifest["version"]["code"] == 9 and source_manifest["publication"] != "release")
     ):
         raise ValueError("Rehearsal requires the original code8/index 34 baseline")
 
