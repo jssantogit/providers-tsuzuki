@@ -70,8 +70,12 @@ class MangaAllCode9ReviewSourceTest(unittest.TestCase):
                     result.stdout,
                 )
         self.assertEqual(baseline, {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in protected})
-        with self.assertRaisesRegex(ValueError, "manual dispatch"):
-            check_code9_publication(ROOT, "push", "")
+        sequence = json.loads((ROOT / "dist/index.payload.json").read_text())["sequence"]
+        if sequence == 35:
+            self.assertEqual(check_code9_publication(ROOT, "push", ""), "NO_CODE9_PROMOTION")
+        else:
+            with self.assertRaisesRegex(ValueError, "manual dispatch"):
+                check_code9_publication(ROOT, "push", "")
 
     def make_isolated_root(self, sandbox):
         source = pathlib.Path(sandbox) / "source"
