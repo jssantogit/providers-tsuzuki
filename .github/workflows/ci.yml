@@ -51,8 +51,10 @@ jobs:
           python3 -m unittest discover -s tooling -p 'test_mangaall_code9_publication_gate.py' -v
           python3 - <<'PY'
           import pathlib
-          from tooling.mangaall_code9_publication_gate import check_code9_publication
+          import sys
           root = pathlib.Path.cwd()
+          sys.path.insert(0, str(root / "tooling"))
+          from mangaall_code9_publication_gate import check_code9_publication
           try:
               result = check_code9_publication(root, "push", "")
           except ValueError as error:
