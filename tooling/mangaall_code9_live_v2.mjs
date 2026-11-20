@@ -58,22 +58,38 @@ export function createStrictHttpService(fetchImpl) {
   };
 }
 function checkedPage(result) {
-  if (!result || result.contractVersion !== 2 ||
+  if (!result || typeof result !== "object") {
+    throw Error("MangaAll code9 V2 contract failed closed");
+  }
+  const validSources = Array.isArray(result.sourceStatuses) &&
+    result.sourceStatuses.length === SOURCE_ORDER.length &&
+    result.sourceStatuses.every((record, index) => {
+      if (!record || record.source !== SOURCE_ORDER[index] ||
+          !STATUS.has(record.status) || !Number.isInteger(record.observedCandidates) ||
+          record.observedCandidates < 0 ||
+          typeof record.observationsTruncated !== "boolean" ||
+          typeof record.unsafeCandidate !== "boolean") return false;
+      if (record.failure == null) return true;
+      const failure = record.failure;
+      return FAILURE.has(failure.code) &&
+        (failure.httpStatus == null ||
+         (Number.isInteger(failure.httpStatus) &&
+          failure.httpStatus >= 100 && failure.httpStatus <= 599)) &&
+        typeof failure.retryable === "boolean";
+    });
+  const validState = new Set(["COMPLETE_SINGLE_PAGE", "PARTIAL_EVIDENCE", "INCONCLUSIVE"]);
+  if (result.contractVersion !== 2 ||
       result.providerId !== "app.tsuzuki.mangaall" ||
       result.provenance !== VERSION_MARKER ||
       result.eligibleForReader !== false ||
       result.eligibleForCanonicalBinding !== false ||
-      Object.hasOwn(result, "items") || Object.hasOwn(result, "hostProvenance") ||
-      !Array.isArray(result.sourceStatuses) || result.sourceStatuses.length !== 3 ||
-      !Array.isArray(result.observedCandidates) ||
-      Buffer.byteLength(JSON.stringify(result), "utf8") > 48 * 1024 ||
-      result.sourceStatuses.some((record, index) =>
-        record.source !== SOURCE_ORDER[index] ||
-        !STATUS.has(record.status) ||
-        (record.failure != null && (!FAILURE.has(record.failure.code) ||
-          (record.failure.httpStatus != null &&
-            (!Number.isInteger(record.failure.httpStatus) ||
-             record.failure.httpStatus < 100 || record.failure.httpStatus > 599))))) {
+      !validState.has(result.state) ||
+      typeof result.lookupComplete !== "boolean" ||
+      typeof result.canContinue !== "boolean" ||
+      Object.hasOwn(result, "items") ||
+      Object.hasOwn(result, "hostProvenance") ||
+      !validSources || !Array.isArray(result.observedCandidates) ||
+      Buffer.byteLength(JSON.stringify(result), "utf8") > 48 * 1024) {
     throw Error("MangaAll code9 V2 contract failed closed");
   }
   return result;
