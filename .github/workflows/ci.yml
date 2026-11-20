@@ -10,8 +10,17 @@ permissions:
 jobs:
   conformance:
     runs-on: ubuntu-latest
+    env:
+      MANGAALL_CODE8_ORIGINAL_ROOT: original-code8
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout immutable P-256 signed code8 historical snapshot
+        uses: actions/checkout@v4
+        with:
+          repository: jssantogit/providers-tsuzuki
+          ref: 99f3565a1e1edc0d8ed249b7597006c897f02636
+          path: original-code8
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -115,13 +124,6 @@ jobs:
       # The first official MangaAll code9 was signed through the operator's
       # verified publication run #44738222894. Recheck the exact P-256
       # release against the historical sequence 34 on every ordinary CI run.
-      - name: Checkout immutable P-256 signed code8 baseline (read-only)
-        uses: actions/checkout@v4
-        with:
-          repository: jssantogit/providers-tsuzuki
-          ref: 99f3565a1e1edc0d8ed249b7597006c897f02636
-          path: original-code8
-          persist-credentials: false
       - name: Audit actual P-256 code9 sequence 35 against the reviewed source
         shell: bash
         run: |
