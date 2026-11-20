@@ -41,10 +41,16 @@ def rehearse_code9_publication(source_root=ROOT):
         p for p in original_payload["providers"]
         if p["providerId"] == "app.tsuzuki.mangaall"
     )
+    source_manifest = json.loads(
+        (source_root / "providers/mangaall/manifest.json").read_text(encoding="utf-8")
+    )
     if (
         original_config["sequence"] != 34
         or original_payload["sequence"] != 34
         or original_manga["versionCode"] != 8
+        or original_manga["versionName"] != "0.5.3"
+        or source_manifest["version"] != {"name": "0.5.3", "code": 8}
+        or source_manifest["publication"] != "preview"
     ):
         raise ValueError("Rehearsal requires the original code8/index 34 baseline")
 
@@ -56,8 +62,9 @@ def rehearse_code9_publication(source_root=ROOT):
         source_root / "dist/index.payload.json",
         source_root / "dist/index.json",
         source_root / "dist/providers/app.tsuzuki.mangaall-8.tsz",
+        source_root / ".github/workflows/publish.yml",
     )
-    before = {_sha256(p): str(p) for p in protected}
+    before = {str(p): _sha256(p) for p in protected}
     with tempfile.TemporaryDirectory(prefix="mangaall-code9-release-rehearsal-") as temp:
         folder = pathlib.Path(temp)
         sandbox = folder / "repository-copy"
@@ -163,7 +170,7 @@ def rehearse_code9_publication(source_root=ROOT):
             "hostInstalled": False,
             "liveNetworkTested": False,
         }
-    if {_sha256(p): str(p) for p in protected} != before:
+    if {str(p): _sha256(p) for p in protected} != before:
         raise ValueError("Rehearsal mutated actual signed source or index")
     return report
 
