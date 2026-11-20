@@ -7,6 +7,7 @@ It must never be used as an authorization to publish a package.
 """
 import hashlib
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -28,14 +29,21 @@ def _sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def rehearse_code9_publication(source_root=ROOT):
-    """Return only metadata; all rehearsal artifacts are destroyed on return."""
+def rehearse_code9_publication(source_root=ROOT, *, historical_root=None):
+    """Rehearse a FIRST release against the original signed seq34 snapshot.
+
+    A real seq35 release must NOT replace the historical pre-publication
+    index used by this regression; the operator's original P-256 index is
+    checked from an immutable pinned checkout, never manufactured.
+    """
     source_root = pathlib.Path(source_root).resolve()
+    baseline = historical_root or os.environ.get("MANGAALL_CODE8_ORIGINAL_ROOT")
+    original_root = pathlib.Path(baseline).resolve() if baseline else source_root
     original_config = json.loads(
-        (source_root / "repository/config.json").read_text(encoding="utf-8")
+        (original_root / "repository/config.json").read_text(encoding="utf-8")
     )
     original_payload = json.loads(
-        (source_root / "dist/index.payload.json").read_text(encoding="utf-8")
+        (original_root / "dist/index.payload.json").read_text(encoding="utf-8")
     )
     original_manga = next(
         p for p in original_payload["providers"]
@@ -59,16 +67,18 @@ def rehearse_code9_publication(source_root=ROOT):
     ):
         raise ValueError("Rehearsal requires the original code8/index 34 baseline")
 
-    # Verify the *existing* sequence-34 P-256 signature and every published
-    # artifact via the official, read-only verifier before any simulated plan.
-    # This is not a signature or validation of the prospective code9 archive.
-    verified = subprocess.run(
-        ["node", str(source_root / "tooling/verify_index.mjs")],
-        cwd=source_root, capture_output=True, text=True, check=False, timeout=30,
-    )
-    if verified.returncode != 0:
-        raise ValueError("Existing signed index verification failed: " +
-                         verified.stderr[:600])
+    # Independently verify P-256 signatures from the original historical
+    # sequence34 and, when different, the CURRENT sequence35. Neither may
+    # be fabricated, and neither proves synthetic Reader images.
+    for signed_root in (original_root, source_root) if original_root != source_root else (original_root,):
+        verified = subprocess.run(
+            ["node", str(source_root / "tooling/verify_index.mjs")],
+            cwd=signed_root, capture_output=True, text=True,
+            check=False, timeout=30,
+        )
+        if verified.returncode != 0:
+            raise ValueError("Existing signed index verification failed: " +
+                             verified.stderr[:600])
 
     # Source-tree and signed payload hashes must not be altered by the trial.
     protected = (
@@ -97,7 +107,7 @@ def rehearse_code9_publication(source_root=ROOT):
         ):
             dest = sandbox / relative
             dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source_root / relative, dest)
+            shutil.copyfile(original_root / relative, dest)
         retired = source_root / "repository/retirements.json"
         if retired.is_file():
             shutil.copyfile(retired, sandbox / "repository/retirements.json")
