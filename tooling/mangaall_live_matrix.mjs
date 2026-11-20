@@ -10,6 +10,7 @@ import { pathToFileURL } from 'node:url';
 import { createHttpBridge } from './mangaall_live_probe_core.mjs';
 import { parseWorks, shardWorks } from './mangaall_generic_works.mjs';
 import { createRealEnvelopeCapture } from './mangaall_real_envelope_capture.mjs';
+import { inspectCurrentSignedCode9Source, CODE9_OPT_IN } from './mangaall_signed_code9_smoke_gate.mjs';
 import { probeJourney as probe, journeyVerdict as verdict, granted } from './mangaall_live_journey_core.mjs';
 
 // Preset data is never read in generic custom mode: no fixed title corpus
@@ -120,7 +121,7 @@ if (process.argv.length === 3 && process.argv[2] === '--self-test') {
   assert.equal(unavailable.lookupError, 'CHALLENGE_BLOCKED');
   assert.equal(verdict(unavailable), 'INCONCLUSIVE');
   assert.equal(JSON.stringify(unavailable).includes('private.example'), false);
-  console.log('MangaAll code8 live-matrix offline contract: PASS');
+  console.log('MangaAll V1 live-matrix offline contract: PASS');
   process.exit(0);
 }
 const captureOutput = process.argv.length === 7 && process.argv[5] === '--real-envelopes'
@@ -136,9 +137,22 @@ if (![5, 7].includes(process.argv.length) || process.argv[2] !== '--live' ||
 }
 const root = path.resolve('providers/mangaall');
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
-if (manifest.id !== 'app.tsuzuki.mangaall' || manifest.version.code < 8 ||
-    !['preview', 'development'].includes(manifest.publication)) {
-  throw new Error('Expected unpublished, single-provider MangaAll code8+');
+const legacyReadOnly = manifest.id === 'app.tsuzuki.mangaall' &&
+  manifest.version.code >= 8 && ['preview', 'development'].includes(manifest.publication);
+const officialCode9 = manifest.id === 'app.tsuzuki.mangaall' &&
+  manifest.version.code === 9 && manifest.version.name === '0.5.4' &&
+  manifest.publication === 'release';
+// A published code9 source is NOT allowed into the older unsigned source
+// runner by accident. Require strict consent and the real P-256 verifier
+// before any HTTP requests or captured Host envelopes.
+if (!legacyReadOnly && !officialCode9) {
+  throw new Error('MangaAll live source requires reviewed legacy or authentic signed code9');
+}
+if (officialCode9) {
+  if (process.env.MANGAALL_SIGNED_CODE9_CANONICAL_SMOKE !== CODE9_OPT_IN) {
+    throw new Error('Official code9 smoke requires explicit signed-source authorization');
+  }
+  inspectCurrentSignedCode9Source(process.env.MANGAALL_SIGNED_CODE9_CANONICAL_SMOKE);
 }
 const grants = manifest.permissions.network.origins;
 if (!Object.keys(origins).every((origin) => grants.includes(origin))) {
