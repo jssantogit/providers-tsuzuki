@@ -196,13 +196,14 @@ export async function probeJourney(reading, spec, grants, options = {}) {
       try {
         response = await reading.lookup({
           titles: [title], cursor, requestedLanguage: "en",
-          // Host ProviderReadingLookupRequest V1 has coverageEvidenceVersion
-          // but DOES NOT have editorialEvidenceVersion or diagnosticsVersion.
-          // Requesting extra fields creates a different captured call from
-          // the real canonical collector and hides genuine replay gaps.
+          // The production Host LookupRequestDto has diagnosticsVersion=1
+          // and editorialEvidenceVersion=1 defaults, and its Json encoder
+          // uses encodeDefaults=true. The signed-code9 V1 capture MUST send
+          // those serialized wire fields, although the public Domain request
+          // does not expose them. Version 2 is ONLY the read-only V2 envelope.
           ...(lookupContract === 'legacy'
             ? { diagnosticsVersion: 2, editorialEvidenceVersion: 1 }
-            : {}),
+            : { diagnosticsVersion: 1, editorialEvidenceVersion: 1 }),
           coverageEvidenceVersion: 1,
         });
       } catch (error) {
