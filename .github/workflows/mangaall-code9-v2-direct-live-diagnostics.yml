@@ -50,9 +50,10 @@ jobs:
           set -euo pipefail
           node tooling/verify_index.mjs
           python3 - <<'PY'
-          import pathlib, tempfile
-          from tooling.mangaall_code9_review_source import materialize_review_code9
-          from tooling.build_provider import build
+          import pathlib, tempfile, sys
+          sys.path.insert(0, str(pathlib.Path('tooling').resolve()))
+          from mangaall_code9_review_source import materialize_review_code9
+          from build_provider import build
           with tempfile.TemporaryDirectory(prefix='mangaall-code9-live-review-') as folder:
               root = pathlib.Path(folder)
               exact = materialize_review_code9(root / 'reviewed')
