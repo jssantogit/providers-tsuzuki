@@ -21,6 +21,13 @@ sequence or accessing the signing key. For a new code9 release it requires:
   wire marker, and no `UNSIGNED_CANDIDATE_NOT_LIVE` marker.
 - A byte-identical, deterministic rebuild of the code9 artifact from that
   source tree, rather than accepting an arbitrary ZIP with the correct ID.
+- An **additional** byte-for-byte comparison to the audited
+  `review/mangaall-code9` source overlay over the original signed code8
+  archive (Provider PR #77). A package with added files, altered V2 JS or
+  modified MangaDex/MangaDot/MangaFire adapters fails even when the normal
+  rebuild succeeds, the version/marker matches and manual authorization
+  was supplied. Review source remains `publication=development`; only the
+  runtime manifest (which excludes the publication field) is compared.
 - A **manual** `Publish repository` workflow dispatch with the exact
   `mangaall_code9_authorization=PUBLISH_MANGAALL_CODE9` input. A
   `publish.request` push cannot publish the first code9 even with a source
@@ -28,7 +35,9 @@ sequence or accessing the signing key. For a new code9 release it requires:
 
 The preflight prints `AUTHORIZED_PREFLIGHT_ONLY_NOT_SIGNED` when it passes:
 this is **not a signature** or an approval of editorial identity, chapters,
-or image delivery. Existing code8 publications and future unrelated Provider
+or image delivery. This comparison is also **not** a substitute for the
+index's P-256 signature verification (performed separately before preflight),
+and source review is not permission to publish automatically. Existing code8 publications and future unrelated Provider
 publications are not forced to supply this code9-specific input. The normal
 signed-index verifier and immutable-package planner remain required.
 
