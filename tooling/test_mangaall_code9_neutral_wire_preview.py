@@ -86,8 +86,18 @@ class MangaAllNeutralWirePreviewTest(unittest.TestCase):
             {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in protected},
             "Preview must never mutate the published code8 or repository sequence",
         )
-        with self.assertRaisesRegex(ValueError, "manual dispatch"):
-            check_code9_publication(ROOT, "push", "")
+        # Before first release, push was rejected; after official seq35,
+        # there is no longer any *pending* code9 promotion for CI to authorize.
+        # A temporary unsigned preview still carries zero publish authority.
+        sequence = json.loads((ROOT / "dist/index.payload.json").read_text())["sequence"]
+        if sequence == 35:
+            self.assertEqual(
+                check_code9_publication(ROOT, "push", ""),
+                "NO_CODE9_PROMOTION",
+            )
+        else:
+            with self.assertRaisesRegex(ValueError, "manual dispatch"):
+                check_code9_publication(ROOT, "push", "")
         # Neither unsigned preview can authorize a code9 publish in CI.
 
     def test_preview_and_legacy_fixture_are_distinct_unsigned_artifacts(self):
