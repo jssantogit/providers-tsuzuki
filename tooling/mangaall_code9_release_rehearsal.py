@@ -54,6 +54,17 @@ def rehearse_code9_publication(source_root=ROOT):
     ):
         raise ValueError("Rehearsal requires the original code8/index 34 baseline")
 
+    # Verify the *existing* sequence-34 P-256 signature and every published
+    # artifact via the official, read-only verifier before any simulated plan.
+    # This is not a signature or validation of the prospective code9 archive.
+    verified = subprocess.run(
+        ["node", str(source_root / "tooling/verify_index.mjs")],
+        cwd=source_root, capture_output=True, text=True, check=False, timeout=30,
+    )
+    if verified.returncode != 0:
+        raise ValueError("Existing signed index verification failed: " +
+                         verified.stderr[:600])
+
     # Source-tree and signed payload hashes must not be altered by the trial.
     protected = (
         source_root / "providers/mangaall/manifest.json",
