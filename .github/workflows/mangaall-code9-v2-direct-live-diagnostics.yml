@@ -1,0 +1,82 @@
+name: MangaAll code9 V2 — manual three-source direct-live diagnostics (unsigned)
+
+# No automatic scheduled, push or PR network probes. Read-only, opt-in.
+# This probes code9 SOURCE before publication; it does not install or attest it.
+on:
+  workflow_dispatch:
+    inputs:
+      titles_json:
+        description: 'JSON array of 1-3 titles; each requested in one unified three-source lookup'
+        type: string
+        default: '["Naruto","Death Note","Bleach"]'
+        required: true
+      acknowledge_live_read_only:
+        description: 'Type I_ACCEPT_LIVE_READ_ONLY; direct requests hit upstream websites'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mangaall-code9-v2-direct-live-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  code9-v2-network:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Require explicit manual read-only upstream consent
+        shell: bash
+        env:
+          ACKNOWLEDGEMENT: ${{ inputs.acknowledge_live_read_only }}
+        run: |
+          set -euo pipefail
+          test "$ACKNOWLEDGEMENT" = 'I_ACCEPT_LIVE_READ_ONLY'
+          echo 'MANGAALL_CODE9_V2_NETWORK_GATE|consent=READ_ONLY_DIRECT_UPSTREAM|signing=DISABLED'
+      - name: Verify existing P-256 signed code8 and reviewed code9 JS bytes, not a signed code9 claim
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tooling/verify_index.mjs
+          python3 - <<'PY'
+          import pathlib, tempfile
+          from tooling.mangaall_code9_review_source import materialize_review_code9
+          from tooling.build_provider import build
+          with tempfile.TemporaryDirectory(prefix='mangaall-code9-live-review-') as folder:
+              root = pathlib.Path(folder)
+              exact = materialize_review_code9(root / 'reviewed')
+              current = root / 'current-code9-UNSIGNED.tsz'
+              build(pathlib.Path('providers/mangaall'), current)
+              assert exact.read_bytes() == current.read_bytes(), 'Unreviewed code9 bytes'
+          print('MANGAALL_CODE9_V2_SOURCE|reviewed=BYTE_IDENTICAL|signedIndex=CODE8_ONLY|code9=UNSIGNED')
+          PY
+      - name: Offline V2 network-bridge and source-specific 403 contract
+        run: node tooling/test_mangaall_code9_live_v2.mjs
+      - name: Direct-live read-only unified MangaAll V2 probe (NO Reader, NO authority)
+        shell: bash
+        env:
+          MANGAALL_CODE9_V2_LIVE_OPT_IN: I_ACCEPT_LIVE_READ_ONLY
+          MANGAALL_CODE9_V2_TITLES: ${{ inputs.titles_json }}
+        run: |
+          set -euo pipefail
+          node tooling/mangaall_code9_live_v2.mjs --live > mangaall-code9-v2-direct-live.json
+          node -e "const r=require('./mangaall-code9-v2-direct-live.json'); if (r.trustedInstallation||r.signedCode9Verified||r.readerEnabled||r.catalogBindingAllowed||r.userDataWritten) process.exit(1); console.log('MANGAALL_CODE9_V2_DIRECT_LIVE|titles='+r.titleCount+'|signed=NO|reader=NO|network=RUNNER');"
+      - name: Upload only bounded source statuses; no URLs, response bodies or cookies
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mangaall-code9-v2-direct-live-source-status
+          path: mangaall-code9-v2-direct-live.json
+          if-no-files-found: ignore
+          retention-days: 3
