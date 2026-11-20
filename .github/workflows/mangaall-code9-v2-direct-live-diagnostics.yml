@@ -1,8 +1,8 @@
 name: MangaAll code9 V2 — controlled direct-live three-source diagnostics
 
 # Direct source reachability, not a signed Host installation or Reader proof.
-# One operator-approved exact same-repo PR branch may run this without browser
-# UI dispatch; ordinary PRs, pushes and schedules never initiate source calls.
+# The one-time PR #84 real-upstream probe is complete. Retire its branch
+# trigger: only an explicitly acknowledged manual dispatch may hit upstreams.
 on:
   workflow_dispatch:
     inputs:
@@ -15,9 +15,6 @@ on:
         description: 'Type I_ACCEPT_LIVE_READ_ONLY; direct requests hit upstream websites'
         type: string
         required: true
-  pull_request:
-    paths:
-      - '.github/workflows/mangaall-code9-v2-direct-live-diagnostics.yml'
 
 permissions:
   contents: read
@@ -28,11 +25,6 @@ concurrency:
 
 jobs:
   code9-v2-network:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == github.repository &&
-       github.head_ref == 'test/mangaall-code9-v2-real-20261120')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -45,10 +37,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Require explicit manual or same-repo exact-branch read-only opt-in
+      - name: Require explicit manual read-only upstream opt-in
         shell: bash
         env:
-          ACKNOWLEDGEMENT: ${{ github.event_name == 'pull_request' && github.head_ref == 'test/mangaall-code9-v2-real-20261120' && 'I_ACCEPT_LIVE_READ_ONLY' || inputs.acknowledge_live_read_only }}
+          ACKNOWLEDGEMENT: ${{ inputs.acknowledge_live_read_only }}
         run: |
           set -euo pipefail
           test "$ACKNOWLEDGEMENT" = 'I_ACCEPT_LIVE_READ_ONLY'
@@ -85,7 +77,7 @@ jobs:
         shell: bash
         env:
           MANGAALL_CODE9_V2_LIVE_OPT_IN: I_ACCEPT_LIVE_READ_ONLY
-          MANGAALL_CODE9_V2_TITLES: ${{ github.event_name == 'pull_request' && '["Naruto","Death Note","Bleach"]' || inputs.titles_json }}
+          MANGAALL_CODE9_V2_TITLES: ${{ inputs.titles_json }}
         run: |
           set -euo pipefail
           node tooling/mangaall_code9_live_v2.mjs --live > mangaall-code9-v2-direct-live.json
