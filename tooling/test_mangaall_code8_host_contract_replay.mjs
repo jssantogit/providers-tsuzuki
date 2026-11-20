@@ -4,10 +4,28 @@
 // separate gates and cannot be inferred from this script.
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
-const root = path.resolve("providers/mangaall");
+// Replay MUST execute the ORIGINAL code8 referenced by the signed index,
+// not the working source tree, which may already be the next code9 release.
+// The shared bounded ZIP extractor validates the archived digest, trust root
+// and code8 entries before unpacking them into an isolated temporary module.
+const root = fs.mkdtempSync(path.join(os.tmpdir(), "mangaall-code8-exact-replay-"));
+process.on("exit", () => fs.rmSync(root, { recursive: true, force: true }));
+const unpack = spawnSync("python3", ["-c", `
+import pathlib, sys
+sys.path.insert(0, "tooling")
+from mangaall_code9_review_source import ROOT, _read_signed_baseline, _extract_base_archive
+target = pathlib.Path(sys.argv[1])
+manifest = _extract_base_archive(_read_signed_baseline(ROOT), target)
+assert manifest["id"] == "app.tsuzuki.mangaall"
+assert manifest["version"] == {"name": "0.5.3", "code": 8}
+`, root], { encoding: "utf8", cwd: process.cwd() });
+assert.equal(unpack.status, 0, unpack.stderr || unpack.stdout);
+fs.writeFileSync(path.join(root, "package.json"), '{"type":"module"}\n');
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 assert.equal(manifest.id, "app.tsuzuki.mangaall");
 assert.equal(manifest.version.code, 8);

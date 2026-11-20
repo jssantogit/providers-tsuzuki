@@ -4,13 +4,12 @@
 The published code8 sources, index, trust root, and release workflow are never
 modified. This cannot sign, publish or promote the package to the repository.
 """
-import hashlib
 import json
 import pathlib
-import shutil
 import tempfile
 
 from build_provider import build
+from mangaall_code9_review_source import _extract_base_archive, _read_signed_baseline
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PROVIDER = ROOT / "providers" / "mangaall"
@@ -40,22 +39,15 @@ def _stage_code9(
         raise ValueError("Code9 staging directory must be empty")
     output_root.mkdir(parents=True, exist_ok=True)
 
-    manifest = json.loads((PROVIDER / "manifest.json").read_text(encoding="utf-8"))
-    if manifest["id"] != "app.tsuzuki.mangaall" or manifest["version"] != {
-        "name": "0.5.3", "code": 8
-    }:
-        raise ValueError("Refuse staging: signed code8 source is not the expected version")
-    index = json.loads((ROOT / "dist/index.payload.json").read_text(encoding="utf-8"))
-    entries = [e for e in index["providers"] if e["providerId"] == manifest["id"]]
-    if len(entries) != 1 or entries[0]["versionCode"] != 8:
-        raise ValueError("The published signed MangaAll code8 entry is missing")
-    immutable = ROOT / "dist/providers/app.tsuzuki.mangaall-8.tsz"
-    if hashlib.sha256(immutable.read_bytes()).hexdigest() != entries[0]["sha256"]:
-        raise ValueError("Published package digest is invalid")
-
+    # After source promotion, providers/mangaall/ is code9. The old unsigned
+    # fixture MUST still be derived from immutable indexed code8, not from
+    # the newer untrusted source tree. Shared baseline checks pin SHA/key.
+    immutable = _read_signed_baseline(ROOT)
     staged = output_root / "candidate"
-    shutil.copytree(PROVIDER, staged)
-    staged_manifest = json.loads((staged / "manifest.json").read_text(encoding="utf-8"))
+    staged.mkdir()
+    staged_manifest = _extract_base_archive(immutable, staged)
+    if staged_manifest.get("version") != {"name": "0.5.3", "code": 8}:
+        raise ValueError("Refuse staging: indexed code8 has an unexpected manifest")
     staged_manifest["version"] = {
         "name": "0.5.4-preview-unsigned" if neutral_wire_preview else "0.5.4-dev-unsigned",
         "code": 9,

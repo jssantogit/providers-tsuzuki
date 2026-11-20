@@ -70,10 +70,8 @@ class MangaAllCode9ReviewSourceTest(unittest.TestCase):
                     result.stdout,
                 )
         self.assertEqual(baseline, {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in protected})
-        self.assertEqual(
-            check_code9_publication(ROOT, "workflow_dispatch", "PUBLISH_MANGAALL_CODE9"),
-            "NO_CODE9_PROMOTION",
-        )
+        with self.assertRaisesRegex(ValueError, "manual dispatch"):
+            check_code9_publication(ROOT, "push", "")
 
     def make_isolated_root(self, sandbox):
         source = pathlib.Path(sandbox) / "source"

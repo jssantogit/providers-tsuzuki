@@ -86,11 +86,9 @@ class MangaAllNeutralWirePreviewTest(unittest.TestCase):
             {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in protected},
             "Preview must never mutate the published code8 or repository sequence",
         )
-        self.assertEqual(
-            check_code9_publication(ROOT, "workflow_dispatch", "PUBLISH_MANGAALL_CODE9"),
-            "NO_CODE9_PROMOTION",
-            "A preview never makes the source tree or publication eligible for code9",
-        )
+        with self.assertRaisesRegex(ValueError, "manual dispatch"):
+            check_code9_publication(ROOT, "push", "")
+        # Neither unsigned preview can authorize a code9 publish in CI.
 
     def test_preview_and_legacy_fixture_are_distinct_unsigned_artifacts(self):
         with tempfile.TemporaryDirectory(prefix="mangaall-code9-modes-") as temp:
@@ -107,7 +105,7 @@ class MangaAllNeutralWirePreviewTest(unittest.TestCase):
                     json.loads(old.read("manifest.json"))["version"]["name"],
                     json.loads(new.read("manifest.json"))["version"]["name"],
                 )
-            self.assertEqual(json.loads((PROVIDER / "manifest.json").read_text())["version"]["code"], 8)
+            self.assertEqual(json.loads((PROVIDER / "manifest.json").read_text())["version"]["code"], 9)
 
     def test_preview_refuses_repository_destination(self):
         with self.assertRaisesRegex(ValueError, "outside the source repository"):

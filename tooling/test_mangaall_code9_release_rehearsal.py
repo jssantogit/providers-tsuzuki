@@ -39,7 +39,7 @@ class MangaAllCode9ReleaseRehearsalTest(unittest.TestCase):
         self.assertFalse((ROOT / "dist/providers/app.tsuzuki.mangaall-9.tsz").exists())
         self.assertEqual(
             json.loads((ROOT / "providers/mangaall/manifest.json").read_text())["version"],
-            {"name": "0.5.3", "code": 8},
+            {"name": "0.5.4", "code": 9},
         )
 
     def test_refuses_rehearsal_when_real_manifest_is_no_longer_code8(self):
@@ -55,7 +55,7 @@ class MangaAllCode9ReleaseRehearsalTest(unittest.TestCase):
                 shutil.copyfile(ROOT / relative, dst)
             source_manifest = source / "providers/mangaall/manifest.json"
             altered = json.loads(source_manifest.read_text())
-            altered["version"] = {"name": "0.5.4", "code": 9}
+            altered["version"] = {"name": "0.5.5", "code": 10}
             source_manifest.write_text(json.dumps(altered))
             with self.assertRaisesRegex(ValueError, "code8/index 34 baseline"):
                 rehearse_code9_publication(source)

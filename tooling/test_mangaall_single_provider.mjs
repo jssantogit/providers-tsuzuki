@@ -7,7 +7,8 @@ const dir = path.resolve("providers/mangaall");
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
 assert.equal(manifest.id, "app.tsuzuki.mangaall");
 assert.equal(manifest.name, "MangaAll");
-assert.equal(manifest.publication, "preview", "MangaAll 0.5.1 continues the permanent signed update channel");
+assert.equal(manifest.publication, "release", "Code9 source is release-marked, but first code9 signing requires explicit manual authorization");
+assert.deepEqual(manifest.version, { name: "0.5.4", code: 9 });
 assert.deepEqual(manifest.capabilities.map((cap) => cap.id), [
   "reading.lookup", "reading.chapters", "reading.pages",
 ]);
