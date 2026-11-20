@@ -168,6 +168,13 @@ const maxAttempts = 2;
 export async function probeJourney(reading, spec, grants, options = {}) {
   const lookupPageLimit = options.lookupPageLimit ?? 3;
   const chapterPageLimit = options.chapterPageLimit ?? 4;
+  // Official code9 routes diagnosticsVersion=2 to a *different*, read-only
+  // V2 envelope without V1 items. Canonical/chapter/SQLite replay requires
+  // the actual signed V1 reading.lookup contract, not a coerced V2 result.
+  const lookupContract = options.lookupContract ?? 'legacy';
+  if (lookupContract !== 'legacy' && lookupContract !== 'v1') {
+    throw Error('Invalid MangaAll live lookup contract');
+  }
   if (!Number.isInteger(lookupPageLimit) || lookupPageLimit < 1 || lookupPageLimit > 5 ||
       !Number.isInteger(chapterPageLimit) || chapterPageLimit < 1 || chapterPageLimit > 8) {
     throw Error("Invalid bounded MangaAll journey limits");
@@ -189,7 +196,8 @@ export async function probeJourney(reading, spec, grants, options = {}) {
       try {
         response = await reading.lookup({
           titles: [title], cursor, requestedLanguage: "en",
-          diagnosticsVersion: 2, editorialEvidenceVersion: 1, coverageEvidenceVersion: 1,
+          ...(lookupContract === 'legacy' ? { diagnosticsVersion: 2 } : {}),
+          editorialEvidenceVersion: 1, coverageEvidenceVersion: 1,
         });
       } catch (error) {
         result.lookupError = errorCode(error);
