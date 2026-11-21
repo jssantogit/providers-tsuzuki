@@ -99,6 +99,8 @@ jobs:
         run: node tooling/test_mangaall_code8_host_contract_replay.mjs
       - name: MangaAll code10 deterministic unsigned package and signed code9 immutability (offline)
         run: python3 -m unittest discover -s tooling -p 'test_mangaall_code10_unsigned_package.py' -v
+      - name: MangaAll code10 separate manual release preflight (offline sandbox only; no signing)
+        run: python3 -m unittest discover -s tooling -p 'test_mangaall_code10_publication_gate.py' -v
       - name: MangaDex verified author and facet coverage fixtures
         run: node tooling/test_mangaall_mangadex_evidence.mjs
       - name: MangaAll three-source contract
