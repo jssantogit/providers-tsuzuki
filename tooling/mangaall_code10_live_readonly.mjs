@@ -82,7 +82,7 @@ function errorClass(error) {
 async function auditV1(reading, title) {
   const pages = [], used = new Set();
   let cursor = null;
-  for (let page = 1; page <= 3; page++) {
+  for (let page = 1; page <= 8; page++) {
     let result;
     try {
       result = await reading.lookup({
@@ -98,6 +98,12 @@ async function auditV1(reading, title) {
         Buffer.byteLength(JSON.stringify(result), "utf8") > 48 * 1024 ||
         !result.items.every(item => item && typeof item.externalWorkId === "string")) {
       return {state: "MALFORMED_V1_RESPONSE", pages};
+    }
+    if (result.lookupFailureCode) {
+      const code = String(result.lookupFailureCode);
+      return {state: "TERMINAL_SOURCE_FAILURE_CLOSED", failureCode: code,
+        failureHttpStatus: result.lookupHttpStatus ?? null,
+        pages, canonicalEditionVerified: false, readerTested: false};
     }
     const counts = sourceCounts(result.items);
     const sameWork = result.items.filter(item => typeof item.title === "string" &&
@@ -119,7 +125,7 @@ async function auditV1(reading, title) {
     used.add(result.nextCursor);
     cursor = result.nextCursor;
   }
-  return {state: "BOUNDED_AFTER_THREE_PAGES", pages,
+  return {state: "BOUNDED_AFTER_EIGHT_PAGES", pages,
     canonicalEditionVerified: false, readerTested: false};
 }
 
