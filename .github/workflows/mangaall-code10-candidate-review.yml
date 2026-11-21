@@ -1,0 +1,70 @@
+name: MangaALL code10 release candidate review (unsigned)
+
+on:
+  pull_request:
+    paths:
+      - 'providers/mangaall/**'
+      - 'tooling/mangaall_code10_release_candidate.py'
+      - 'tooling/test_mangaall_code10_release_candidate.py'
+      - 'tooling/test_mangaall_mangadex_evidence.mjs'
+      - 'tooling/test_mangaall_single_provider.mjs'
+      - 'tooling/test_mangaall_code10_source_facet_guards.mjs'
+      - '.github/workflows/mangaall-code10-candidate-review.yml'
+      - 'review/mangaall-code10/**'
+
+permissions:
+  contents: read
+
+jobs:
+  unsigned-release-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact reviewed PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Check release-builder fail-closed regression tests (offline)
+        run: python3 -m unittest discover -s tooling -p 'test_mangaall_code10_release_candidate.py' -v
+      - name: Build exact code10 candidate for independent review (UNSIGNED ONLY)
+        id: candidate
+        run: |
+          set -euo pipefail
+          candidate_dir="${RUNNER_TEMP}/mangaall-code10-review-${GITHUB_RUN_ID}"
+          python3 tooling/mangaall_code10_release_candidate.py \
+            --output-dir "${candidate_dir}" \
+            --source-commit "$(git rev-parse HEAD)"
+          test -f "${candidate_dir}/app.tsuzuki.mangaall-10.tsz"
+          test -f "${candidate_dir}/candidate-review.json"
+          sha256sum "${candidate_dir}/app.tsuzuki.mangaall-10.tsz"
+          echo "candidate_dir=${candidate_dir}" >> "${GITHUB_OUTPUT}"
+      - name: Upload unsigned code10 package and unapproved review manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: mangaall-0.5.5-code10-unsigned-review-${{ github.run_id }}
+          path: ${{ steps.candidate.outputs.candidate_dir }}/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Summarize exactly what was prepared, not approved
+        run: |
+          {
+            echo "## MangaALL 0.5.5/code10 — UNSIGNED release candidate"
+            echo ""
+            echo "- **Source PR head:** \`${{ github.event.pull_request.head.sha }}\`"
+            echo "- **Candidate TSZ SHA-256:** \`${{ steps.candidate.outputs.sha256 }}\`"
+            echo "- **Release authorization:** NOT GRANTED"
+            echo "- **Review lock:** NOT CREATED"
+            echo "- **P-256 signature:** NOT CREATED"
+            echo "- **Public signed index:** UNCHANGED (sequence 35/code9)"
+            echo ""
+            echo "The attached CI artifact is for independent inspection only."
+            echo "It must not be installed or published as a signed release."
+          } >> "${GITHUB_STEP_SUMMARY}"

@@ -85,6 +85,10 @@ function parseWorkId(value) {
 // editorial edition; the Host must independently corroborate creators and
 // match exact source chapters before adding Reader choices.
 const MAX_EVIDENCE_WORKS = 2;
+// A bounded, read-only preview; not the complete chapter feed nor an edition
+// grant. Probe past external/unnumbered releases without unbounded pagination.
+const COVERAGE_PAGE_SIZE = 12;
+const MAX_COVERAGE_PAGES = 2;
 function normalizedIdentity(value) {
   return text(value).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 }
@@ -118,39 +122,54 @@ async function verifiedWorkEvidence(item, language, includeCoverage) {
   };
   if (!includeCoverage || !LANGUAGES.has(language)) return evidence;
   try {
-    const page = await getMangaDexJson("/chapter", [
-      ["manga", id], ["translatedLanguage[]", language],
-      ["contentRating[]", "safe"], ["contentRating[]", "suggestive"],
-      ["limit", 2], ["offset", 0],
-    ]);
-    if (!Number.isInteger(page.total) || page.total < 0 || page.total > 1000000 ||
-        page.data.length > 2 || page.data.length > page.total) {
-      return { ...evidence, coverageOutcome: "INVALID_RESPONSE" };
+    let offset = 0;
+    let expectedTotal = null;
+    for (let pageIndex = 0; pageIndex < MAX_COVERAGE_PAGES; pageIndex++) {
+      const page = await getMangaDexJson("/chapter", [
+        ["manga", id], ["translatedLanguage[]", language],
+        ["contentRating[]", "safe"], ["contentRating[]", "suggestive"],
+        ["limit", COVERAGE_PAGE_SIZE], ["offset", offset],
+      ]);
+      // A changed/malformed total or skipped offset cannot establish coverage.
+      // Never translate an incomplete page into authoritative EMPTY.
+      if (!page || !Array.isArray(page.data) ||
+          !Number.isInteger(page.total) || page.total < 0 || page.total > 1000000 ||
+          (page.offset !== undefined && page.offset !== offset) ||
+          (expectedTotal !== null && expectedTotal !== page.total) ||
+          page.data.length > COVERAGE_PAGE_SIZE ||
+          offset + page.data.length > page.total ||
+          (page.total > offset && page.data.length === 0)) {
+        return { ...evidence, coverageOutcome: "INVALID_RESPONSE" };
+      }
+      expectedTotal = page.total;
+      const numbers = [];
+      for (const chapter of page.data) {
+        if (chapter?.type !== "chapter" || !ID_PATTERN.test(chapter.id || "") ||
+            chapter.attributes?.translatedLanguage !== language ||
+            chapter.attributes.externalUrl != null ||
+            !Array.isArray(chapter.relationships) ||
+            !chapter.relationships.some((relationship) =>
+              relationship?.type === "manga" &&
+              typeof relationship.id === "string" &&
+              relationship.id.toLowerCase() === id)) continue;
+        const number = numericChapter(text(chapter.attributes.chapter, 32));
+        if (number == null || number < 0 || number * 1000 > 1000000000) continue;
+        numbers.push(Math.round(number * 1000));
+      }
+      if (numbers.length) {
+        return { ...evidence, coverageOutcome: "OBSERVED",
+          coverageObservedCount: numbers.length,
+          coverageMinMilli: Math.min(...numbers), coverageMaxMilli: Math.max(...numbers),
+          coverageHasMore: page.total > offset + page.data.length };
+      }
+      if (page.total === 0) {
+        return { ...evidence, coverageOutcome: "EMPTY",
+          coverageObservedCount: 0, coverageHasMore: false };
+      }
+      offset += page.data.length;
+      if (offset >= page.total) return { ...evidence, coverageOutcome: "UNKNOWN" };
     }
-    const numbers = [];
-    for (const chapter of page.data) {
-      if (chapter?.type !== "chapter" || !ID_PATTERN.test(chapter.id || "") ||
-          chapter.attributes?.translatedLanguage !== language ||
-          chapter.attributes.externalUrl ||
-          !Array.isArray(chapter.relationships) ||
-          !chapter.relationships.some((relationship) =>
-            relationship?.type === "manga" &&
-            typeof relationship.id === "string" &&
-            relationship.id.toLowerCase() === id)) continue;
-      const number = numericChapter(text(chapter.attributes.chapter, 32));
-      if (number == null || number < 0 || number * 1000 > 1000000000) continue;
-      numbers.push(Math.round(number * 1000));
-    }
-    if (numbers.length) {
-      return { ...evidence, coverageOutcome: "OBSERVED",
-        coverageObservedCount: numbers.length,
-        coverageMinMilli: Math.min(...numbers), coverageMaxMilli: Math.max(...numbers),
-        coverageHasMore: page.total > page.data.length };
-    }
-    if (page.total === 0) {
-      return { ...evidence, coverageOutcome: "EMPTY",
-        coverageObservedCount: 0, coverageHasMore: false };
-    }
+    // An exhausted preview budget is incomplete evidence, not missing chapters.
     return { ...evidence, coverageOutcome: "UNKNOWN" };
   } catch {
     return { ...evidence, coverageOutcome: "FAILED" };
@@ -250,8 +269,23 @@ export async function chapters(input) {
   const seen = new Set();
   for (const item of response.data) {
     const attrs = item?.attributes;
-    if (item?.type !== "chapter" || !attrs || !ID_PATTERN.test(item.id || "")) continue;
-    if (attrs.translatedLanguage !== language) continue;
+    // Never admit an unrelated chapter merely because the /chapter search
+    // endpoint echoed the requested ?manga= UUID. A malformed or foreign
+    // record contaminates the WHOLE page: do not silently skip it and then
+    // advertise an exhaustive empty/partial chapter inventory to the Host.
+    if (item?.type !== "chapter" || !attrs ||
+        !ID_PATTERN.test(item.id || "") || !Array.isArray(item.relationships)) {
+      throw new Error("MangaAll invalid chapter response");
+    }
+    if (!item.relationships.some((related) =>
+      related?.type === "manga" &&
+      typeof related.id === "string" &&
+      related.id.toLowerCase() === mangaId.toLowerCase())) {
+      throw new Error("MangaAll chapter work mismatch");
+    }
+    if (attrs.translatedLanguage !== language) {
+      throw new Error("MangaAll chapter language mismatch");
+    }
     const rawChapter = text(attrs.chapter, 32);
     const number = numericChapter(rawChapter);
     if (number === null || seen.has(item.id)) continue;

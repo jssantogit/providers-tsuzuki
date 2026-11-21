@@ -234,6 +234,12 @@ async function sourceCoveragePreview(externalWorkId) {
       const facet = cleanText(entry?.language).toLowerCase();
       return !facet || facet === LANGUAGE;
     });
+    // A foreign-language-only response to an English request cannot
+    // certify that the English source inventory is empty. The API may
+    // have ignored the facet; preserve INCONCLUSIVE source evidence.
+    if (page.items.length > 0 && rows.length === 0) {
+      return { coverageOutcome: "INVALID_RESPONSE" };
+    }
     const numbers = rows.map((entry) => Number(entry?.number));
     if (rows.some((entry) => entry == null || entry.id == null ||
       String(entry.id).trim() === "" || entry.number == null ||
@@ -487,6 +493,13 @@ async function chapters(input) {
     return (!sourceLanguage || sourceLanguage === language) &&
       !isMisnumberedVolumeContainer(item);
   });
+  if (rawItems.length > 0 && facetItems.length === 0 &&
+      rawItems.some((item) =>
+        cleanText(item?.language) &&
+        cleanText(item.language).toLowerCase() !== language &&
+        !isMisnumberedVolumeContainer(item))) {
+    throw new Error("MangaFire chapters language mismatch");
+  }
   // Exclude mislabeled full volumes *before* choosing official/newest variants:
   // otherwise a "Ch. 0 - Volume 112" can displace a real prologue.
   for (const item of mergeChapterVariants(facetItems)) {

@@ -7,8 +7,8 @@ const dir = path.resolve("providers/mangaall");
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
 assert.equal(manifest.id, "app.tsuzuki.mangaall");
 assert.equal(manifest.name, "MangaAll");
-assert.equal(manifest.publication, "release", "Code9 source is release-marked, but first code9 signing requires explicit manual authorization");
-assert.deepEqual(manifest.version, { name: "0.5.4", code: 9 });
+assert.equal(manifest.publication, "development", "unsigned code10 must never publish on push");
+assert.deepEqual(manifest.version, { name: "0.5.5-dev", code: 10 });
 assert.deepEqual(manifest.capabilities.map((cap) => cap.id), [
   "reading.lookup", "reading.chapters", "reading.pages",
 ]);
@@ -276,13 +276,132 @@ const boundedFailure = createMangaAllReading({
 });
 const firstPartial = await boundedFailure.lookup({ titles: ["Example"] });
 const secondPartial = await boundedFailure.lookup({ titles: ["Example"], cursor: firstPartial.nextCursor });
-// Exhausted retries are not an exhaustive work/edition lookup. A completed
-// cursor after two failed source attempts would falsely certify a missing
-// MangaFire (or other internal source) as an empty source inventory.
-assert.deepEqual(secondPartial, {
+// Preserve healthy candidates seen on the retry page, but NEVER declare
+// the whole three-source search complete. The next page must be a typed
+// terminal error without any third upstream request.
+assert.deepEqual(secondPartial.items.map(item => item.externalWorkId), [workIds[1]]);
+assert.ok(secondPartial.nextCursor?.includes('"v":2'),
+  "a deferred terminal failure is not a completed lookup");
+const terminalPartial = await boundedFailure.lookup({
+  titles: ["Example"], cursor: secondPartial.nextCursor,
+});
+assert.deepEqual(terminalPartial, {
   items: [], nextCursor: null, lookupFailureCode: "UNCLASSIFIED_ERROR",
-}, "exhausted source must fail closed even when another source succeeds");
-assert.equal(alwaysFails, 2, "failed source gets exactly one retry");
+}, "the original failure is delivered AFTER salvaging valid candidates");
+assert.equal(alwaysFails, 2, "failed source gets exactly one retry, not a third request");
+
+// Deferred V1 continuation is closed, bounded, and language-scoped. A forged
+// terminal error can at most fail closed; it cannot create a success snapshot.
+const validTerminal = JSON.parse(secondPartial.nextCursor);
+assert.equal(validTerminal.v, 2);
+assert.deepEqual(validTerminal.remaining, {});
+assert.equal(validTerminal.facet, null);
+for (const mutation of [
+  { ...validTerminal, v: 3 },
+  { ...validTerminal, extra: "unreviewed" },
+  { ...validTerminal, failure: { code: "CANONICAL_GRANTED", status: null } },
+  { ...validTerminal, failure: { code: "HTTP_ERROR", status: 200 } },
+  { ...validTerminal, failure: { code: "INVALID_RESPONSE", status: 403 } },
+  { ...validTerminal, remaining: { outsider: "25" } },
+  { ...validTerminal, remaining: { mangadex: { c: "25", r: 2 } } },
+  { ...validTerminal, facet: "en" },
+]) {
+  await assert.rejects(
+    boundedFailure.lookup({ titles: ["Example"], cursor: JSON.stringify(mutation) }),
+    /invalid cursor/i,
+    "malformed/tampered deferred state cannot report success",
+  );
+}
+await assert.rejects(boundedFailure.lookup({
+  titles: ["Example"], cursor: "x".repeat(513),
+}), /invalid cursor/i, "oversized cursor fails closed");
+
+// Exercise a *deferred* failure while a healthy source page requires multiple
+// 48KiB result chunks. No source IDs, long aliases or evidence may be dropped
+// or duplicated merely because MangaFire exhausted its one permitted retry.
+const oversizeAliases = Array.from({ length: 6 }, (_, i) => "Alias " + i + " " + "x".repeat(840));
+const spillItems = Array.from({ length: 12 }, (_, i) => ({
+  externalWorkId: "mangadex:spill-" + i, title: "Example", aliases: oversizeAliases,
+}));
+const spillCalls = [];
+const spill = createMangaAllReading({
+  mangadex: { async lookup(req) {
+    spillCalls.push(["mangadex", req.cursor]);
+    return req.cursor == null
+      ? { items: [], nextCursor: "25" }
+      : { items: spillItems, nextCursor: null };
+  } },
+  mangadot: { async lookup(req) {
+    spillCalls.push(["mangadot", req.cursor]);
+    return { items: [], nextCursor: null };
+  } },
+  mangafire: { async lookup(req) {
+    spillCalls.push(["mangafire", req.cursor]);
+    throw Error("MangaAll HTTP 403");
+  } },
+});
+let spillCursor = null;
+const spillIds = [];
+let spillPages = 0, sawDeferred = false;
+do {
+  const step = await spill.lookup({ titles: ["Example"], requestedLanguage: "en", cursor: spillCursor });
+  spillPages++;
+  spillIds.push(...step.items.map(item => item.externalWorkId));
+  if (step.nextCursor !== null) {
+    const decoded = JSON.parse(step.nextCursor);
+    if (decoded.v === 2) {
+      sawDeferred = true;
+      assert.equal(decoded.facet, "en");
+      assert.equal(decoded.failure.code, "CHALLENGE_BLOCKED");
+      assert.equal(decoded.failure.status, 403);
+      await assert.rejects(spill.lookup({
+        titles: ["Example"], requestedLanguage: "pt-br", cursor: step.nextCursor,
+      }), /invalid cursor/i, "English deferred cursor cannot be resumed in Portuguese");
+    }
+  } else {
+    assert.deepEqual(step, {
+      items: [], nextCursor: null, lookupFailureCode: "CHALLENGE_BLOCKED", lookupHttpStatus: 403,
+    }, "only a typed source error, never a completed inventory, terminates the spill");
+  }
+  spillCursor = step.nextCursor;
+  assert.ok(spillPages <= 8, "deferred salvage must fit the Host's eight-page lookup budget");
+} while (spillCursor);
+assert.equal(sawDeferred, true);
+assert.ok(spillPages >= 4, "exercise an actual split, not just the empty deferred terminal");
+assert.equal(new Set(spillIds).size, spillIds.length, "no source chapter/work ID duplicates");
+assert.deepEqual(spillIds.slice().sort(), spillItems.map(item => item.externalWorkId).sort(),
+  "source-scoped candidates and aliases survive all 48KiB partial pages");
+assert.equal(spillCalls.filter(([source]) => source === "mangafire").length, 2,
+  "MangaFire is never re-requested after exhausted retry");
+assert.ok(spillCalls.filter(([source]) => source === "mangadex").length <= 4,
+  "only bounded source-page re-fetching is allowed");
+
+// Multiple independently blocked sources with different causes must retain an
+// UNCLASSIFIED terminal verdict, not misattribute every source to HTTP403.
+let mixedAttempts = 0;
+const mixedTerminal = createMangaAllReading({
+  mangadex: { async lookup({ cursor }) {
+    return cursor == null
+      ? { items: [], nextCursor: "25" }
+      : { items: [{ externalWorkId: "mangadex:mixed-25", title: "Example" }], nextCursor: null };
+  } },
+  mangadot: { async lookup() {
+    throw Error("MangaAll invalid source lookup response");
+  } },
+  mangafire: { async lookup() {
+    mixedAttempts++; throw Error("MangaAll HTTP 403");
+  } },
+});
+const mixedFirst = await mixedTerminal.lookup({ titles: ["Example"] });
+const mixedSecond = await mixedTerminal.lookup({ titles: ["Example"], cursor: mixedFirst.nextCursor });
+assert.deepEqual(mixedSecond.items.map(x => x.externalWorkId), ["mangadex:mixed-25"]);
+assert.ok(mixedSecond.nextCursor);
+const mixedFinal = await mixedTerminal.lookup({ titles: ["Example"], cursor: mixedSecond.nextCursor });
+assert.deepEqual(mixedFinal, {
+  items: [], nextCursor: null, lookupFailureCode: "UNCLASSIFIED_ERROR",
+}, "mixed failure types must not be blamed on one source");
+assert.equal(mixedAttempts, 2);
+
 
 // In the real A54 capture Enen no Shouboutai had a MangaFire/en original HID
 // (z1r3l), but the English lookup only surfaced Fan Colored alternatives.
@@ -537,6 +656,7 @@ globalThis.tsuzuki = { http: { async request(method, url) {
     { id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", type: "chapter",
       attributes: { chapter: "1", translatedLanguage: "pt-br" },
       relationships: [
+        { type: "manga", id: "11111111-2222-4333-8444-555555555555" },
         { type: "scanlation_group", attributes: { name: "Group Alpha" } },
         { type: "scanlation_group", attributes: { name: "Group Beta" } },
         { type: "scanlation_group", attributes: { name: "Group Alpha" } },
@@ -545,7 +665,7 @@ globalThis.tsuzuki = { http: { async request(method, url) {
     },
     { id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeef", type: "chapter",
       attributes: { chapter: "2", translatedLanguage: "pt-br" },
-      relationships: [],
+      relationships: [{ type: "manga", id: "11111111-2222-4333-8444-555555555555" }],
     },
   ] };
   return JSON.stringify({ statusCode: 200, body: JSON.stringify(body) });

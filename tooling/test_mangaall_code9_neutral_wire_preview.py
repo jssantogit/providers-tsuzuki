@@ -115,7 +115,11 @@ class MangaAllNeutralWirePreviewTest(unittest.TestCase):
                     json.loads(old.read("manifest.json"))["version"]["name"],
                     json.loads(new.read("manifest.json"))["version"]["name"],
                 )
-            self.assertEqual(json.loads((PROVIDER / "manifest.json").read_text())["version"]["code"], 9)
+            # Historical code9 previews stay byte-identical, while the source
+            # tree can carry a separately unpublished code10 candidate.
+            current = json.loads((PROVIDER / "manifest.json").read_text())
+            self.assertEqual(current["version"]["code"], 10)
+            self.assertEqual(current["publication"], "development")
 
     def test_preview_refuses_repository_destination(self):
         with self.assertRaisesRegex(ValueError, "outside the source repository"):

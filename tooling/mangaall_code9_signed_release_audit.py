@@ -12,6 +12,7 @@ import pathlib
 import shutil
 import subprocess
 import tempfile
+import zipfile
 
 from build_provider import build
 from mangaall_code9_review_source import (
@@ -106,12 +107,27 @@ def audit_signed_code9(current_root, published_code8_root):
         raise ValueError("Signed code9 artifact is missing or digest differs")
 
     manifest = _read_json(current / "providers/mangaall/manifest.json")
-    if (
-        manifest["id"] != PROVIDER_ID or
-        manifest["version"] != {"name": "0.5.4", "code": 9} or
-        manifest["publication"] != "release"
-    ):
+    source_is_code9 = (
+        manifest.get("id") == PROVIDER_ID and
+        manifest.get("version") == {"name": "0.5.4", "code": 9} and
+        manifest.get("publication") == "release"
+    )
+    source_is_unpublished_code10 = (
+        manifest.get("id") == PROVIDER_ID and
+        manifest.get("version") == {"name": "0.5.5-dev", "code": 10} and
+        manifest.get("publication") == "development"
+    )
+    if not source_is_code9 and not source_is_unpublished_code10:
         raise ValueError("Published code9 source manifest is inconsistent")
+    # Source-only 'publication' is stripped from the signed runtime ZIP.
+    # Under code10 development, attest the frozen code9 using its archive
+    # and independent review, never the deliberately changed working tree.
+    with zipfile.ZipFile(code9) as archive:
+        runtime_manifest = json.loads(archive.read("manifest.json"))
+    if (runtime_manifest.get("id") != PROVIDER_ID or
+            runtime_manifest.get("version") != {"name": "0.5.4", "code": 9} or
+            "publication" in runtime_manifest):
+        raise ValueError("Original signed code9 runtime manifest differs from reviewed version")
     with tempfile.TemporaryDirectory(prefix="mangaall-code9-signed-release-audit-") as temp:
         scratch = pathlib.Path(temp)
         baseline = scratch / "baseline"
@@ -127,10 +143,16 @@ def audit_signed_code9(current_root, published_code8_root):
         shutil.copytree(current / "review/mangaall-code9",
                         baseline / "review/mangaall-code9")
         audited = materialize_review_code9(scratch / "reviewed", root=baseline)
-        rebuilt = scratch / "rebuilt-from-source.tsz"
-        build(current / "providers/mangaall", rebuilt)
-        if audited.read_bytes() != code9.read_bytes() or rebuilt.read_bytes() != code9.read_bytes():
-            raise ValueError("Signed code9 differs from source review or deterministic rebuild")
+        if audited.read_bytes() != code9.read_bytes():
+            raise ValueError("Signed code9 differs from immutable source review")
+        if source_is_code9:
+            rebuilt = scratch / "rebuilt-from-source.tsz"
+            build(current / "providers/mangaall", rebuilt)
+            if rebuilt.read_bytes() != code9.read_bytes():
+                raise ValueError("Signed code9 differs from current code9 source rebuild")
+        # Unpublished code10 MUST differ; rebuilding the working tree against
+        # the immutable code9 signature would incorrectly mark development
+        # as a tampered publication. It has no publish/signing authority.
 
     return {
         "state": "OFFICIAL_CODE9_SIGNED_INDEX_VERIFIED",

@@ -77,6 +77,29 @@ function checkedPage(result) {
           failure.httpStatus >= 100 && failure.httpStatus <= 599)) &&
         typeof failure.retryable === "boolean";
     });
+  // V2 evidence is diagnostic only, but must remain internally consistent.
+  // Work IDs are used solely for bounded in-memory de-duplication and never
+  // included in the CLI report or granted to a Reader.
+  const seenOnPage = new Set();
+  const counts = Object.fromEntries(SOURCE_ORDER.map(name => [name, 0]));
+  const validCandidates = Array.isArray(result.observedCandidates) &&
+    result.observedCandidates.length <= 96 &&
+    result.observedCandidates.every(item => {
+      if (!item || !SOURCE_ORDER.includes(item.source) ||
+          typeof item.externalWorkId !== "string" ||
+          item.externalWorkId.length > 160 ||
+          !item.externalWorkId.startsWith(item.source + ":") ||
+          !/^[A-Za-z0-9._:-]+$/.test(item.externalWorkId) ||
+          seenOnPage.has(item.externalWorkId) ||
+          item.editorialIdentityVerified !== false || item.bindingEligible !== false) {
+        return false;
+      }
+      seenOnPage.add(item.externalWorkId);
+      counts[item.source]++;
+      return true;
+    });
+  const validCounts = validCandidates &&
+    result.sourceStatuses.every(item => counts[item.source] === item.observedCandidates);
   const validState = new Set(["COMPLETE_SINGLE_PAGE", "PARTIAL_EVIDENCE", "INCONCLUSIVE"]);
   if (result.contractVersion !== 2 ||
       result.providerId !== "app.tsuzuki.mangaall" ||
@@ -88,7 +111,7 @@ function checkedPage(result) {
       typeof result.canContinue !== "boolean" ||
       Object.hasOwn(result, "items") ||
       Object.hasOwn(result, "hostProvenance") ||
-      !validSources || !Array.isArray(result.observedCandidates) ||
+      !validSources || !validCandidates || !validCounts ||
       Buffer.byteLength(JSON.stringify(result), "utf8") > 48 * 1024) {
     throw Error("MangaAll code9 V2 contract failed closed");
   }
@@ -98,6 +121,24 @@ function checkedPage(result) {
 export async function auditOneTitle(reading, title) {
   const pages = [];
   const visited = new Set();
+  // Preserve V2 observations even if the V1 router returns a terminal source
+  // failure. These in-memory identity keys are never exported from the report.
+  const works = new Map(SOURCE_ORDER.map(source => [source, new Map()]));
+  const histories = Object.fromEntries(SOURCE_ORDER.map(source => [source, {
+    pagesQueried: 0, successfulPages: 0, failures: 0,
+    lastFailureCode: null, retriedAndFailed: false,
+  }]));
+  const summarized = () => SOURCE_ORDER.map(source => ({
+    source,
+    observedUniqueCandidates: works.get(source).size,
+    pagesQueried: histories[source].pagesQueried,
+    successfulPages: histories[source].successfulPages,
+    failurePages: histories[source].failures,
+    lastFailureCode: histories[source].lastFailureCode,
+    retriedAndFailed: histories[source].retriedAndFailed,
+    // Never use these source observations as a canonical or Reader grant.
+    editorialGrant: false,
+  }));
   let cursor = null;
   for (let index = 0; index < MAX_PAGES; index++) {
     let result;
@@ -113,11 +154,36 @@ export async function auditOneTitle(reading, title) {
         title,
         outcome: "INCONCLUSIVE_PROVIDER_EXECUTION",
         requestedSources: SOURCE_ORDER,
-        pages,
+        pages, sourceSummary: summarized(),
         network: "DIRECT_LIVE_RUNNER_UNTRUSTED_CODE9",
         editorialBinding: "NEVER",
         readerPixels: "NOT_TESTED",
       };
+    }
+    const mismatch = result.observedCandidates.some(item => {
+      const prior = works.get(item.source).get(item.externalWorkId);
+      return prior != null && prior !== JSON.stringify(item);
+    });
+    if (mismatch) return {
+      title,
+      outcome: "INCONCLUSIVE_CANDIDATE_CONFLICT",
+      requestedSources: SOURCE_ORDER, pages, sourceSummary: summarized(),
+      network: "DIRECT_LIVE_RUNNER_UNTRUSTED_CODE9",
+      editorialBinding: "NEVER", readerPixels: "NOT_TESTED",
+    };
+    for (const item of result.observedCandidates) {
+      works.get(item.source).set(item.externalWorkId, JSON.stringify(item));
+    }
+    for (const source of result.sourceStatuses) {
+      if (source.status === "NOT_QUERIED") continue;
+      const history = histories[source.source];
+      history.pagesQueried++;
+      if (source.status === "SUCCESS_PAGE") history.successfulPages++;
+      if (source.status === "FAILED") {
+        if (history.failures > 0) history.retriedAndFailed = true;
+        history.failures++;
+        history.lastFailureCode = source.failure.code;
+      }
     }
     pages.push({
       page: index + 1,
@@ -146,7 +212,7 @@ export async function auditOneTitle(reading, title) {
         title,
         outcome: "INCONCLUSIVE_CURSOR_INVALID",
         requestedSources: SOURCE_ORDER,
-        pages,
+        pages, sourceSummary: summarized(),
         network: "DIRECT_LIVE_RUNNER_UNTRUSTED_CODE9",
         editorialBinding: "NEVER",
         readerPixels: "NOT_TESTED",
@@ -161,7 +227,7 @@ export async function auditOneTitle(reading, title) {
     title,
     outcome: firstComplete ? "FIRST_PAGE_COMPLETE_UNCORROBORATED" : "INCONCLUSIVE_OR_PARTIAL",
     requestedSources: SOURCE_ORDER,
-    pages,
+    pages, sourceSummary: summarized(),
     network: "DIRECT_LIVE_RUNNER_UNTRUSTED_CODE9",
     editorialBinding: "NEVER",
     readerPixels: "NOT_TESTED",
