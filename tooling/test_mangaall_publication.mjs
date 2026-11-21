@@ -41,7 +41,7 @@ if (fs.existsSync(code10LockPath)) {
   const approval = JSON.parse(fs.readFileSync(code10LockPath, "utf8"));
   assert.equal(approval.reviewStatus, "approved");
   assert.equal(approval.artifactSha256,
-    "776d0e8bd64897c30283cad29f1aa331c86dac638deac1f106f042768167b94d");
+    "bcdfd03ac18c3cfdd0517e08b58dde7efa1f5baa874e93002af28e518860f95f");
 }
 assert.deepEqual(unified.capabilities.map(v => v.id), [
   "reading.lookup", "reading.chapters", "reading.pages",
