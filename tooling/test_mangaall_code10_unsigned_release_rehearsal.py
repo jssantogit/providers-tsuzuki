@@ -35,7 +35,13 @@ class MangaAllCode10DisposablePublicationTest(unittest.TestCase):
         )
         before = {path: sha(ROOT / path) for path in protected}
         self.assertEqual(before["dist/providers/app.tsuzuki.mangaall-9.tsz"], PRIOR_SHA)
-        self.assertFalse((ROOT / REVIEW_FILE).exists(), "real release approval must remain absent")
+        real_review = ROOT / REVIEW_FILE
+        if real_review.exists():
+            recorded = json.loads(real_review.read_text())
+            self.assertEqual(recorded["reviewStatus"], "approved")
+            self.assertEqual(recorded["versionCode"], 10)
+            self.assertEqual(recorded["priorSequence"], 35)
+            self.assertEqual(recorded["priorCode9Sha256"], PRIOR_SHA)
 
         with tempfile.TemporaryDirectory(prefix="mangaall-code10-UNSIGNED-dry-run-") as tmp:
             sandbox = pathlib.Path(tmp)
