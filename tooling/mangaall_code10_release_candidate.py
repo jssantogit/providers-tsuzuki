@@ -45,8 +45,9 @@ def prepare_candidate(output_dir, *, source_root=ROOT, source_commit=None):
                                and source_manifest.get("publication") == "release")
     if source_manifest.get("id") != PROVIDER_ID or not (exact_dev or exact_release_candidate):
         raise ValueError("Cannot prepare candidate from an unreviewed release or unknown source")
-    if (source_root / "review/mangaall-code10/approved-artifact.json").exists():
-        raise ValueError("Candidate inspection is not an approved-release workflow")
+    approval_file = source_root / "review/mangaall-code10/approved-artifact.json"
+    if approval_file.exists() and not exact_release_candidate:
+        raise ValueError("Release approval lock is invalid for development source")
     ledger_path = source_root / "dist/index.payload.json"
     config_path = source_root / "repository/config.json"
     signed_path = source_root / "dist/index.json"
@@ -122,8 +123,21 @@ def prepare_candidate(output_dir, *, source_root=ROOT, source_commit=None):
             raise ValueError("Refusing to overwrite an existing review archive")
         shutil.copyfile(archives[0], artifact)
 
+    # A review ZIP is NEVER a signature. If a separate operator approval
+    # exists, validate all lock bytes before labeling this read-only copy.
+    approved = False
+    if approval_file.is_file():
+        lock = json.loads(approval_file.read_text(encoding="utf-8"))
+        if lock != {
+            "reviewStatus": "approved", "versionCode": 10,
+            "versionName": "0.5.5", "artifactSha256": sha,
+            "priorSequence": 35, "priorCode9Sha256": OLD_SHA,
+        }:
+            raise ValueError("Final approval lock differs from deterministic code10 archive")
+        approved = True
+
     review = {
-        "reviewStatus": "candidate_unapproved",
+        "reviewStatus": "approved_for_manual_dispatch_not_signed" if approved else "candidate_unapproved",
         "providerId": PROVIDER_ID,
         "versionCode": 10,
         "versionName": "0.5.5",
