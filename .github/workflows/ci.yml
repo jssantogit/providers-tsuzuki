@@ -71,17 +71,20 @@ jobs:
           import sys
           root = pathlib.Path.cwd()
           sys.path.insert(0, str(root / "tooling"))
-          from mangaall_code9_publication_gate import check_code9_publication
+          # Route both generations through the REAL production pre-signature
+          # gate. CI must fail closed for a draft code10 release, and remain
+          # development-only on main. The old code9 unit tests run above.
+          from mangaall_publication_gate import check_mangaall_publication
           try:
-              result = check_code9_publication(root, "push", "")
+              result = check_mangaall_publication(root, event="push")
           except ValueError as error:
-              if "manual dispatch" not in str(error):
+              if "manual workflow dispatch" not in str(error) and "manual dispatch" not in str(error):
                   raise
-              print("MANGAALL_CODE9_RELEASE_GATE|outcome=DENIED_NON_MANUAL_CI")
+              print("MANGAALL_RELEASE_GATE|outcome=DENIED_NON_MANUAL_CI")
           else:
-              if result != "NO_CODE9_PROMOTION":
-                  raise SystemExit("Unexpected code9 promotion without manual authorization: " + result)
-              print("MANGAALL_CODE9_RELEASE_GATE|outcome=NO_CODE9_PROMOTION")
+              if result not in ("DEVELOPMENT_ONLY_NOT_SIGNED", "NO_CODE9_PROMOTION"):
+                  raise SystemExit("Unexpected Provider promotion without manual authorization: " + result)
+              print("MANGAALL_RELEASE_GATE|outcome=" + result)
           PY
       - name: MangaAll UNSIGNED future partial-evidence lookup (single three-source router, offline)
         run: node tooling/test_mangaall_lookup_v2_candidate.mjs
