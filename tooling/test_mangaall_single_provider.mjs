@@ -13,8 +13,14 @@ assert.ok(
   "code10 source is staged only; no approval or release signed yet",
 );
 assert.equal(manifest.version.code, 10);
-assert.equal(fs.existsSync("review/mangaall-code10/approved-artifact.json"), false,
-  "promotion must not acquire a signing approval lock in this PR");
+const code10LockPath = "review/mangaall-code10/approved-artifact.json";
+assert.equal(fs.existsSync(code10LockPath), manifest.publication === "release",
+  "releasing a code10 source requires an exact operator-approved source lock");
+if (fs.existsSync(code10LockPath)) {
+  const approval = JSON.parse(fs.readFileSync(code10LockPath, "utf8"));
+  assert.equal(approval.reviewStatus, "approved");
+  assert.equal(approval.versionCode, 10);
+}
 assert.deepEqual(manifest.capabilities.map((cap) => cap.id), [
   "reading.lookup", "reading.chapters", "reading.pages",
 ]);
