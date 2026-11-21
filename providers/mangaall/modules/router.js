@@ -152,6 +152,40 @@ function lookupState(value) {
   });
 }
 
+// A future-code V1-only *deferred failure* cursor allows the Host to receive
+// healthy source evidence before receiving an unavoidable SOURCE_READ_ERROR on
+// the very next page. It never converts a source outage into a complete empty
+// lookup and never performs an extra network request to report the failure.
+// Opt-in V2 audits retain their original V1 cursor grammar for Host parity.
+function deferredLookupState(value) {
+  if (typeof value !== "string" || value.length > MAX_CURSOR_LENGTH) return null;
+  let state;
+  try { state = JSON.parse(value); } catch { return null; }
+  if (!state || typeof state !== "object" || Array.isArray(state) || state.v !== 2) return null;
+  if (Object.keys(state).some(key => key !== "v" && key !== "remaining" && key !== "failure") ||
+      Object.keys(state).length !== 3 ||
+      !state.remaining || typeof state.remaining !== "object" || Array.isArray(state.remaining) ||
+      !state.failure || typeof state.failure !== "object" || Array.isArray(state.failure)) invalidCursor();
+  const failure = state.failure;
+  if (Object.keys(failure).some(key => key !== "code" && key !== "status") ||
+      !LOOKUP_FAILURE_CODES.has(failure.code) ||
+      !(failure.status === null ||
+        (Number.isInteger(failure.status) && failure.status >= 100 && failure.status <= 599)) ||
+      (failure.code === "UNCLASSIFIED_ERROR" && failure.status !== null) ||
+      (failure.code === "INVALID_RESPONSE" && failure.status !== null)) invalidCursor();
+  const keys = Object.keys(state.remaining);
+  if (keys.some(key => !SOURCE_SET.has(key))) invalidCursor();
+  const pending = keys.length
+    ? lookupState(JSON.stringify({ v: 1, remaining: state.remaining })) : [];
+  return {
+    pending,
+    failure: {
+      items: [], nextCursor: null, lookupFailureCode: failure.code,
+      ...(failure.status == null ? {} : { lookupHttpStatus: failure.status }),
+    },
+  };
+}
+
 function sourceForWork(binding) {
   if (!binding || typeof binding !== "object" ||
       (binding.providerId != null && binding.providerId !== PROVIDER_ID)) {
@@ -203,7 +237,10 @@ export function createMangaAllReading(adapters) {
           !Object.values(SOURCE_LANGUAGES).some((languages) => languages.has(language)))) {
         throw new Error("MangaAll unsupported lookup language");
       }
-      const allPending = lookupState(input?.cursor);
+      const deferred = input?.diagnosticsVersion === 2
+        ? null : deferredLookupState(input?.cursor);
+      const allPending = deferred ? deferred.pending : lookupState(input?.cursor);
+      if (deferred && !allPending.length) return deferred.failure;
       // Source cursors are not exchangeable between language facets. Never
       // resume an English-only HID inside a Portuguese lookup; nor call a
       // source which expressly does not publish the requested language.
@@ -257,7 +294,16 @@ export function createMangaAllReading(adapters) {
       // the Host's partial salvage path by returning an existing typed failure
       // envelope instead of a completed null cursor. No third upstream retry.
       const exhausted = replies.filter((reply) => reply.failure && reply.retried);
-      if (exhausted.length) return allSourcesFailed(exhausted);
+      // The published code9 V1 contract returns only a closed failure here,
+      // discarding other sources' successful continuation candidates. A new
+      // *unpublished* code10 V1 page can instead send those valid candidates
+      // first, then defer the closed failure to a zero-network terminal cursor.
+      // V2 keeps its existing cursor to preserve the independent Host parser.
+      if (exhausted.length && (
+        input?.diagnosticsVersion === 2 ||
+        !successful.some(page => page.items.length > page.offset || page.nextCursor !== null)
+      )) return allSourcesFailed(exhausted);
+      const terminal = exhausted.length ? allSourcesFailed(exhausted) : deferred?.failure ?? null;
       const remaining = Object.create(null);
       const items = [];
       const seen = new Set();
@@ -296,8 +342,16 @@ export function createMangaAllReading(adapters) {
         // candidates" for a healthy source after another site went offline.
         remaining[failure.source] = { c: failure.cursor, r: 1 };
       }
-      const nextCursor = Object.keys(remaining).length
-        ? JSON.stringify({ v: 1, remaining }) : null;
+      const nextCursor = terminal
+        ? JSON.stringify({
+          v: 2, remaining,
+          failure: {
+            code: terminal.lookupFailureCode,
+            status: terminal.lookupHttpStatus ?? null,
+          },
+        })
+        : Object.keys(remaining).length
+          ? JSON.stringify({ v: 1, remaining }) : null;
       if (nextCursor && nextCursor.length > MAX_CURSOR_LENGTH) invalidCursor();
       return { items, nextCursor };
     },
