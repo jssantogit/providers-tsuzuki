@@ -126,7 +126,11 @@ class MangaAllNeutralWirePreviewTest(unittest.TestCase):
             self.assertIn((current["version"]["name"], current["publication"]), {
                 ("0.5.5-dev", "development"), ("0.5.5", "release"),
             })
-            self.assertFalse((ROOT / "review/mangaall-code10/approved-artifact.json").exists())
+            self.assertEqual(
+                (ROOT / "review/mangaall-code10/approved-artifact.json").exists(),
+                current["publication"] == "release",
+                "a separate code10 approval must not alter historical code9 preview bytes",
+            )
 
     def test_preview_refuses_repository_destination(self):
         with self.assertRaisesRegex(ValueError, "outside the source repository"):
