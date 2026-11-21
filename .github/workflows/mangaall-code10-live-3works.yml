@@ -1,0 +1,82 @@
+name: MangaALL code10 real three-source smoke (Naruto, Death Note, Bleach)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mangaall-code10-live-3works.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mangaall-code10-real-three-title-readonly
+  cancel-in-progress: false
+
+jobs:
+  unified-live-three-works:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact public release-source commit, no credentials persisted
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Check real signed sequence35 baseline and exact approved code10 source bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tooling/verify_index.mjs
+          node --check tooling/mangaall_code10_live_readonly.mjs
+          python3 tooling/build_provider.py providers/mangaall "${RUNNER_TEMP}/code10-readonly-check.tsz"
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib
+          root = pathlib.Path(".")
+          m = json.loads((root / "providers/mangaall/manifest.json").read_text())
+          lock = json.loads((root / "review/mangaall-code10/approved-artifact.json").read_text())
+          idx = json.loads((root / "dist/index.payload.json").read_text())
+          old = next(x for x in idx["providers"] if x["providerId"] == m["id"])
+          candidate = pathlib.Path(os.environ["RUNNER_TEMP"]) / "code10-readonly-check.tsz"
+          sha = hashlib.sha256(candidate.read_bytes()).hexdigest()
+          assert m["version"] == {"name": "0.5.5", "code": 10}
+          assert m["publication"] == "release"
+          assert lock["reviewStatus"] == "approved"
+          assert sha == lock["artifactSha256"] == "776d0e8bd64897c30283cad29f1aa331c86dac638deac1f106f042768167b94d"
+          assert idx["sequence"] == lock["priorSequence"] == 35
+          assert old["versionCode"] == 9 and old["sha256"] == lock["priorCode9Sha256"]
+          print("APPROVED_CODE10_SOURCE_UNPUBLISHED|SHA256=" + sha)
+          PY
+      - name: Real 3-title one-Provider (3 internal sources) V2+V1 read-only observations
+        env:
+          MANGAALL_CODE10_LIVE_DIAGNOSTIC_OPT_IN: THREE_WORKS_READ_ONLY
+        run: |
+          set -euo pipefail
+          node tooling/mangaall_code10_live_readonly.mjs --output "${RUNNER_TEMP}/mangaall-code10-three-works-live.json"
+      - name: Preserve sanitized live observations (no cookies, raw pages, identities, image bytes)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mangaall-code10-unified-three-works-live-${{ github.run_id }}
+          path: ${{ runner.temp }}/mangaall-code10-three-works-live.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: State what this real live source probe does NOT establish
+        if: always()
+        run: |
+          {
+            echo '## MangaALL code10 - unified Naruto, Death Note, Bleach live source diagnostic'
+            echo ''
+            echo '- Source inputs: real HTTP, one unified Provider, MangaDex + MangaDot + MangaFire'
+            echo '- Captures V2 per-source status and V1 lookup paging and terminal failures'
+            echo '- Hosted image bytes, Browser challenge bypass, cookies: NEVER'
+            echo '- Real signed code10 installation: NOT TESTED'
+            echo '- Kotlin Host, SQLite, editorial authority, canonical chapter counts, Reader pixels: NOT TESTED'
+            echo '- The 0.5.5 release is NOT published by this diagnostic workflow'
+          } >> "${GITHUB_STEP_SUMMARY}"
