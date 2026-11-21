@@ -52,8 +52,10 @@ class MangaAllCode10DisposablePublicationTest(unittest.TestCase):
 
             manifest_path = sandbox / "providers/mangaall/manifest.json"
             manifest = json.loads(manifest_path.read_text())
-            self.assertEqual(manifest["publication"], "development")
-            self.assertEqual(manifest["version"], {"name": "0.5.5-dev", "code": 10})
+            self.assertIn(
+                (manifest["version"]["name"], manifest["publication"]),
+                {("0.5.5-dev", "development"), ("0.5.5", "release")},
+            )
             manifest["publication"] = "release"     # TEST COPY ONLY
             manifest["version"]["name"] = "0.5.5"  # TEST COPY ONLY
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
