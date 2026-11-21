@@ -117,6 +117,11 @@ class MangaAllCode9PublicationGateTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "reviewed version"):
             self.check()
 
+    def test_code10_development_is_not_published_even_with_code9_manual_approval(self):
+        self.manifest(10, "0.5.5-dev", "development")
+        self.assertEqual(self.check("push", ""), "NO_CODE9_PROMOTION")
+        self.assertEqual(self.check("workflow_dispatch", "PUBLISH_MANGAALL_CODE9"), "NO_CODE9_PROMOTION")
+
     def test_code10_is_not_implicitly_authorized(self):
         self.manifest(10, "0.5.5", "release")
         with self.assertRaisesRegex(ValueError, "Code10"):
