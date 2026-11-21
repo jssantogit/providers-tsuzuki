@@ -49,7 +49,7 @@ jobs:
           assert m["version"] == {"name": "0.5.5", "code": 10}
           assert m["publication"] == "release"
           assert lock["reviewStatus"] == "approved"
-          assert sha == lock["artifactSha256"] == "776d0e8bd64897c30283cad29f1aa331c86dac638deac1f106f042768167b94d"
+          assert sha == lock["artifactSha256"] == "bcdfd03ac18c3cfdd0517e08b58dde7efa1f5baa874e93002af28e518860f95f"
           assert idx["sequence"] == lock["priorSequence"] == 35
           assert old["versionCode"] == 9 and old["sha256"] == lock["priorCode9Sha256"]
           print("APPROVED_CODE10_SOURCE_UNPUBLISHED|SHA256=" + sha)
