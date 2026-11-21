@@ -19,7 +19,7 @@ the CI and source ZIP:
 [review artifact](https://github.com/jssantogit/providers-tsuzuki/actions/runs/44926001803/artifacts/14715458775).
 
 - Exact `app.tsuzuki.mangaall-10.tsz` **SHA-256**:
-  `776d0e8bd64897c30283cad29f1aa331c86dac638deac1f106f042768167b94d`.
+  `bcdfd03ac18c3cfdd0517e08b58dde7efa1f5baa874e93002af28e518860f95f`.
 - Unsigned; never public; no P-256 signature; no Reader/canonical certification.
 - The tracked `promotion-candidate-unapproved.json` is an **observation** of
   this SHA, **NOT** the separately required release approval lock.
