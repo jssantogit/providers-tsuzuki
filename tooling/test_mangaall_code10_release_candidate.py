@@ -17,7 +17,12 @@ class Code10ReviewCandidateTest(unittest.TestCase):
             archive = output / "app.tsuzuki.mangaall-10.tsz"
             on_disk = json.loads((output / "candidate-review.json").read_text())
             self.assertEqual(report, on_disk)
-            self.assertEqual(report["reviewStatus"], "candidate_unapproved")
+            self.assertEqual(
+                report["reviewStatus"],
+                "approved_for_manual_dispatch_not_signed"
+                if (ROOT / "review/mangaall-code10/approved-artifact.json").exists()
+                else "candidate_unapproved",
+            )
             self.assertEqual(report["sourceCommit"], "a" * 40)
             self.assertEqual(report["versionCode"], 10)
             self.assertEqual(report["versionName"], "0.5.5")
