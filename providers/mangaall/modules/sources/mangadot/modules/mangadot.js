@@ -14,7 +14,10 @@ function pageNumber(cursor) {
   if (cursor === undefined || cursor === null) return 1;
   if (!/^[1-9][0-9]{0,2}$/.test(String(cursor))) throw new Error("MangaAll invalid cursor");
   const n = Number(cursor);
-  if (n > 32) throw new Error("MangaAll invalid cursor");
+  // An upstream search can report 32 broad pages without exact title hits.
+  // The unified Host has an eight-page ceiling. After three source pages,
+  // fail closed rather than claim complete/empty coverage or exhaust the Host.
+  if (n > 3) throw new Error("MangaAll bounded source search exhausted");
   return n;
 }
 export async function lookup(input) {
