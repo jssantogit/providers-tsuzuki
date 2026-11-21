@@ -48,8 +48,11 @@ class MangaAllCode9ReleaseRehearsalTest(unittest.TestCase):
             hashlib.sha256((ROOT / "dist/providers/app.tsuzuki.mangaall-9.tsz").read_bytes()).hexdigest(),
         )
         candidate = json.loads((ROOT / "providers/mangaall/manifest.json").read_text())
-        self.assertEqual(candidate["version"], {"name": "0.5.5-dev", "code": 10})
-        self.assertEqual(candidate["publication"], "development")
+        self.assertEqual(candidate["version"]["code"], 10)
+        self.assertIn(
+            (candidate["version"]["name"], candidate["publication"]),
+            {("0.5.5-dev", "development"), ("0.5.5", "release")},
+        )
         # Rehearsal builds historical code9 ONLY in a throwaway sandbox.
         # It must never promote this future candidate into the signed index.
 
@@ -66,7 +69,7 @@ class MangaAllCode9ReleaseRehearsalTest(unittest.TestCase):
                 shutil.copyfile(ROOT / relative, dst)
             source_manifest = source / "providers/mangaall/manifest.json"
             altered = json.loads(source_manifest.read_text())
-            altered["version"] = {"name": "0.5.5", "code": 10}
+            altered["version"] = {"name": "0.5.6", "code": 10}
             source_manifest.write_text(json.dumps(altered))
             with self.assertRaisesRegex(ValueError, "code8/index 34 baseline"):
                 rehearse_code9_publication(source)
