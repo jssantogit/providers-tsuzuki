@@ -111,9 +111,23 @@ async function auditV1(reading, title) {
         (Array.isArray(item.aliases) &&
           item.aliases.some(alias => typeof alias === "string" &&
             alias.toLowerCase() === title.toLowerCase()))));
+    let continuation = null;
+    if (typeof result.nextCursor === "string") {
+      try {
+        const parsed = JSON.parse(result.nextCursor);
+        continuation = {
+          kind: parsed.v === 2 ? "DEFERRED_FAILURE" : "SOURCE_PAGINATION",
+          sourceKeys: Object.keys(parsed.remaining || {}).sort(),
+          hasFailure: Boolean(parsed.failure),
+        };
+      } catch {
+        continuation = {kind: "INVALID", sourceKeys: [], hasFailure: false};
+      }
+    }
     pages.push({page, sourceCandidateCounts: counts,
       exactTitleCandidateCount: sameWork.length,
-      nextCursorPresent: typeof result.nextCursor === "string"});
+      nextCursorPresent: typeof result.nextCursor === "string",
+      continuation});
     if (!result.nextCursor) {
       return {state: "LOOKUP_EXHAUSTED_UNVERIFIED",
         pages, canonicalEditionVerified: false, readerTested: false};
