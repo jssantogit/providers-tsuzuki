@@ -17,7 +17,12 @@ class Code10ReviewCandidateTest(unittest.TestCase):
             archive = output / "app.tsuzuki.mangaall-10.tsz"
             on_disk = json.loads((output / "candidate-review.json").read_text())
             self.assertEqual(report, on_disk)
-            self.assertEqual(report["reviewStatus"], "candidate_unapproved")
+            self.assertEqual(
+                report["reviewStatus"],
+                "approved_for_manual_dispatch_not_signed"
+                if (ROOT / "review/mangaall-code10/approved-artifact.json").exists()
+                else "candidate_unapproved",
+            )
             self.assertEqual(report["sourceCommit"], "a" * 40)
             self.assertEqual(report["versionCode"], 10)
             self.assertEqual(report["versionName"], "0.5.5")
@@ -33,9 +38,16 @@ class Code10ReviewCandidateTest(unittest.TestCase):
                 self.assertIn("modules/router.js", source.namelist())
             # A candidate's metadata MUST NOT satisfy the code10 gate.
             self.assertNotIn("approved", output.joinpath("candidate-review.json").name)
-            self.assertFalse((ROOT / "review/mangaall-code10/approved-artifact.json").exists())
-            self.assertEqual(json.loads((ROOT / "providers/mangaall/manifest.json").read_text())
-                             ["publication"], "development")
+            lock_file = ROOT / "review/mangaall-code10/approved-artifact.json"
+            source = json.loads((ROOT / "providers/mangaall/manifest.json").read_text())
+            self.assertEqual(lock_file.exists(), source["publication"] == "release")
+            if lock_file.exists():
+                approved = json.loads(lock_file.read_text())
+                self.assertEqual(approved["artifactSha256"], report["artifactSha256"])
+                self.assertEqual(approved["reviewStatus"], "approved")
+            self.assertIn((source["version"]["name"], source["publication"]), {
+                ("0.5.5-dev", "development"), ("0.5.5", "release"),
+            })
             # Never overwrite an already materialized review candidate.
             with self.assertRaisesRegex(ValueError, "Refusing to overwrite"):
                 prepare_candidate(output, source_commit="a" * 40)
@@ -52,7 +64,7 @@ class Code10ReviewCandidateTest(unittest.TestCase):
             manifest = root / "providers/mangaall/manifest.json"
             manifest.parent.mkdir(parents=True)
             for value in (
-                {"id": "app.tsuzuki.mangaall", "version": {"name": "0.5.5", "code": 10},
+                {"id": "app.tsuzuki.mangaall", "version": {"name": "0.5.6", "code": 10},
                  "publication": "release"},
                 {"id": "app.tsuzuki.mangaall", "version": {"name": "0.5.5-dev", "code": 9},
                  "publication": "development"},

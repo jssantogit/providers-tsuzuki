@@ -35,7 +35,13 @@ class MangaAllCode10DisposablePublicationTest(unittest.TestCase):
         )
         before = {path: sha(ROOT / path) for path in protected}
         self.assertEqual(before["dist/providers/app.tsuzuki.mangaall-9.tsz"], PRIOR_SHA)
-        self.assertFalse((ROOT / REVIEW_FILE).exists(), "real release approval must remain absent")
+        real_review = ROOT / REVIEW_FILE
+        if real_review.exists():
+            recorded = json.loads(real_review.read_text())
+            self.assertEqual(recorded["reviewStatus"], "approved")
+            self.assertEqual(recorded["versionCode"], 10)
+            self.assertEqual(recorded["priorSequence"], 35)
+            self.assertEqual(recorded["priorCode9Sha256"], PRIOR_SHA)
 
         with tempfile.TemporaryDirectory(prefix="mangaall-code10-UNSIGNED-dry-run-") as tmp:
             sandbox = pathlib.Path(tmp)
@@ -52,8 +58,10 @@ class MangaAllCode10DisposablePublicationTest(unittest.TestCase):
 
             manifest_path = sandbox / "providers/mangaall/manifest.json"
             manifest = json.loads(manifest_path.read_text())
-            self.assertEqual(manifest["publication"], "development")
-            self.assertEqual(manifest["version"], {"name": "0.5.5-dev", "code": 10})
+            self.assertIn(
+                (manifest["version"]["name"], manifest["publication"]),
+                {("0.5.5-dev", "development"), ("0.5.5", "release")},
+            )
             manifest["publication"] = "release"     # TEST COPY ONLY
             manifest["version"]["name"] = "0.5.5"  # TEST COPY ONLY
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -114,7 +122,8 @@ class MangaAllCode10DisposablePublicationTest(unittest.TestCase):
 
         self.assertEqual(before, {path: sha(ROOT / path) for path in protected},
                          "disposable rehearsal cannot modify any actual source or signed artifact")
-        self.assertFalse((ROOT / REVIEW_FILE).exists(), "fixture lock must never leave sandbox")
+        self.assertEqual((ROOT / REVIEW_FILE).exists(), real_review.exists(),
+                         "disposable rehearsal must preserve the original operator approval state")
 
 
 if __name__ == "__main__":

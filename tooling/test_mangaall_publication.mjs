@@ -29,8 +29,20 @@ assert.equal(retirements.replacementProviderId, "app.tsuzuki.mangaall",
 const unified = JSON.parse(fs.readFileSync("providers/mangaall/manifest.json", "utf8"));
 assert.equal(unified.id, retirements.replacementProviderId);
 assert.equal(unified.version.code, 10);
-assert.equal(unified.version.name, "0.5.5-dev");
-assert.equal(unified.publication, "development", "future code10 must not enter the signed publication planner");
+assert.ok(
+  (unified.publication === "development" && unified.version.name === "0.5.5-dev") ||
+  (unified.publication === "release" && unified.version.name === "0.5.5"),
+  "only an unapproved staging branch may carry the code10 release manifest",
+);
+const code10LockPath = "review/mangaall-code10/approved-artifact.json";
+assert.equal(fs.existsSync(code10LockPath), unified.publication === "release",
+  "release manifest must be separately reviewed and tied to code10 approval");
+if (fs.existsSync(code10LockPath)) {
+  const approval = JSON.parse(fs.readFileSync(code10LockPath, "utf8"));
+  assert.equal(approval.reviewStatus, "approved");
+  assert.equal(approval.artifactSha256,
+    "776d0e8bd64897c30283cad29f1aa331c86dac638deac1f106f042768167b94d");
+}
 assert.deepEqual(unified.capabilities.map(v => v.id), [
   "reading.lookup", "reading.chapters", "reading.pages",
 ], "only the single unified package exposes Reader functionality");

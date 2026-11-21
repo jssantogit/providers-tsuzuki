@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Build an independently reviewable, UNSIGNED MangaALL code10 release candidate.
 
-The *real* provider remains 0.5.5-dev and publication=development. Only a
-disposable source COPY is changed to 0.5.5/release. This command never signs,
+A development or draft-release source is copied into a disposable tree and
+prepared as a 0.5.5/release review ZIP. This command never signs,
 dispatches, updates an index, writes to dist/, or creates a release approval.
 """
 import argparse
@@ -37,10 +37,17 @@ def prepare_candidate(output_dir, *, source_root=ROOT, source_commit=None):
         raise ValueError("Review output must live OUTSIDE the checked-out repository")
     source_manifest_path = source_root / "providers/mangaall/manifest.json"
     source_manifest = json.loads(source_manifest_path.read_text(encoding="utf-8"))
-    if (source_manifest.get("id") != PROVIDER_ID or
-            source_manifest.get("version") != {"name": "0.5.5-dev", "code": 10} or
-            source_manifest.get("publication") != "development"):
+    # Permit the dev-only source or an unmerged, still-UNAPPROVED release
+    # promotion PR. Neither state is a signing or publication authorization.
+    exact_dev = (source_manifest.get("version") == {"name": "0.5.5-dev", "code": 10}
+                 and source_manifest.get("publication") == "development")
+    exact_release_candidate = (source_manifest.get("version") == {"name": "0.5.5", "code": 10}
+                               and source_manifest.get("publication") == "release")
+    if source_manifest.get("id") != PROVIDER_ID or not (exact_dev or exact_release_candidate):
         raise ValueError("Cannot prepare candidate from an unreviewed release or unknown source")
+    approval_file = source_root / "review/mangaall-code10/approved-artifact.json"
+    if approval_file.exists() and not exact_release_candidate:
+        raise ValueError("Release approval lock is invalid for development source")
     ledger_path = source_root / "dist/index.payload.json"
     config_path = source_root / "repository/config.json"
     signed_path = source_root / "dist/index.json"
@@ -116,8 +123,21 @@ def prepare_candidate(output_dir, *, source_root=ROOT, source_commit=None):
             raise ValueError("Refusing to overwrite an existing review archive")
         shutil.copyfile(archives[0], artifact)
 
+    # A review ZIP is NEVER a signature. If a separate operator approval
+    # exists, validate all lock bytes before labeling this read-only copy.
+    approved = False
+    if approval_file.is_file():
+        lock = json.loads(approval_file.read_text(encoding="utf-8"))
+        if lock != {
+            "reviewStatus": "approved", "versionCode": 10,
+            "versionName": "0.5.5", "artifactSha256": sha,
+            "priorSequence": 35, "priorCode9Sha256": OLD_SHA,
+        }:
+            raise ValueError("Final approval lock differs from deterministic code10 archive")
+        approved = True
+
     review = {
-        "reviewStatus": "candidate_unapproved",
+        "reviewStatus": "approved_for_manual_dispatch_not_signed" if approved else "candidate_unapproved",
         "providerId": PROVIDER_ID,
         "versionCode": 10,
         "versionName": "0.5.5",
@@ -143,7 +163,7 @@ def main():
     parser.add_argument("--source-commit", default=None)
     args = parser.parse_args()
     result = prepare_candidate(args.output_dir, source_commit=args.source_commit)
-    print("MANGAALL_CODE10_RELEASE_CANDIDATE_UNAPPROVED|" +
+    print("MANGAALL_CODE10_RELEASE_REVIEW_UNSIGNED|" +
           json.dumps(result, sort_keys=True))
     github_output = os.environ.get("GITHUB_OUTPUT")
     if github_output:

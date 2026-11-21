@@ -10,8 +10,21 @@ assert.equal(product.name, "MangaAll");
 const single = JSON.parse(fs.readFileSync(path.join(root, "providers/mangaall/manifest.json"), "utf8"));
 assert.equal(single.id, "app.tsuzuki.mangaall", "MangaAll has one installable identity");
 assert.equal(single.name, "MangaAll");
-assert.equal(single.publication, "development", "code10 must remain one unpublished unified provider");
-assert.deepEqual(single.version, { name: "0.5.5-dev", code: 10 });
+assert.ok(
+  (single.publication === "development" && single.version.name === "0.5.5-dev") ||
+  (single.publication === "release" && single.version.name === "0.5.5"),
+  "only a development candidate or an unmerged promotion branch may carry code10",
+);
+assert.equal(single.version.code, 10);
+const code10LockPath = "review/mangaall-code10/approved-artifact.json";
+assert.equal(fs.existsSync(code10LockPath), single.publication === "release",
+  "signed-release PR must carry an explicit SHA-pinned operator approval lock");
+if (fs.existsSync(code10LockPath)) {
+  const approval = JSON.parse(fs.readFileSync(code10LockPath, "utf8"));
+  assert.equal(approval.reviewStatus, "approved");
+  assert.equal(approval.artifactSha256,
+    "776d0e8bd64897c30283cad29f1aa331c86dac638deac1f106f042768167b94d");
+}
 assert.deepEqual(single.capabilities.map(({ id }) => id), [
   "reading.lookup", "reading.chapters", "reading.pages",
 ]);

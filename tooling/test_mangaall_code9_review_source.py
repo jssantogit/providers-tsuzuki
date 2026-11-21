@@ -71,7 +71,11 @@ class MangaAllCode9ReviewSourceTest(unittest.TestCase):
                 )
         self.assertEqual(baseline, {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in protected})
         sequence = json.loads((ROOT / "dist/index.payload.json").read_text())["sequence"]
-        if sequence == 35:
+        source = json.loads((ROOT / "providers/mangaall/manifest.json").read_text())
+        if sequence == 35 and source["publication"] == "release":
+            with self.assertRaisesRegex(ValueError, "Code10\\+ requires"):
+                check_code9_publication(ROOT, "push", "")
+        elif sequence == 35:
             self.assertEqual(check_code9_publication(ROOT, "push", ""), "NO_CODE9_PROMOTION")
         else:
             with self.assertRaisesRegex(ValueError, "manual dispatch"):
