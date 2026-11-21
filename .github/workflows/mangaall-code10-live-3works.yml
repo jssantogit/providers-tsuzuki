@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/mangaall-code10-live-3works.yml'
+      - 'tooling/mangaall_code10_live_readonly.mjs'
 
 permissions:
   contents: read
