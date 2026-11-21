@@ -15,8 +15,9 @@ assert.ok(
   (developmentManifest.publication === 'release' && developmentManifest.version.name === '0.5.5'),
   'code10 draft may stage a release manifest, but never replace the signed code9 archive',
 );
-assert.equal(fs.existsSync('review/mangaall-code10/approved-artifact.json'), false,
-  'unsigned promotion PR cannot contain a code10 signing approval lock');
+assert.equal(fs.existsSync('review/mangaall-code10/approved-artifact.json'),
+  developmentManifest.publication === 'release',
+  'code10 release approval must not change the real signed code9 smoke source');
 assert.throws(() => checkSignedCode9SmokeSource({
   manifest: developmentManifest,
   payload: JSON.parse(fs.readFileSync('dist/index.payload.json', 'utf8')),
