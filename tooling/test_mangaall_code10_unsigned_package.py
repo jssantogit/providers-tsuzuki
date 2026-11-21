@@ -30,8 +30,12 @@ class MangaAllCode10UnsignedPackageTest(unittest.TestCase):
             {("0.5.5-dev", "development"), ("0.5.5", "release")},
             "only the development branch or unapproved release review branch is eligible",
         )
-        self.assertFalse((ROOT / "review/mangaall-code10/approved-artifact.json").exists(),
-                         "an unsigned candidate must never carry a signer approval lock")
+        review_file = ROOT / "review/mangaall-code10/approved-artifact.json"
+        self.assertEqual(review_file.exists(), source["publication"] == "release")
+        if review_file.exists():
+            review = json.loads(review_file.read_text())
+            self.assertEqual(review["reviewStatus"], "approved")
+            self.assertEqual(review["versionCode"], 10)
 
         published_path = ROOT / "dist/providers/app.tsuzuki.mangaall-9.tsz"
         ledger = ROOT / "dist/index.payload.json"
