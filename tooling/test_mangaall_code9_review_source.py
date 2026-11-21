@@ -77,6 +77,12 @@ class MangaAllCode9ReviewSourceTest(unittest.TestCase):
                 check_code9_publication(ROOT, "push", "")
         elif sequence == 35:
             self.assertEqual(check_code9_publication(ROOT, "push", ""), "NO_CODE9_PROMOTION")
+        elif sequence == 36:
+            self.assertEqual(
+                check_code9_publication(ROOT, "push", ""),
+                "NO_CODE9_PROMOTION",
+                "an already signed code10 must never reactivate historical code9",
+            )
         else:
             with self.assertRaisesRegex(ValueError, "manual dispatch"):
                 check_code9_publication(ROOT, "push", "")
@@ -88,6 +94,8 @@ class MangaAllCode9ReviewSourceTest(unittest.TestCase):
             "dist/enrollment.json",
             "dist/providers/app.tsuzuki.mangaall-8.tsz",
             "dist/providers/app.tsuzuki.mangaall-9.tsz",
+            "dist/providers/app.tsuzuki.mangaall-10.tsz",
+            "review/mangaall-code10/approved-artifact.json",
             "repository/config.json",
         ):
             dst = source / relative
