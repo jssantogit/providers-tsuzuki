@@ -99,6 +99,12 @@ class MangaAllNeutralWirePreviewTest(unittest.TestCase):
                 check_code9_publication(ROOT, "push", ""),
                 "NO_CODE9_PROMOTION",
             )
+        elif sequence == 36:
+            self.assertEqual(
+                check_code9_publication(ROOT, "push", ""),
+                "NO_CODE9_PROMOTION",
+                "a published code10 cannot reopen the retired code9 signing path",
+            )
         else:
             with self.assertRaisesRegex(ValueError, "manual dispatch"):
                 check_code9_publication(ROOT, "push", "")
