@@ -61,11 +61,14 @@ def rehearse_code9_publication(source_root=ROOT, *, historical_root=None):
             {"name": "0.5.3", "code": 8},
             {"name": "0.5.4", "code": 9},
             {"name": "0.5.5-dev", "code": 10},
+            {"name": "0.5.5", "code": 10},
         )
         or source_manifest["publication"] not in ("preview", "release", "development")
         or (source_manifest["version"]["code"] == 8 and source_manifest["publication"] != "preview")
         or (source_manifest["version"]["code"] == 9 and source_manifest["publication"] != "release")
-        or (source_manifest["version"]["code"] == 10 and source_manifest["publication"] != "development")
+        or (source_manifest["version"]["code"] == 10 and
+            (source_manifest["version"]["name"], source_manifest["publication"])
+            not in (("0.5.5-dev", "development"), ("0.5.5", "release")))
     ):
         raise ValueError("Rehearsal requires the original code8/index 34 baseline")
 
