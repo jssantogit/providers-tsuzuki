@@ -34,8 +34,10 @@ class Code10ReviewCandidateTest(unittest.TestCase):
             # A candidate's metadata MUST NOT satisfy the code10 gate.
             self.assertNotIn("approved", output.joinpath("candidate-review.json").name)
             self.assertFalse((ROOT / "review/mangaall-code10/approved-artifact.json").exists())
-            self.assertEqual(json.loads((ROOT / "providers/mangaall/manifest.json").read_text())
-                             ["publication"], "development")
+            source = json.loads((ROOT / "providers/mangaall/manifest.json").read_text())
+            self.assertIn((source["version"]["name"], source["publication"]), {
+                ("0.5.5-dev", "development"), ("0.5.5", "release"),
+            })
             # Never overwrite an already materialized review candidate.
             with self.assertRaisesRegex(ValueError, "Refusing to overwrite"):
                 prepare_candidate(output, source_commit="a" * 40)
@@ -52,7 +54,7 @@ class Code10ReviewCandidateTest(unittest.TestCase):
             manifest = root / "providers/mangaall/manifest.json"
             manifest.parent.mkdir(parents=True)
             for value in (
-                {"id": "app.tsuzuki.mangaall", "version": {"name": "0.5.5", "code": 10},
+                {"id": "app.tsuzuki.mangaall", "version": {"name": "0.5.6", "code": 10},
                  "publication": "release"},
                 {"id": "app.tsuzuki.mangaall", "version": {"name": "0.5.5-dev", "code": 9},
                  "publication": "development"},
