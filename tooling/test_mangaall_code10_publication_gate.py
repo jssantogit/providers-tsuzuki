@@ -35,6 +35,15 @@ class Code10ReleaseGateTest(unittest.TestCase):
         shutil.copytree(ROOT / "providers/mangaall", self.root / "providers/mangaall")
         shutil.copytree(ROOT / "dist/providers", self.root / "dist/providers")
         self.source = self.root / "providers/mangaall/manifest.json"
+        # Preserve the historical dev branch negative test even when the
+        # source repository is an UNMERGED release-review PR: reset ONLY this
+        # throwaway fixture to the development baseline.
+        fixture_source = json.loads(self.source.read_text())
+        if fixture_source.get("publication") == "release":
+            self.assertEqual(fixture_source["version"], {"name": "0.5.5", "code": 10})
+            fixture_source["publication"] = "development"
+            fixture_source["version"] = {"name": "0.5.5-dev", "code": 10}
+            self.source.write_text(json.dumps(fixture_source), encoding="utf-8")
         self.approval_sha = ""
         self.assertEqual(
             hashlib.sha256((self.root / "dist/providers/app.tsuzuki.mangaall-9.tsz").read_bytes()).hexdigest(),

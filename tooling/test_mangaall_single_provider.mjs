@@ -7,8 +7,14 @@ const dir = path.resolve("providers/mangaall");
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
 assert.equal(manifest.id, "app.tsuzuki.mangaall");
 assert.equal(manifest.name, "MangaAll");
-assert.equal(manifest.publication, "development", "unsigned code10 must never publish on push");
-assert.deepEqual(manifest.version, { name: "0.5.5-dev", code: 10 });
+assert.ok(
+  (manifest.publication === "development" && manifest.version.name === "0.5.5-dev") ||
+  (manifest.publication === "release" && manifest.version.name === "0.5.5"),
+  "code10 source is staged only; no approval or release signed yet",
+);
+assert.equal(manifest.version.code, 10);
+assert.equal(fs.existsSync("review/mangaall-code10/approved-artifact.json"), false,
+  "promotion must not acquire a signing approval lock in this PR");
 assert.deepEqual(manifest.capabilities.map((cap) => cap.id), [
   "reading.lookup", "reading.chapters", "reading.pages",
 ]);

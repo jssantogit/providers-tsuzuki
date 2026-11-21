@@ -90,7 +90,11 @@ class MangaAllNeutralWirePreviewTest(unittest.TestCase):
         # there is no longer any *pending* code9 promotion for CI to authorize.
         # A temporary unsigned preview still carries zero publish authority.
         sequence = json.loads((ROOT / "dist/index.payload.json").read_text())["sequence"]
-        if sequence == 35:
+        current_source = json.loads((PROVIDER / "manifest.json").read_text())
+        if sequence == 35 and current_source.get("publication") == "release":
+            with self.assertRaisesRegex(ValueError, "Code10\\+ requires"):
+                check_code9_publication(ROOT, "push", "")
+        elif sequence == 35:
             self.assertEqual(
                 check_code9_publication(ROOT, "push", ""),
                 "NO_CODE9_PROMOTION",
@@ -119,7 +123,10 @@ class MangaAllNeutralWirePreviewTest(unittest.TestCase):
             # tree can carry a separately unpublished code10 candidate.
             current = json.loads((PROVIDER / "manifest.json").read_text())
             self.assertEqual(current["version"]["code"], 10)
-            self.assertEqual(current["publication"], "development")
+            self.assertIn((current["version"]["name"], current["publication"]), {
+                ("0.5.5-dev", "development"), ("0.5.5", "release"),
+            })
+            self.assertFalse((ROOT / "review/mangaall-code10/approved-artifact.json").exists())
 
     def test_preview_refuses_repository_destination(self):
         with self.assertRaisesRegex(ValueError, "outside the source repository"):

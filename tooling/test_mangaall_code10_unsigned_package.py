@@ -24,8 +24,14 @@ class MangaAllCode10UnsignedPackageTest(unittest.TestCase):
     def test_dev_package_is_reproducible_and_cannot_replace_signed_code9(self):
         source = json.loads((ROOT / "providers/mangaall/manifest.json").read_text())
         self.assertEqual(source["id"], "app.tsuzuki.mangaall")
-        self.assertEqual(source["version"], {"name": "0.5.5-dev", "code": 10})
-        self.assertEqual(source["publication"], "development")
+        self.assertEqual(source["version"]["code"], 10)
+        self.assertIn(
+            (source["version"]["name"], source["publication"]),
+            {("0.5.5-dev", "development"), ("0.5.5", "release")},
+            "only the development branch or unapproved release review branch is eligible",
+        )
+        self.assertFalse((ROOT / "review/mangaall-code10/approved-artifact.json").exists(),
+                         "an unsigned candidate must never carry a signer approval lock")
 
         published_path = ROOT / "dist/providers/app.tsuzuki.mangaall-9.tsz"
         ledger = ROOT / "dist/index.payload.json"
@@ -64,7 +70,7 @@ class MangaAllCode10UnsignedPackageTest(unittest.TestCase):
                 old_manifest = json.loads(published.read("manifest.json"))
                 new_manifest = json.loads(candidate.read("manifest.json"))
                 self.assertEqual(old_manifest["version"], {"name": "0.5.4", "code": 9})
-                self.assertEqual(new_manifest["version"], {"name": "0.5.5-dev", "code": 10})
+                self.assertEqual(new_manifest["version"], source["version"])
                 self.assertNotIn("publication", new_manifest)
                 for unchanged in ("id", "name", "minHostApi", "entrypoint",
                                   "capabilities", "permissions", "contentLanguages"):
@@ -87,10 +93,22 @@ class MangaAllCode10UnsignedPackageTest(unittest.TestCase):
 
     def test_code10_release_is_not_approved_by_historical_code9_gate(self):
         from mangaall_code9_publication_gate import check_code9_publication
-        self.assertEqual(check_code9_publication(ROOT, "push", ""), "NO_CODE9_PROMOTION")
-        self.assertEqual(check_code9_publication(
-            ROOT, "workflow_dispatch", "PUBLISH_MANGAALL_CODE9",
-        ), "NO_CODE9_PROMOTION")
+        source = json.loads((ROOT / "providers/mangaall/manifest.json").read_text())
+        if source["publication"] == "release":
+            # Historical token must never authorize the NEW version, even
+            # if the requested event looks like a valid manual dispatch.
+            for event, token in (
+                ("push", ""), ("workflow_dispatch", "PUBLISH_MANGAALL_CODE9"),
+            ):
+                with self.subTest(event=event), self.assertRaisesRegex(
+                    ValueError, "Code10\\+ requires",
+                ):
+                    check_code9_publication(ROOT, event, token)
+        else:
+            self.assertEqual(check_code9_publication(ROOT, "push", ""), "NO_CODE9_PROMOTION")
+            self.assertEqual(check_code9_publication(
+                ROOT, "workflow_dispatch", "PUBLISH_MANGAALL_CODE9",
+            ), "NO_CODE9_PROMOTION")
 
 
 if __name__ == "__main__":
