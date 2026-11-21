@@ -50,6 +50,11 @@ def check_code9_publication(root, event_name, authorization):
     if current_code <= 8:
         return "NO_CODE9_PROMOTION"
     if current_code > 9:
+        # Future versions remain inert until a separate reviewed publisher
+        # gate exists. Development code10 can be validated by PR CI but must
+        # never enter this historical code9 signer, even via manual dispatch.
+        if manifest.get("publication") == "development" and current_code > prior.get("versionCode"):
+            return "NO_CODE9_PROMOTION"
         if current_code == prior.get("versionCode"):
             return "NO_CODE9_PROMOTION"
         raise ValueError("Code10+ requires a separately reviewed publication gate")
