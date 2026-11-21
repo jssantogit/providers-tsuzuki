@@ -16,8 +16,15 @@ assert.ok(
   "only a development candidate or an unmerged promotion branch may carry code10",
 );
 assert.equal(single.version.code, 10);
-assert.equal(fs.existsSync("review/mangaall-code10/approved-artifact.json"), false,
-  "CI cannot silently create an operator-approved release lock");
+const code10LockPath = "review/mangaall-code10/approved-artifact.json";
+assert.equal(fs.existsSync(code10LockPath), single.publication === "release",
+  "signed-release PR must carry an explicit SHA-pinned operator approval lock");
+if (fs.existsSync(code10LockPath)) {
+  const approval = JSON.parse(fs.readFileSync(code10LockPath, "utf8"));
+  assert.equal(approval.reviewStatus, "approved");
+  assert.equal(approval.artifactSha256,
+    "776d0e8bd64897c30283cad29f1aa331c86dac638deac1f106f042768167b94d");
+}
 assert.deepEqual(single.capabilities.map(({ id }) => id), [
   "reading.lookup", "reading.chapters", "reading.pages",
 ]);
