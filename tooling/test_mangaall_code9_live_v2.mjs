@@ -47,7 +47,25 @@ await assert.rejects(
 );
 assert.deepEqual(service.requests(), { mangadex: 0, mangadot: 0, mangafire: 0 });
 
-const healthy = await runLiveV2(["Naruto"], { fetchImpl: fakeFetch });
+// The historical real-network code9 runner must REFUSE the code10 source.
+await assert.rejects(
+  runLiveV2(["Naruto"], { fetchImpl: fakeFetch }),
+  /requires exact promoted source manifest/,
+);
+// Test the CURRENT three-source development router only with injected offline
+// fake transport. This helper has no dispatch, signing or live-network path.
+const candidate = await import("../providers/mangaall/main.js");
+async function offlineCandidateAudit(titles) {
+  const local = createStrictHttpService(fakeFetch);
+  globalThis.tsuzuki = { http: local.http };
+  return {
+    trustedInstallation: false, signedCode9Verified: false,
+    userDataWritten: false, catalogBindingAllowed: false,
+    observations: await Promise.all(titles.map(title => auditOneTitle(candidate.default.reading, title))),
+    requestsBySource: local.requests(),
+  };
+}
+const healthy = await offlineCandidateAudit(["Naruto"]);
 assert.equal(healthy.trustedInstallation, false);
 assert.equal(healthy.signedCode9Verified, false);
 assert.equal(healthy.userDataWritten, false);
@@ -64,7 +82,7 @@ assert.ok(!JSON.stringify(healthy).includes("externalWorkId"));
 
 requested.length = 0;
 blocked = true;
-const blockedReport = await runLiveV2(["Naruto"], { fetchImpl: fakeFetch });
+const blockedReport = await offlineCandidateAudit(["Naruto"]);
 assert.equal(blockedReport.observations[0].outcome, "INCONCLUSIVE_OR_PARTIAL");
 const pages = blockedReport.observations[0].pages;
 assert.equal(pages.length, 2, "Only one bounded source-scoped 403 retry allowed");
