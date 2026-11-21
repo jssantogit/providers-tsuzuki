@@ -37,8 +37,10 @@ jobs:
         run: node tooling/test_mangaall_live_probe.mjs
       - name: MangaAll arbitrary title selection parser and shard contract (offline, no source replay)
         run: node tooling/test_mangaall_generic_works.mjs
-      - name: Verify authentic sequence35/code9 source gate for future canonical smoke (offline)
+      - name: Verify immutable archived code9 source guard (historical, offline)
         run: node tooling/test_mangaall_signed_code9_smoke_gate.mjs
+      - name: Verify authentic signed P-256 sequence36/code10 smoke gate (offline)
+        run: node tooling/test_mangaall_signed_code10_smoke_gate.mjs
       - name: MangaAll source-to-Host real envelope provenance contract
         run: node tooling/test_mangaall_real_envelope_capture.mjs
       - name: MangaAll existing live CLI source-verdict contract (offline only)
