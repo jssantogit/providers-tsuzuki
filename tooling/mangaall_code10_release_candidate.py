@@ -163,7 +163,7 @@ def main():
     parser.add_argument("--source-commit", default=None)
     args = parser.parse_args()
     result = prepare_candidate(args.output_dir, source_commit=args.source_commit)
-    print("MANGAALL_CODE10_RELEASE_CANDIDATE_UNAPPROVED|" +
+    print("MANGAALL_CODE10_RELEASE_REVIEW_UNSIGNED|" +
           json.dumps(result, sort_keys=True))
     github_output = os.environ.get("GITHUB_OUTPUT")
     if github_output:
