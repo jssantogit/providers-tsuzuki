@@ -101,6 +101,8 @@ jobs:
         run: python3 -m unittest discover -s tooling -p 'test_mangaall_code10_unsigned_package.py' -v
       - name: MangaAll code10 separate manual release preflight (offline sandbox only; no signing)
         run: python3 -m unittest discover -s tooling -p 'test_mangaall_code10_publication_gate.py' -v
+      - name: MangaAll code10 signed-sequence36 planning rehearsal (UNSIGNED temporary sandbox only)
+        run: python3 -m unittest discover -s tooling -p 'test_mangaall_code10_unsigned_release_rehearsal.py' -v
       - name: MangaDex verified author and facet coverage fixtures
         run: node tooling/test_mangaall_mangadex_evidence.mjs
       - name: MangaAll three-source contract
