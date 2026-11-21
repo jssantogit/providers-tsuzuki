@@ -3,10 +3,20 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
   CODE9_SHA, CODE9_OPT_IN, checkSignedCode9SmokeSource,
-  inspectCurrentSignedCode9Source,
+  inspectCurrentSignedCode9Source, readSignedCode9ArchiveManifest,
 } from './mangaall_signed_code9_smoke_gate.mjs';
 
-const manifest = JSON.parse(fs.readFileSync('providers/mangaall/manifest.json', 'utf8'));
+const manifest = readSignedCode9ArchiveManifest();
+const developmentManifest = JSON.parse(fs.readFileSync('providers/mangaall/manifest.json', 'utf8'));
+assert.equal(manifest.version.code, 9, 'the trusted archived release remains code9');
+assert.equal(developmentManifest.version.code, 10, 'future source is a separate unpublished candidate');
+assert.equal(developmentManifest.publication, 'development');
+assert.throws(() => checkSignedCode9SmokeSource({
+  manifest: developmentManifest,
+  payload: JSON.parse(fs.readFileSync('dist/index.payload.json', 'utf8')),
+  archiveBytes: fs.readFileSync('dist/providers/app.tsuzuki.mangaall-9.tsz'),
+  consent: CODE9_OPT_IN,
+}), 'an unshipped source manifest cannot attest the old signed ZIP');
 const payload = JSON.parse(fs.readFileSync('dist/index.payload.json', 'utf8'));
 const archiveBytes = fs.readFileSync('dist/providers/app.tsuzuki.mangaall-9.tsz');
 const run = (overrides = {}) => checkSignedCode9SmokeSource({
