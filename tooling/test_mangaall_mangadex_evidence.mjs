@@ -207,7 +207,8 @@ for (const [reason, first, second] of [
     { offset: 12, total: 14, data: [sampleChapter(extraChapterId, "4")] }],
 ]) {
   const result = await runCoverageScenario([first, second].filter(Boolean));
-  assert.equal(result.candidate.coverageOutcome, "INVALID_RESPONSE", reason);
+  assert.equal(result.candidate.coverageOutcome,
+    reason === "missing-array" ? "FAILED" : "INVALID_RESPONSE", reason);
 }
 const timeout = await runCoverageScenario([
   { offset: 0, total: 13, data: firstTwelveExternal },
