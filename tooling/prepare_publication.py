@@ -25,12 +25,24 @@ def prepare_publication(root: pathlib.Path) -> bool:
         raise ValueError("duplicate provider in the signed index")
 
     current = {}
+    retained = set()
     changed = False
     for manifest_path in sorted((root / "providers").glob("*/manifest.json")):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        if manifest.get("publication") == "development":
-            continue
         identity = manifest["id"]
+        if manifest.get("publication") == "development":
+            # An unpublished future code must never remove an existing signed
+            # installation from the index. Retain only the prior exact
+            # signed descriptor and archive, never use the dev source.
+            older = previous.get(identity)
+            if older is not None:
+                if int(manifest["version"]["code"]) <= older["versionCode"]:
+                    raise ValueError("development version cannot replace its signed version")
+                archive = root / "dist/providers" / f"{identity}-{older['versionCode']}.tsz"
+                if not archive.is_file() or hashlib.sha256(archive.read_bytes()).hexdigest() != older["sha256"]:
+                    raise ValueError("immutable published artifact cannot be retained")
+                retained.add(identity)
+            continue
         if identity in current:
             raise ValueError(f"duplicate provider in source: {identity}")
         current[identity] = manifest
@@ -72,14 +84,20 @@ def prepare_publication(root: pathlib.Path) -> bool:
                              ", ".join(sorted(retired - permitted)))
         if retired:
             replacement = plan.get("replacementProviderId")
-            if replacement != "app.tsuzuki.mangaall" or replacement not in current:
+            if replacement != "app.tsuzuki.mangaall" or (
+                    replacement not in current and replacement not in retained
+            ):
                 raise ValueError("unified MangaAll replacement must be included in the same signed sequence")
-            if current[replacement]["version"]["code"] < 5:
+            published_code = (
+                current[replacement]["version"]["code"] if replacement in current
+                else previous[replacement]["versionCode"]
+            )
+            if published_code < 5:
                 raise ValueError("unified MangaAll replacement must be version code 5 or greater")
             if retired & set(current):
                 raise ValueError("retired legacy adapter cannot also be published")
 
-    missing = set(previous) - set(current)
+    missing = set(previous) - set(current) - retained
     unexpected = missing - retired
     if unexpected:
         raise ValueError(f"missing published providers: {', '.join(sorted(unexpected))}")
