@@ -10,8 +10,14 @@ assert.equal(product.name, "MangaAll");
 const single = JSON.parse(fs.readFileSync(path.join(root, "providers/mangaall/manifest.json"), "utf8"));
 assert.equal(single.id, "app.tsuzuki.mangaall", "MangaAll has one installable identity");
 assert.equal(single.name, "MangaAll");
-assert.equal(single.publication, "development", "code10 must remain one unpublished unified provider");
-assert.deepEqual(single.version, { name: "0.5.5-dev", code: 10 });
+assert.ok(
+  (single.publication === "development" && single.version.name === "0.5.5-dev") ||
+  (single.publication === "release" && single.version.name === "0.5.5"),
+  "only a development candidate or an unmerged promotion branch may carry code10",
+);
+assert.equal(single.version.code, 10);
+assert.equal(fs.existsSync("review/mangaall-code10/approved-artifact.json"), false,
+  "CI cannot silently create an operator-approved release lock");
 assert.deepEqual(single.capabilities.map(({ id }) => id), [
   "reading.lookup", "reading.chapters", "reading.pages",
 ]);
