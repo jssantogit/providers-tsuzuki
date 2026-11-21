@@ -10,7 +10,13 @@ const manifest = readSignedCode9ArchiveManifest();
 const developmentManifest = JSON.parse(fs.readFileSync('providers/mangaall/manifest.json', 'utf8'));
 assert.equal(manifest.version.code, 9, 'the trusted archived release remains code9');
 assert.equal(developmentManifest.version.code, 10, 'future source is a separate unpublished candidate');
-assert.equal(developmentManifest.publication, 'development');
+assert.ok(
+  (developmentManifest.publication === 'development' && developmentManifest.version.name === '0.5.5-dev') ||
+  (developmentManifest.publication === 'release' && developmentManifest.version.name === '0.5.5'),
+  'code10 draft may stage a release manifest, but never replace the signed code9 archive',
+);
+assert.equal(fs.existsSync('review/mangaall-code10/approved-artifact.json'), false,
+  'unsigned promotion PR cannot contain a code10 signing approval lock');
 assert.throws(() => checkSignedCode9SmokeSource({
   manifest: developmentManifest,
   payload: JSON.parse(fs.readFileSync('dist/index.payload.json', 'utf8')),
