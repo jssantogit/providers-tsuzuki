@@ -49,10 +49,11 @@ FIRST_SIGNED_CODE9_SHA256 = "d9c223146faa9fea0e5b1593711b74836bc0af3c2939b2c6f24
 def _read_signed_baseline(root):
     """Recover immutable code8 from sequence34 or from the signed seq35 archive.
 
-    Once the release moved the CURRENT signed index to sequence35, code8
-    deliberately disappeared from the *current* descriptor. Its digest remains
-    pinned to the ORIGINAL P-256 signed sequence34. The full verifier for both
-    signed sequences is in mangaall_code9_signed_release_audit.py / CI.
+    Once code10/sequence36 is published, code8 and code9 remain immutable
+    archival packages. The current signed seq36 descriptor verifies code10,
+    while the original code8 and code9 digests are still pinned by reviewed
+    historical evidence and the new operator-approved code10 lock. The
+    actual P-256 signature is separately verified by CI verify_index.mjs.
     """
     payload = _json(root / "dist/index.payload.json")
     config = _json(root / "repository/config.json")
@@ -62,7 +63,7 @@ def _read_signed_baseline(root):
         payload.get("repositoryId") != REPOSITORY_ID
         or config.get("repositoryId") != REPOSITORY_ID
         or enrollment.get("repositoryId") != REPOSITORY_ID
-        or sequence not in (34, 35)
+        or sequence not in (34, 35, 36)
         or config.get("sequence") != sequence
         or config.get("keyId") != KEY_ID
         or enrollment.get("keyId") != KEY_ID
@@ -80,11 +81,33 @@ def _read_signed_baseline(root):
                 descriptor.get("versionName") != "0.5.3" or
                 descriptor.get("sha256") != ORIGINAL_CODE8_SHA256):
             raise ValueError("Original sequence34 code8 digest changed")
-    else:
+    elif sequence == 35:
         if (descriptor.get("versionCode") != 9 or
                 descriptor.get("versionName") != "0.5.4" or
                 descriptor.get("sha256") != FIRST_SIGNED_CODE9_SHA256):
             raise ValueError("Published sequence35 code9 digest changed")
+    else:
+        approval = root / "review/mangaall-code10/approved-artifact.json"
+        if not approval.is_file():
+            raise ValueError("Sequence36 lacks code10 operator approval lock")
+        lock = _json(approval)
+        if lock != {
+            "reviewStatus": "approved", "versionCode": 10,
+            "versionName": "0.5.5",
+            "artifactSha256": "bcdfd03ac18c3cfdd0517e08b58dde7efa1f5baa874e93002af28e518860f95f",
+            "priorSequence": 35,
+            "priorCode9Sha256": FIRST_SIGNED_CODE9_SHA256,
+        }:
+            raise ValueError("Code10 approval lock does not pin the historic code9 baseline")
+        if (descriptor.get("versionCode") != 10 or
+                descriptor.get("versionName") != "0.5.5" or
+                descriptor.get("sha256") != lock["artifactSha256"]):
+            raise ValueError("Signed sequence36 code10 descriptor differs from approved release")
+        code10 = root / "dist/providers/app.tsuzuki.mangaall-10.tsz"
+        if (not code10.is_file() or
+                hashlib.sha256(code10.read_bytes()).hexdigest() != descriptor["sha256"]):
+            raise ValueError("Actual code10 ZIP differs from published signed sequence36")
+    if sequence in (35, 36):
         published_code9 = root / "dist/providers/app.tsuzuki.mangaall-9.tsz"
         if (not published_code9.is_file() or
                 hashlib.sha256(published_code9.read_bytes()).hexdigest() !=
