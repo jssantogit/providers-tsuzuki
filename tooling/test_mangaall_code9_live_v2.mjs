@@ -190,10 +190,10 @@ const shared = createMangaAllLookupV2Candidate({
       input.diagnosticsVersion === 2 ? "v2-only" : "v1-only", input.titles[0])]);
   } },
   mangadot: { async lookup(input) {
-    return sourcePage([work("mangadot", "dot-" + input.titles[0], input.titles[0])]);
+    return sourcePage([work("mangadot", "dot-" + input.titles[0].replaceAll(" ", "-"), input.titles[0])]);
   } },
   mangafire: { async lookup(input) {
-    return sourcePage([work("mangafire", "fire-" + input.titles[0], input.titles[0])]);
+    return sourcePage([work("mangafire", "fire-" + input.titles[0].replaceAll(" ", "-"), input.titles[0])]);
   } },
 });
 const pendingAudit = shared.lookup({
