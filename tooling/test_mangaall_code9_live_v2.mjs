@@ -154,12 +154,17 @@ const v1Router = createMangaAllReading(twoPageAdapters());
 const firstLegacy = await v1Router.lookup({ titles: ["Naruto"], requestedLanguage: "en" });
 assert.equal(firstLegacy.items.length, 2);
 assert.ok(firstLegacy.nextCursor);
-const finalLegacy = await v1Router.lookup({
+const salvagedLegacy = await v1Router.lookup({
   titles: ["Naruto"], requestedLanguage: "en", cursor: firstLegacy.nextCursor,
+});
+assert.deepEqual(salvagedLegacy.items.map(item => item.externalWorkId), ["mangadex:dex-2"]);
+assert.ok(salvagedLegacy.nextCursor?.includes('"v":2'));
+const finalLegacy = await v1Router.lookup({
+  titles: ["Naruto"], requestedLanguage: "en", cursor: salvagedLegacy.nextCursor,
 });
 assert.deepEqual(finalLegacy, {
   items: [], nextCursor: null, lookupFailureCode: "CHALLENGE_BLOCKED", lookupHttpStatus: 403,
-}, "the V1 Host rejects mixed success/error; keep its bounded fail-closed semantics");
+}, "the V1 Host never receives a mixed success/failure envelope or a completed empty search");
 
 // Mixed-source error classifications must remain distinct in V2 even though
 // the old V1 combined error is necessarily UNCLASSIFIED_ERROR.
