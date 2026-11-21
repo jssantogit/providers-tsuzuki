@@ -113,7 +113,7 @@ class Code10ReleaseGateTest(unittest.TestCase):
                 ValueError, "manual workflow dispatch",
             ):
                 self.check(event=event, approval=approval)
-        with self.assertRaisesRegex(ValueError, "historical"):
+        with self.assertRaisesRegex(ValueError, "Historical code9"):
             check_mangaall_publication(
                 self.root, event="workflow_dispatch", code9_approval="PUBLISH_MANGAALL_CODE9",
                 code10_approval=APPROVAL, code10_sha=self.approval_sha,
