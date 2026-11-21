@@ -38,8 +38,13 @@ class Code10ReviewCandidateTest(unittest.TestCase):
                 self.assertIn("modules/router.js", source.namelist())
             # A candidate's metadata MUST NOT satisfy the code10 gate.
             self.assertNotIn("approved", output.joinpath("candidate-review.json").name)
-            self.assertFalse((ROOT / "review/mangaall-code10/approved-artifact.json").exists())
+            lock_file = ROOT / "review/mangaall-code10/approved-artifact.json"
             source = json.loads((ROOT / "providers/mangaall/manifest.json").read_text())
+            self.assertEqual(lock_file.exists(), source["publication"] == "release")
+            if lock_file.exists():
+                approved = json.loads(lock_file.read_text())
+                self.assertEqual(approved["artifactSha256"], report["artifactSha256"])
+                self.assertEqual(approved["reviewStatus"], "approved")
             self.assertIn((source["version"]["name"], source["publication"]), {
                 ("0.5.5-dev", "development"), ("0.5.5", "release"),
             })
