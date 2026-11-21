@@ -15,7 +15,7 @@ const SOURCES = Object.freeze({
   mangadot: "https://mangadot.net",
   mangafire: "https://mangafire.to",
 });
-const EXPECTED_SHA = "776d0e8bd64897c30283cad29f1aa331c86dac638deac1f106f042768167b94d";
+const EXPECTED_SHA = "bcdfd03ac18c3cfdd0517e08b58dde7efa1f5baa874e93002af28e518860f95f";
 const MANIFEST = "providers/mangaall/manifest.json";
 
 export function sourceForId(id) {
