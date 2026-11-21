@@ -117,10 +117,16 @@ def audit_signed_code9(current_root, published_code8_root):
         manifest.get("version") == {"name": "0.5.5-dev", "code": 10} and
         manifest.get("publication") == "development"
     )
-    if not source_is_code9 and not source_is_unpublished_code10:
+    source_is_unapproved_code10_review = (
+        manifest.get("id") == PROVIDER_ID and
+        manifest.get("version") == {"name": "0.5.5", "code": 10} and
+        manifest.get("publication") == "release" and
+        not (current / "review/mangaall-code10/approved-artifact.json").exists()
+    )
+    if not (source_is_code9 or source_is_unpublished_code10 or source_is_unapproved_code10_review):
         raise ValueError("Published code9 source manifest is inconsistent")
     # Source-only 'publication' is stripped from the signed runtime ZIP.
-    # Under code10 development, attest the frozen code9 using its archive
+    # Under code10 development or unapproved review, attest code9 by archive
     # and independent review, never the deliberately changed working tree.
     with zipfile.ZipFile(code9) as archive:
         runtime_manifest = json.loads(archive.read("manifest.json"))
