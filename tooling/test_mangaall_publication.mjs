@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -66,5 +67,46 @@ try {
     "signed metadata-only sources must be included; development MangaBall stays excluded");
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });
+}
+// A development successor must preserve the ORIGINAL P-256 index entry,
+// never replace the installed code9 descriptor with unsigned code10 JS.
+const carry = fs.mkdtempSync(path.join(os.tmpdir(), "mangaall-signed-retain-"));
+try {
+  for (const dir of ["repository", "providers/mangaall", "dist/providers"]) {
+    fs.mkdirSync(path.join(carry, dir), { recursive: true });
+  }
+  const previousArchive = Buffer.from("fixture-signed-code9");
+  const previousDescriptor = {
+    providerId: "app.tsuzuki.mangaall",
+    versionName: "0.5.4", versionCode: 9,
+    artifactUrl: "https://example.org/provider/app.tsuzuki.mangaall-9.tsz",
+    sha256: crypto.createHash("sha256").update(previousArchive).digest("hex"),
+    minHostApi: 1,
+  };
+  fs.writeFileSync(path.join(carry, "repository/config.json"), JSON.stringify({
+    repositoryId: "test.repo", sequence: 35, artifactBaseUrl: "https://example.org/provider",
+  }));
+  fs.writeFileSync(path.join(carry, "dist/index.payload.json"), JSON.stringify({
+    schemaVersion: 1, repositoryId: "test.repo", sequence: 35,
+    providers: [previousDescriptor], revokedArtifactSha256: [], nextSigningKey: null,
+  }));
+  fs.writeFileSync(path.join(carry, "dist/providers/app.tsuzuki.mangaall-9.tsz"), previousArchive);
+  fs.writeFileSync(path.join(carry, "providers/mangaall/manifest.json"), JSON.stringify({
+    id: "app.tsuzuki.mangaall", version: { name: "0.5.5-dev", code: 10 },
+    publication: "development", minHostApi: 1,
+  }));
+  const buildIndex = () => spawnSync(process.execPath, [path.resolve("tooling/build_index.mjs")],
+    { cwd: carry, encoding: "utf8" });
+  const retained = buildIndex();
+  assert.equal(retained.status, 0, retained.stderr);
+  const next = JSON.parse(fs.readFileSync(path.join(carry, "dist/index.payload.json"), "utf8"));
+  assert.deepEqual(next.providers, [previousDescriptor], "only the exact prior signed descriptor survives");
+  assert.equal(next.sequence, 35, "staged code10 must never bump signed sequence");
+  fs.writeFileSync(path.join(carry, "dist/providers/app.tsuzuki.mangaall-9.tsz"), "tampered");
+  const rejected = buildIndex();
+  assert.notEqual(rejected.status, 0, "reusing a modified published code9 archive must fail closed");
+  assert.match(rejected.stderr, /cannot retain unverified previous signed Provider/);
+} finally {
+  fs.rmSync(carry, { recursive: true, force: true });
 }
 console.log("MangaAll unified identity, retired source adapters, paused MangaBall: OK");
