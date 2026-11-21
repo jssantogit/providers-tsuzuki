@@ -61,16 +61,23 @@ export async function chapters(input) {
   const rows = await api("GET", "/api/manga/" + id + "/chapters/list", [["lang", lang]]);
   if (!Array.isArray(rows) || rows.length > 16000) throw new Error("MangaAll invalid API response");
   const items = [], seen = new Set();
+  let rejectedFacetEvidence = false;
   for (const row of rows) {
     const chapterId = cleanId(row?.id);
     const number = chapterNumber(row?.chapter_number);
     // MangaDot's language is optional. Preserve unknown languages as unknown
     // rather than assigning a requested facet's language to the chapter.
     const rawLanguage = row?.language;
-    if (rawLanguage != null && typeof rawLanguage !== "string") continue;
+    if (rawLanguage != null && typeof rawLanguage !== "string") {
+      rejectedFacetEvidence = true;
+      continue;
+    }
     const chapterLanguage = rawLanguage == null ? null : rawLanguage.toLowerCase();
-    if (!chapterId || number === null || seen.has(chapterId) ||
-        (chapterLanguage != null && chapterLanguage !== lang)) continue;
+    if (chapterLanguage != null && chapterLanguage !== lang) {
+      rejectedFacetEvidence = true;
+      continue;
+    }
+    if (!chapterId || number === null || seen.has(chapterId)) continue;
     const title = safeText(row.chapter_title, 3900) || null;
     const groups = Array.isArray(row.groups) ? row.groups : [];
     const scanlationGroup = safeText(groups[0]?.name) ||
@@ -82,6 +89,12 @@ export async function chapters(input) {
       rawNumber: number, title, language: chapterLanguage,
       scanlationGroup, releaseDateMillis: dateMillis(row.date_added),
     });
+  }
+  // A nonempty endpoint that returns ONLY foreign or invalid language
+  // evidence has not established a complete-empty requested facet. Keep
+  // the Host's source state INCONCLUSIVE instead of manufacturing EMPTY.
+  if (rows.length > 0 && items.length === 0 && rejectedFacetEvidence) {
+    throw new Error("MangaAll chapter language mismatch");
   }
   return { items, nextCursor: null };
 }
