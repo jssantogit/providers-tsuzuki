@@ -6,6 +6,8 @@ on:
       - 'providers/mangaall/**'
       - 'tooling/mangaall_code10_release_candidate.py'
       - 'tooling/test_mangaall_code10_release_candidate.py'
+      - 'tooling/test_mangaall_mangadex_evidence.mjs'
+      - 'tooling/test_mangaall_single_provider.mjs'
       - '.github/workflows/mangaall-code10-candidate-review.yml'
       - 'review/mangaall-code10/**'
 
