@@ -19,7 +19,9 @@ export function checkSignedCode9SmokeSource({
   assert.equal(consent, CODE9_OPT_IN, 'Code9 canonical smoke requires explicit opt-in');
   assert.equal(manifest.id, CODE9_PROVIDER);
   assert.deepEqual(manifest.version, { name: '0.5.4', code: 9 });
-  assert.equal(manifest.publication, 'release');
+  // The immutable signed runtime ZIP strips the source-only 'publication'
+  // control. Its P-256 index entry and exact archive hash attest publication.
+  assert.ok(manifest.publication === undefined || manifest.publication === 'release');
   assert.equal(payload.repositoryId, CODE9_REPOSITORY);
   assert.equal(payload.sequence, 35, 'First signed code9 smoke is pinned to sequence35');
   const mangaall = payload.providers.filter(p => p.providerId === CODE9_PROVIDER);
@@ -56,8 +58,24 @@ export function verifyRealSignedIndexBeforeNetwork() {
   }
 }
 
+/**
+ * The CURRENT source may be an unpublished later development version. Its
+ * manifest must never impersonate the already-signed code9. Extract the
+ * runtime manifest from the exact frozen signed ZIP instead (no network).
+ */
+export function readSignedCode9ArchiveManifest() {
+  const archivePath = 'dist/providers/app.tsuzuki.mangaall-9.tsz';
+  const extracted = spawnSync('python3', [
+    '-c',
+    'import sys,zipfile;print(zipfile.ZipFile(sys.argv[1]).read("manifest.json").decode("utf-8"))',
+    archivePath,
+  ], { encoding: 'utf8', timeout: 20_000, maxBuffer: 65_536 });
+  if (extracted.status !== 0) throw Error('Cannot inspect original signed code9 manifest');
+  return JSON.parse(extracted.stdout);
+}
+
 export function inspectCurrentSignedCode9Source(consent) {
-  const manifest = JSON.parse(fs.readFileSync('providers/mangaall/manifest.json', 'utf8'));
+  const manifest = readSignedCode9ArchiveManifest();
   const payload = JSON.parse(fs.readFileSync('dist/index.payload.json', 'utf8'));
   const archive = fs.readFileSync('dist/providers/app.tsuzuki.mangaall-9.tsz');
   const result = checkSignedCode9SmokeSource({ manifest, payload, archiveBytes: archive, consent });
