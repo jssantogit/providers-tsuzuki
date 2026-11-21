@@ -90,6 +90,136 @@ const before = chapterCalls;
 await lookup({ titles: ["Vagabond"], editorialEvidenceVersion: 1, coverageEvidenceVersion: 1 });
 assert.equal(chapterCalls, before, "unknown facet must never get cross-language coverage");
 
+// Regression #90: only source-attested, exact-work/facet, hosted numbered
+// releases count. The published code9 sampled two rows, missing later chapters.
+const sampleChapter = (id, number, extras = {}) => ({
+  type: "chapter", id,
+  attributes: { chapter: number, translatedLanguage: "en", ...extras.attributes },
+  relationships: extras.relationships ?? [{ type: "manga", id: mangaId }],
+});
+const extraChapterId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const externalChapter = (n) => sampleChapter(
+  "aaaaaaaa-bbbb-4ccc-8ddd-" + n.toString(16).padStart(12, "0"),
+  String(n), { attributes: { externalUrl: "https://publisher.example/read" } },
+);
+async function runCoverageScenario(pages) {
+  const chapterOffsets = [];
+  let nextPage = 0;
+  globalThis.tsuzuki = { http: { async request(method, url) {
+    assert.equal(method, "GET");
+    const parsed = new URL(url);
+    assert.equal(parsed.origin, "https://api.mangadex.org");
+    if (parsed.pathname === "/manga") {
+      return response({ offset: 0, total: 1, data: [{
+        type: "manga", id: mangaId,
+        attributes: { title: { en: "Vagabond" }, altTitles: [] },
+      }] });
+    }
+    if (parsed.pathname === "/manga/" + mangaId) {
+      return response({ data: {
+        type: "manga", id: mangaId,
+        attributes: { title: { en: "Vagabond" }, altTitles: [] },
+        relationships: [{ type: "author",
+          id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          attributes: { name: "Takehiko Inoue" } }],
+      } });
+    }
+    if (parsed.pathname === "/chapter") {
+      assert.equal(parsed.searchParams.get("manga"), mangaId);
+      assert.deepEqual(parsed.searchParams.getAll("translatedLanguage[]"), ["en"]);
+      assert.deepEqual(parsed.searchParams.getAll("contentRating[]"), ["safe", "suggestive"]);
+      const offset = Number(parsed.searchParams.get("offset"));
+      const limit = Number(parsed.searchParams.get("limit"));
+      assert.equal(limit, 12, "chapter preview must have a strict small page limit");
+      assert.equal(offset, nextPage * limit, "preview cursor must progress monotonically");
+      chapterOffsets.push(offset);
+      assert.ok(chapterOffsets.length <= 2, "never exceed the read-only probe budget");
+      const item = pages[nextPage++];
+      if (item instanceof Error) throw item;
+      assert.ok(item, "unexpected third preview request");
+      return response(item);
+    }
+    throw new Error("unexpected test route");
+  } } };
+  return {
+    chapterOffsets,
+    candidate: (await lookup(request("en"))).items[0],
+  };
+}
+
+const firstTwelveExternal = Array.from({ length: 12 }, (_, index) =>
+  index < 2 ? externalChapter(index + 1) :
+    sampleChapter("dddddddd-dddd-4ddd-8ddd-" + (index + 1).toString(16).padStart(12, "0"), null));
+const laterHosted = await runCoverageScenario([
+  { offset: 0, total: 13, data: firstTwelveExternal },
+  { offset: 12, total: 13, data: [sampleChapter(extraChapterId, "336")] },
+]);
+assert.deepEqual(laterHosted.chapterOffsets, [0, 12]);
+assert.equal(laterHosted.candidate.coverageOutcome, "OBSERVED");
+assert.equal(laterHosted.candidate.coverageObservedCount, 1);
+assert.equal(laterHosted.candidate.coverageMinMilli, 336000);
+assert.equal(laterHosted.candidate.coverageMaxMilli, 336000);
+assert.equal(laterHosted.candidate.coverageHasMore, false);
+assert.deepEqual(laterHosted.candidate.authors, ["Takehiko Inoue"]);
+
+const onePagePositive = await runCoverageScenario([{
+  offset: 0, total: 120, data: [sampleChapter(extraChapterId, "1")],
+}]);
+assert.deepEqual(onePagePositive.chapterOffsets, [0], "positive first page must not spawn extra HTTP");
+assert.equal(onePagePositive.candidate.coverageOutcome, "OBSERVED");
+assert.equal(onePagePositive.candidate.coverageHasMore, true);
+
+const noHostedInBudget = await runCoverageScenario([
+  { offset: 0, total: 35, data: firstTwelveExternal },
+  { offset: 12, total: 35, data: firstTwelveExternal },
+]);
+assert.deepEqual(noHostedInBudget.chapterOffsets, [0, 12]);
+assert.equal(noHostedInBudget.candidate.coverageOutcome, "UNKNOWN",
+  "the source may have hosted chapters after the sampled window");
+assert.equal(noHostedInBudget.candidate.coverageObservedCount ?? 0, 0);
+
+const trueEmpty = await runCoverageScenario([{ offset: 0, total: 0, data: [] }]);
+assert.deepEqual(trueEmpty.chapterOffsets, [0]);
+assert.equal(trueEmpty.candidate.coverageOutcome, "EMPTY");
+assert.equal(trueEmpty.candidate.coverageHasMore, false);
+
+for (const [reason, entry] of [
+  ["foreign-work", sampleChapter(extraChapterId, "4", {
+    relationships: [{ type: "manga", id: "ffffffff-ffff-4fff-8fff-ffffffffffff" }],
+  })],
+  ["foreign-facet", sampleChapter(extraChapterId, "4", { attributes: { translatedLanguage: "pt-br" } })],
+  ["external", sampleChapter(extraChapterId, "4", { attributes: { externalUrl: "https://publisher.example/owned" } })],
+  ["unnumbered", sampleChapter(extraChapterId, null)],
+  ["non-numeric", sampleChapter(extraChapterId, "Episode Five")],
+]) {
+  const result = await runCoverageScenario([{ offset: 0, total: 1, data: [entry] }]);
+  assert.equal(result.candidate.coverageOutcome, "UNKNOWN", reason);
+  assert.deepEqual(result.chapterOffsets, [0], reason);
+}
+for (const [reason, first, second] of [
+  ["wrong-offset", { offset: 99, total: 1, data: [sampleChapter(extraChapterId, "4")] }],
+  ["missing-array", { offset: 0, total: 1, data: null }],
+  ["short-total", { offset: 0, total: 0, data: [sampleChapter(extraChapterId, "4")] }],
+  ["nonadvancing-page", { offset: 0, total: 2, data: [] }],
+  ["second-offset-conflict", { offset: 0, total: 13, data: firstTwelveExternal },
+    { offset: 11, total: 13, data: [sampleChapter(extraChapterId, "4")] }],
+  ["second-total-conflict", { offset: 0, total: 13, data: firstTwelveExternal },
+    { offset: 12, total: 14, data: [sampleChapter(extraChapterId, "4")] }],
+]) {
+  const result = await runCoverageScenario([first, second].filter(Boolean));
+  assert.equal(result.candidate.coverageOutcome, "INVALID_RESPONSE", reason);
+}
+const timeout = await runCoverageScenario([
+  { offset: 0, total: 13, data: firstTwelveExternal },
+  new Error("Private upstream timeout text must never be trusted"),
+]);
+assert.equal(timeout.candidate.coverageOutcome, "FAILED");
+assert.deepEqual(timeout.chapterOffsets, [0, 12]);
+assert.ok(!JSON.stringify(timeout.candidate).includes("Private upstream"));
+const rateLimit = await runCoverageScenario([new Error("HTTP 429 sensitive upstream body")]);
+assert.equal(rateLimit.candidate.coverageOutcome, "FAILED");
+assert.deepEqual(rateLimit.chapterOffsets, [0]);
+
 // The MangaDex API accepts up to 100 search rows, but the former 20-item
 // query turned broad title searches into many round trips under the Host's
 // strict eight-page deadline. A conservative 50-row page must preserve every
