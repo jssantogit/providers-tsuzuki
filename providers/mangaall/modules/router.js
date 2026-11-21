@@ -157,13 +157,15 @@ function lookupState(value) {
 // the very next page. It never converts a source outage into a complete empty
 // lookup and never performs an extra network request to report the failure.
 // Opt-in V2 audits retain their original V1 cursor grammar for Host parity.
-function deferredLookupState(value) {
+function deferredLookupState(value, language) {
   if (typeof value !== "string" || value.length > MAX_CURSOR_LENGTH) return null;
   let state;
   try { state = JSON.parse(value); } catch { return null; }
   if (!state || typeof state !== "object" || Array.isArray(state) || state.v !== 2) return null;
-  if (Object.keys(state).some(key => key !== "v" && key !== "remaining" && key !== "failure") ||
-      Object.keys(state).length !== 3 ||
+  if (Object.keys(state).some(key =>
+        key !== "v" && key !== "remaining" && key !== "failure" && key !== "facet"
+      ) || Object.keys(state).length !== 4 ||
+      state.facet !== language ||
       !state.remaining || typeof state.remaining !== "object" || Array.isArray(state.remaining) ||
       !state.failure || typeof state.failure !== "object" || Array.isArray(state.failure)) invalidCursor();
   const failure = state.failure;
@@ -239,7 +241,7 @@ export function createMangaAllReading(adapters) {
         throw new Error("MangaAll unsupported lookup language");
       }
       const deferred = input?.diagnosticsVersion === 2
-        ? null : deferredLookupState(input?.cursor);
+        ? null : deferredLookupState(input?.cursor, language);
       const allPending = deferred ? deferred.pending : lookupState(input?.cursor);
       if (deferred && !allPending.length) return deferred.failure;
       // Source cursors are not exchangeable between language facets. Never
@@ -358,7 +360,7 @@ export function createMangaAllReading(adapters) {
       }
       const nextCursor = terminal
         ? JSON.stringify({
-          v: 2, remaining,
+          v: 2, remaining, facet: language,
           failure: {
             code: terminal.lookupFailureCode,
             status: terminal.lookupHttpStatus ?? null,
