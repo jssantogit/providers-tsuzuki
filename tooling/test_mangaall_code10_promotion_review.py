@@ -18,7 +18,7 @@ from mangaall_code10_publication_gate import (
 )
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SHA = "776d0e8bd64897c30283cad29f1aa331c86dac638deac1f106f042768167b94d"
+SHA = "bcdfd03ac18c3cfdd0517e08b58dde7efa1f5baa874e93002af28e518860f95f"
 
 
 def digest(path):
