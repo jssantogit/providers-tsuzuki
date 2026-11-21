@@ -161,6 +161,42 @@ class PublicationPlanningTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "archive"):
             prepare_publication(self.root)
 
+    def test_development_successor_keeps_exact_signed_version_in_catalog(self):
+        identity = "app.tsuzuki.mangaall"
+        (self.root / "providers/mangaall").mkdir()
+        published = json.loads((self.root / "dist/index.payload.json").read_text())
+        published["providers"].append(self.desc(identity, 9, "0.5.4", b"signed-nine"))
+        self.write("dist/index.payload.json", published)
+        archived = self.root / "dist/providers/app.tsuzuki.mangaall-9.tsz"
+        archived.write_bytes(b"signed-nine")
+        self.write("providers/mangaall/manifest.json", {
+            "id": identity,
+            "version": {"name": "0.5.5-dev", "code": 10},
+            "publication": "development",
+        })
+        self.assertFalse(prepare_publication(self.root),
+                         "code10 must neither retire code9 nor reserve signed sequence")
+        self.assertEqual(self.current_sequence(), 24)
+        self.assertEqual(archived.read_bytes(), b"signed-nine")
+        self.write("repository/retirements.json", {
+            "retiredProviderIds": ["app.tsuzuki.mangaall.mangadex"],
+            "replacementProviderId": identity,
+        })
+        self.assertFalse(prepare_publication(self.root),
+                         "an already signed replacement remains valid during later development")
+
+        archived.write_bytes(b"tampered")
+        with self.assertRaisesRegex(ValueError, "immutable published artifact"):
+            prepare_publication(self.root)
+        archived.write_bytes(b"signed-nine")
+        self.write("providers/mangaall/manifest.json", {
+            "id": identity,
+            "version": {"name": "0.5.4-dev", "code": 9},
+            "publication": "development",
+        })
+        with self.assertRaisesRegex(ValueError, "development version"):
+            prepare_publication(self.root)
+
     def test_development_provider_not_promoted(self):
         (self.root / "providers/mangaall-ball").mkdir(parents=True, exist_ok=True)
         self.write("providers/mangaall-ball/manifest.json", {"id": "app.tsuzuki.mangaall.ball", "version": {"code": 1, "name": "0.1.0"}, "publication": "development"})
