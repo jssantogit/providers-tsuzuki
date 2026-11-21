@@ -11,6 +11,7 @@ import { createHttpBridge } from './mangaall_live_probe_core.mjs';
 import { parseWorks, shardWorks } from './mangaall_generic_works.mjs';
 import { createRealEnvelopeCapture } from './mangaall_real_envelope_capture.mjs';
 import { inspectCurrentSignedCode9Source, CODE9_OPT_IN } from './mangaall_signed_code9_smoke_gate.mjs';
+import { inspectCurrentSignedCode10Source, CODE10_OPT_IN } from './mangaall_signed_code10_smoke_gate.mjs';
 import { probeJourney as probe, journeyVerdict as verdict, granted } from './mangaall_live_journey_core.mjs';
 
 // Preset data is never read in generic custom mode: no fixed title corpus
@@ -142,17 +143,31 @@ const legacyReadOnly = manifest.id === 'app.tsuzuki.mangaall' &&
 const officialCode9 = manifest.id === 'app.tsuzuki.mangaall' &&
   manifest.version.code === 9 && manifest.version.name === '0.5.4' &&
   manifest.publication === 'release';
+const officialCode10 = manifest.id === 'app.tsuzuki.mangaall' &&
+  manifest.version.code === 10 && manifest.version.name === '0.5.5' &&
+  manifest.publication === 'release';
 // A published code9 source is NOT allowed into the older unsigned source
 // runner by accident. Require strict consent and the real P-256 verifier
 // before any HTTP requests or captured Host envelopes.
-if (!legacyReadOnly && !officialCode9) {
-  throw new Error('MangaAll live source requires reviewed legacy or authentic signed code9');
+if (!legacyReadOnly && !officialCode9 && !officialCode10) {
+  throw new Error('MangaAll live source requires reviewed legacy or authentic signed code9/code10');
 }
 if (officialCode9) {
   if (process.env.MANGAALL_SIGNED_CODE9_CANONICAL_SMOKE !== CODE9_OPT_IN) {
     throw new Error('Official code9 smoke requires explicit signed-source authorization');
   }
   inspectCurrentSignedCode9Source(process.env.MANGAALL_SIGNED_CODE9_CANONICAL_SMOKE);
+}
+if (officialCode10) {
+  // Only current truly P-256 signed seq36 and exact lock/source bytes.
+  // Neither a dev candidate nor a similarly named unsigned package qualifies.
+  if (process.env.MANGAALL_SIGNED_CODE10_CANONICAL_SMOKE !== CODE10_OPT_IN) {
+    throw new Error('Official code10 smoke requires explicit signed-source authorization');
+  }
+  if (process.env.MANGAALL_SIGNED_CODE9_CANONICAL_SMOKE) {
+    throw new Error('Historical code9 opt-in may never authorize a code10 capture');
+  }
+  inspectCurrentSignedCode10Source(process.env.MANGAALL_SIGNED_CODE10_CANONICAL_SMOKE);
 }
 const grants = manifest.permissions.network.origins;
 if (!Object.keys(origins).every((origin) => grants.includes(origin))) {
@@ -227,7 +242,7 @@ for (const spec of cases) {
   const value = await probe(recording?.reading ?? provider.reading, spec, grants, {
     // Code9 diagnosticsVersion=2 yields V2 observations WITHOUT V1 items;
     // the canonical smoke must use the signed V1 interface explicitly.
-    lookupContract: officialCode9 ? 'v1' : 'legacy',
+    lookupContract: (officialCode9 || officialCode10) ? 'v1' : 'legacy',
     lookupPageLimit: selectedSuite === 'custom' ? 3 : 2,
     chapterPageLimit: selectedSuite === 'custom' ? 8 : 4,
     includeCandidates: selectedSuite === 'custom',
