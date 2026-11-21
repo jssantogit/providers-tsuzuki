@@ -10,8 +10,8 @@ assert.equal(product.name, "MangaAll");
 const single = JSON.parse(fs.readFileSync(path.join(root, "providers/mangaall/manifest.json"), "utf8"));
 assert.equal(single.id, "app.tsuzuki.mangaall", "MangaAll has one installable identity");
 assert.equal(single.name, "MangaAll");
-assert.equal(single.publication, "release", "one unified provider, with first code9 publication guarded by manual authorization");
-assert.deepEqual(single.version, { name: "0.5.4", code: 9 });
+assert.equal(single.publication, "development", "code10 must remain one unpublished unified provider");
+assert.deepEqual(single.version, { name: "0.5.5-dev", code: 10 });
 assert.deepEqual(single.capabilities.map(({ id }) => id), [
   "reading.lookup", "reading.chapters", "reading.pages",
 ]);
