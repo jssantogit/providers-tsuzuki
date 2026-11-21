@@ -93,10 +93,22 @@ class MangaAllCode10UnsignedPackageTest(unittest.TestCase):
 
     def test_code10_release_is_not_approved_by_historical_code9_gate(self):
         from mangaall_code9_publication_gate import check_code9_publication
-        self.assertEqual(check_code9_publication(ROOT, "push", ""), "NO_CODE9_PROMOTION")
-        self.assertEqual(check_code9_publication(
-            ROOT, "workflow_dispatch", "PUBLISH_MANGAALL_CODE9",
-        ), "NO_CODE9_PROMOTION")
+        source = json.loads((ROOT / "providers/mangaall/manifest.json").read_text())
+        if source["publication"] == "release":
+            # Historical token must never authorize the NEW version, even
+            # if the requested event looks like a valid manual dispatch.
+            for event, token in (
+                ("push", ""), ("workflow_dispatch", "PUBLISH_MANGAALL_CODE9"),
+            ):
+                with self.subTest(event=event), self.assertRaisesRegex(
+                    ValueError, "Code10\\+ requires",
+                ):
+                    check_code9_publication(ROOT, event, token)
+        else:
+            self.assertEqual(check_code9_publication(ROOT, "push", ""), "NO_CODE9_PROMOTION")
+            self.assertEqual(check_code9_publication(
+                ROOT, "workflow_dispatch", "PUBLISH_MANGAALL_CODE9",
+            ), "NO_CODE9_PROMOTION")
 
 
 if __name__ == "__main__":
