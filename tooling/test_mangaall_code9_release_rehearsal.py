@@ -47,10 +47,11 @@ class MangaAllCode9ReleaseRehearsalTest(unittest.TestCase):
             descriptor["sha256"],
             hashlib.sha256((ROOT / "dist/providers/app.tsuzuki.mangaall-9.tsz").read_bytes()).hexdigest(),
         )
-        self.assertEqual(
-            json.loads((ROOT / "providers/mangaall/manifest.json").read_text())["version"],
-            {"name": "0.5.4", "code": 9},
-        )
+        candidate = json.loads((ROOT / "providers/mangaall/manifest.json").read_text())
+        self.assertEqual(candidate["version"], {"name": "0.5.5-dev", "code": 10})
+        self.assertEqual(candidate["publication"], "development")
+        # Rehearsal builds historical code9 ONLY in a throwaway sandbox.
+        # It must never promote this future candidate into the signed index.
 
     def test_refuses_rehearsal_when_real_manifest_is_no_longer_code8(self):
         with tempfile.TemporaryDirectory(prefix="code9-rehearsal-negative-") as temp:
