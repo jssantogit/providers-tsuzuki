@@ -86,14 +86,20 @@ function safeCandidate(source, raw, titles) {
  */
 export function createMangaAllLookupV2Candidate(adapters) {
   if (!adapters || typeof adapters !== "object") throw Error("MangaAll adapters required");
-  let active = null;
+  // A single mutable active audit corrupts V2 evidence if a V1 lookup or
+  // another read-only audit interleaves with awaited source HTTP. Keep each
+  // invocation isolated behind a closure-private Symbol carried through the
+  // router's request spread; never expose it in the Provider JSON result.
+  const tokenKey = Symbol("mangaall.v2.audit");
+  const audits = new Map();
   const wrapped = Object.fromEntries(SOURCE_ORDER.map(source => {
     const original = adapters[source];
     return [source, {
       ...original,
       async lookup(request) {
-        if (active === null) return original.lookup(request);
-        const observed = active[source];
+        const context = audits.get(request[tokenKey]);
+        if (!context) return original.lookup(request);
+        const observed = context.perSource[source];
         observed.attempts++;
         try {
           const page = await original.lookup(request);
@@ -113,8 +119,8 @@ export function createMangaAllLookupV2Candidate(adapters) {
           observed.status = "SUCCESS_PAGE";
           observed.pageComplete = page.nextCursor == null;
           for (const item of page.items) {
-            if (!lookupTitleMatches(active.titles, item)) continue;
-            const safe = safeCandidate(source, item, active.titles);
+            if (!lookupTitleMatches(context.titles, item)) continue;
+            const safe = safeCandidate(source, item, context.titles);
             if (!safe) {
               observed.unsafeCandidate = true;
               continue;
@@ -144,17 +150,17 @@ export function createMangaAllLookupV2Candidate(adapters) {
     pages: (input) => router.pages(input),
     async lookup(input) {
       if (input?.diagnosticsVersion !== 2) return router.lookup(input);
-      if (active !== null) throw Error("MangaAll candidate audit reentry not permitted");
       const perSource = Object.fromEntries(SOURCE_ORDER.map(source => [source, {
         source, attempts: 0, status: "NOT_QUERIED", pageComplete: null,
         failure: null, candidates: [], truncated: false, unsafeCandidate: false,
       }]));
-      active = { ...perSource, titles: input.titles };
+      const token = Symbol("mangaall.v2.invocation");
+      audits.set(token, { perSource, titles: input.titles });
       let legacy;
       try {
-        legacy = await router.lookup(input);
+        legacy = await router.lookup({ ...input, [tokenKey]: token });
       } finally {
-        active = null;
+        audits.delete(token);
       }
       const sourceStatuses = SOURCE_ORDER.map(source => {
         const found = perSource[source];
