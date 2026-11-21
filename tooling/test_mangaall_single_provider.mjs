@@ -656,6 +656,7 @@ globalThis.tsuzuki = { http: { async request(method, url) {
     { id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", type: "chapter",
       attributes: { chapter: "1", translatedLanguage: "pt-br" },
       relationships: [
+        { type: "manga", id: "11111111-2222-4333-8444-555555555555" },
         { type: "scanlation_group", attributes: { name: "Group Alpha" } },
         { type: "scanlation_group", attributes: { name: "Group Beta" } },
         { type: "scanlation_group", attributes: { name: "Group Alpha" } },
@@ -664,7 +665,7 @@ globalThis.tsuzuki = { http: { async request(method, url) {
     },
     { id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeef", type: "chapter",
       attributes: { chapter: "2", translatedLanguage: "pt-br" },
-      relationships: [],
+      relationships: [{ type: "manga", id: "11111111-2222-4333-8444-555555555555" }],
     },
   ] };
   return JSON.stringify({ statusCode: 200, body: JSON.stringify(body) });
