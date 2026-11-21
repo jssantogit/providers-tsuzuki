@@ -171,6 +171,7 @@ function deferredLookupState(value) {
       !LOOKUP_FAILURE_CODES.has(failure.code) ||
       !(failure.status === null ||
         (Number.isInteger(failure.status) && failure.status >= 100 && failure.status <= 599)) ||
+      (failure.status != null && failure.status >= 200 && failure.status <= 299) ||
       (failure.code === "UNCLASSIFIED_ERROR" && failure.status !== null) ||
       (failure.code === "INVALID_RESPONSE" && failure.status !== null)) invalidCursor();
   const keys = Object.keys(state.remaining);
@@ -303,7 +304,20 @@ export function createMangaAllReading(adapters) {
         input?.diagnosticsVersion === 2 ||
         !successful.some(page => page.items.length > page.offset || page.nextCursor !== null)
       )) return allSourcesFailed(exhausted);
-      const terminal = exhausted.length ? allSourcesFailed(exhausted) : deferred?.failure ?? null;
+      // If another source fails while healthy pages are still being drained,
+      // preserve BOTH terminal causes conservatively. Mixed closed codes
+      // become UNCLASSIFIED_ERROR; never replace an earlier 403 with success.
+      const combinedFailures = [
+        ...(deferred ? [{
+          error: {
+            code: deferred.failure.lookupFailureCode,
+            status: deferred.failure.lookupHttpStatus ?? null,
+          },
+        }] : []),
+        ...exhausted,
+      ];
+      const terminal = combinedFailures.length
+        ? allSourcesFailed(combinedFailures) : null;
       const remaining = Object.create(null);
       const items = [];
       const seen = new Set();
