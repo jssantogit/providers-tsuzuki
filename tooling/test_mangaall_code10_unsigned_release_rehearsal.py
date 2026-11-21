@@ -122,7 +122,8 @@ class MangaAllCode10DisposablePublicationTest(unittest.TestCase):
 
         self.assertEqual(before, {path: sha(ROOT / path) for path in protected},
                          "disposable rehearsal cannot modify any actual source or signed artifact")
-        self.assertFalse((ROOT / REVIEW_FILE).exists(), "fixture lock must never leave sandbox")
+        self.assertEqual((ROOT / REVIEW_FILE).exists(), real_review.exists(),
+                         "disposable rehearsal must preserve the original operator approval state")
 
 
 if __name__ == "__main__":
