@@ -153,7 +153,7 @@ export async function runRealThreeTitleDiagnostic() {
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   if (process.argv[2] !== "--output" ||
       typeof process.argv[3] !== "string" ||
-      !/^[A-Za-z0-9_.-]+\\.json$/.test(path.basename(process.argv[3])) ||
+      !/^[A-Za-z0-9_.-]+\.json$/.test(path.basename(process.argv[3])) ||
       process.env.MANGAALL_CODE10_LIVE_DIAGNOSTIC_OPT_IN !== "THREE_WORKS_READ_ONLY") {
     throw Error("Code10 live source audit requires exact read-only three-title opt-in");
   }
