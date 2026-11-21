@@ -27,9 +27,9 @@ assert.equal(retirements.replacementProviderId, "app.tsuzuki.mangaall",
   "retirement must be paired with the unified MangaAll package");
 const unified = JSON.parse(fs.readFileSync("providers/mangaall/manifest.json", "utf8"));
 assert.equal(unified.id, retirements.replacementProviderId);
-assert.equal(unified.version.code, 9);
-assert.equal(unified.version.name, "0.5.4");
-assert.equal(unified.publication, "release", "code9 source requires explicit manual dispatch before signing");
+assert.equal(unified.version.code, 10);
+assert.equal(unified.version.name, "0.5.5-dev");
+assert.equal(unified.publication, "development", "future code10 must not enter the signed publication planner");
 assert.deepEqual(unified.capabilities.map(v => v.id), [
   "reading.lookup", "reading.chapters", "reading.pages",
 ], "only the single unified package exposes Reader functionality");
