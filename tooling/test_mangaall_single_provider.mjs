@@ -276,13 +276,19 @@ const boundedFailure = createMangaAllReading({
 });
 const firstPartial = await boundedFailure.lookup({ titles: ["Example"] });
 const secondPartial = await boundedFailure.lookup({ titles: ["Example"], cursor: firstPartial.nextCursor });
-// Exhausted retries are not an exhaustive work/edition lookup. A completed
-// cursor after two failed source attempts would falsely certify a missing
-// MangaFire (or other internal source) as an empty source inventory.
-assert.deepEqual(secondPartial, {
+// Preserve healthy candidates seen on the retry page, but NEVER declare
+// the whole three-source search complete. The next page must be a typed
+// terminal error without any third upstream request.
+assert.deepEqual(secondPartial.items.map(item => item.externalWorkId), [workIds[1]]);
+assert.ok(secondPartial.nextCursor?.includes('"v":2'),
+  "a deferred terminal failure is not a completed lookup");
+const terminalPartial = await boundedFailure.lookup({
+  titles: ["Example"], cursor: secondPartial.nextCursor,
+});
+assert.deepEqual(terminalPartial, {
   items: [], nextCursor: null, lookupFailureCode: "UNCLASSIFIED_ERROR",
-}, "exhausted source must fail closed even when another source succeeds");
-assert.equal(alwaysFails, 2, "failed source gets exactly one retry");
+}, "the original failure is delivered AFTER salvaging valid candidates");
+assert.equal(alwaysFails, 2, "failed source gets exactly one retry, not a third request");
 
 // In the real A54 capture Enen no Shouboutai had a MangaFire/en original HID
 // (z1r3l), but the English lookup only surfaced Fan Colored alternatives.
