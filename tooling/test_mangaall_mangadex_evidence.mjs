@@ -44,7 +44,7 @@ globalThis.tsuzuki = { http: { async request(method, url) {
   }
   throw Error("Unexpected API path: " + parsed.pathname);
 }}};
-const { lookup, pages } = await import(pathToFileURL(path.resolve(
+const { lookup, chapters, pages } = await import(pathToFileURL(path.resolve(
   "providers/mangaall/modules/sources/mangadex/modules/mangadex.js",
 )).href);
 const request = (requestedLanguage) => ({
@@ -322,4 +322,66 @@ const readyPages = await pages(pageRequest);
 assert.equal(readyPages.type, "page_list");
 assert.equal(readyPages.pages.length, 1);
 assert.equal(readyPages.pages[0].url.startsWith("https://uploads.mangadex.org/data/"), true);
+// Independent code10 release audit: /chapter?manga=ID is a query filter,
+ // NOT independent attestation that every returned chapter belongs to ID.
+ // The old candidate silently accepted another work's chapter and would
+ // produce a valid-looking providerChapterId for the wrong manga. This test
+ // exercises the ACTUAL MangaDex source adapter, not a mock router.
+const sourceBinding = { externalWorkId: "mangadex:" + mangaId, facetId: "en" };
+const validChapter = (overrides = {}) => ({
+  id: chapterId, type: "chapter",
+  attributes: { chapter: "1", translatedLanguage: "en" },
+  relationships: [{ type: "manga", id: mangaId }],
+  ...overrides,
+});
+let requestedFeed = [];
+let chapterFeedCalls = 0;
+globalThis.tsuzuki = { http: { async request(method, url) {
+  assert.equal(method, "GET");
+  const query = new URL(url);
+  assert.equal(query.origin, "https://api.mangadex.org");
+  assert.equal(query.pathname, "/chapter");
+  assert.equal(query.searchParams.get("manga"), mangaId);
+  assert.equal(query.searchParams.getAll("translatedLanguage[]")[0], "en");
+  assert.deepEqual(query.searchParams.getAll("includes[]"), ["scanlation_group"]);
+  chapterFeedCalls++;
+  return response({ offset: 0, total: requestedFeed.length, data: requestedFeed });
+} } };
+const matchingFeed = [validChapter()];
+requestedFeed = matchingFeed;
+const verifiedList = await chapters({ binding: sourceBinding });
+assert.deepEqual(verifiedList.items.map(x => x.providerChapterId), ["mangadex:" + chapterId]);
+assert.equal(verifiedList.nextCursor, null);
+assert.equal(verifiedList.items[0].rawNumber, 1);
+for (const [reason, data] of [
+  ["wrong-work", [validChapter({ relationships: [{
+    type: "manga", id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+  }] })]],
+  ["missing-work-relationship", [validChapter({ relationships: [{
+    type: "scanlation_group", id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  }] })]],
+  ["missing-relationships", [validChapter({ relationships: undefined })]],
+  ["wrong-language", [validChapter({ attributes: { chapter: "1", translatedLanguage: "pt-br" } })]],
+  ["mixed-healthy-foreign", [...matchingFeed, validChapter({
+    id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    relationships: [{ type: "manga", id: "ffffffff-ffff-4fff-8fff-ffffffffffff" }],
+  })]],
+  ["foreign-unnumbered", [validChapter({
+    attributes: { chapter: null, translatedLanguage: "en" },
+    relationships: [{ type: "manga", id: "ffffffff-ffff-4fff-8fff-ffffffffffff" }],
+  })]],
+]) {
+  requestedFeed = data;
+  await assert.rejects(chapters({ binding: sourceBinding }),
+    /chapter (?:work mismatch|language mismatch)|invalid chapter response/,
+    "reject entire cross-work/facet page: " + reason);
+}
+requestedFeed = [validChapter({ attributes: { chapter: null, translatedLanguage: "en" } })];
+const unnumbered = await chapters({ binding: sourceBinding });
+assert.deepEqual(unnumbered.items, [], "valid unnumbered source chapters cannot invent ordinal numbers");
+requestedFeed = [];
+const emptySource = await chapters({ binding: sourceBinding });
+assert.deepEqual(emptySource, { items: [], nextCursor: null });
+assert.equal(chapterFeedCalls, 9, "no extra upstream HTTP retries or backdoor chapter/detail lookup");
+
 console.log("MangaDex exact work+author verification and source-language chapter coverage OK");

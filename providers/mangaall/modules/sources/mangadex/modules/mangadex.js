@@ -269,8 +269,23 @@ export async function chapters(input) {
   const seen = new Set();
   for (const item of response.data) {
     const attrs = item?.attributes;
-    if (item?.type !== "chapter" || !attrs || !ID_PATTERN.test(item.id || "")) continue;
-    if (attrs.translatedLanguage !== language) continue;
+    // Never admit an unrelated chapter merely because the /chapter search
+    // endpoint echoed the requested ?manga= UUID. A malformed or foreign
+    // record contaminates the WHOLE page: do not silently skip it and then
+    // advertise an exhaustive empty/partial chapter inventory to the Host.
+    if (item?.type !== "chapter" || !attrs ||
+        !ID_PATTERN.test(item.id || "") || !Array.isArray(item.relationships)) {
+      throw new Error("MangaAll invalid chapter response");
+    }
+    if (!item.relationships.some((related) =>
+      related?.type === "manga" &&
+      typeof related.id === "string" &&
+      related.id.toLowerCase() === mangaId.toLowerCase())) {
+      throw new Error("MangaAll chapter work mismatch");
+    }
+    if (attrs.translatedLanguage !== language) {
+      throw new Error("MangaAll chapter language mismatch");
+    }
     const rawChapter = text(attrs.chapter, 32);
     const number = numericChapter(rawChapter);
     if (number === null || seen.has(item.id)) continue;
