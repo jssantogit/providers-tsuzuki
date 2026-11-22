@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url';
 import { createHttpBridge } from './mangaall_live_probe_core.mjs';
 import { parseWorks, shardWorks } from './mangaall_generic_works.mjs';
 import { createRealEnvelopeCapture } from './mangaall_real_envelope_capture.mjs';
-import { describeMangaDotChapterListHttp } from './mangaall_mangadot_chapter_http_shape.mjs';
+import { describeMangaDotChapterListHttp, describeMangaDotChapterTransportFailure } from './mangaall_mangadot_chapter_http_shape.mjs';
 import { inspectCurrentSignedCode9Source, CODE9_OPT_IN } from './mangaall_signed_code9_smoke_gate.mjs';
 import { inspectCurrentSignedCode10Source, CODE10_OPT_IN } from './mangaall_signed_code10_smoke_gate.mjs';
 import { probeJourney as probe, journeyVerdict as verdict, granted } from './mangaall_live_journey_core.mjs';
@@ -207,10 +207,19 @@ globalThis.tsuzuki = { http: { async request(method, url, headers, body) {
   // Stop re-requesting an upstream that already challenged this runner.
   // No bypass or retry, and do not invent a completed empty result.
   if (blockedOrigins.has(origin)) throw Error('MangaFire challenge required');
-  const response = await bridge.request(method, url, headers, body);
-  if (officialCode10 && selectedSuite === 'custom' &&
-      origin === 'https://mangadot.net' && method === 'GET' &&
-      /^\/api\/manga\/[1-9][0-9]{0,15}\/chapters\/list$/.test(new URL(url).pathname)) {
+  const observedChapterEndpoint = officialCode10 && selectedSuite === 'custom' &&
+    origin === 'https://mangadot.net' && method === 'GET' &&
+    /^\/api\/manga\/[1-9][0-9]{0,15}\/chapters\/list$/.test(new URL(url).pathname);
+  let response;
+  try {
+    response = await bridge.request(method, url, headers, body);
+  } catch (error) {
+    if (observedChapterEndpoint) {
+      chapterHttpShapes.push(describeMangaDotChapterTransportFailure(error));
+    }
+    throw error;
+  }
+  if (observedChapterEndpoint) {
     chapterHttpShapes.push(describeMangaDotChapterListHttp(response));
   }
   return response;
