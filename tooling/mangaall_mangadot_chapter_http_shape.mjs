@@ -42,3 +42,17 @@ export function describeMangaDotChapterListHttp(rawEnvelope) {
   }
   return result;
 }
+
+export function describeMangaDotChapterTransportFailure(error) {
+  // Full error messages may include upstream data. Only exact local bridge
+  // errors are mapped. An arbitrary source error is an opaque OTHER.
+  const reason = error?.message === 'MangaAll response too large'
+    ? 'BRIDGE_RESPONSE_TOO_LARGE'
+    : error?.message === 'MangaAll request limit' ? 'BRIDGE_REQUEST_LIMIT'
+      : 'TRANSPORT_OR_RUNTIME_FAILURE';
+  return {
+    status: null, bodyKind: reason, collection: 'NONE', count: null,
+    firstRowKind: 'NONE', idKind: 'NONE', numberKind: 'NONE',
+    hasErrorField: false,
+  };
+}
