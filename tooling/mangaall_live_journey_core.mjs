@@ -96,9 +96,17 @@ async function sourceChapterPreview(reading, candidate, pageLimit) {
     chapterPages: 0, chapterCount: 0, firstNumber: null, lastNumber: null,
     chapterOnePresent: false, hasMore: true, outcome: "NOT_INSPECTED",
   };
-  if (!source || !result.workId ||
-      !DETAILS.has(candidate.detailOutcome) ||
-      candidate.coverageOutcome !== "OBSERVED") {
+  // Coverage UNKNOWN means the brief work-level preview could not find a
+  // numbered chapter. It is NOT an empty inventory. A read-only, bounded V1
+  // chapter query may independently observe numbered chapters, but only for a
+  // real source-scoped HID with verified details and nonempty source authors.
+  // Never grant a preferred edition, canonical binding or Reader from this.
+  const authorsObserved = Array.isArray(candidate.authors) &&
+    candidate.authors.some((author) => typeof author === "string" && normalize(author));
+  const coveragePermitsReadOnlyPreview =
+    candidate.coverageOutcome === "OBSERVED" || candidate.coverageOutcome === "UNKNOWN";
+  if (!source || !result.workId || !DETAILS.has(candidate.detailOutcome) ||
+      !authorsObserved || !coveragePermitsReadOnlyPreview) {
     result.outcome = "SOURCE_DETAIL_OR_COVERAGE_UNVERIFIED";
     return result;
   }
