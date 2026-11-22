@@ -125,14 +125,12 @@ export function createFutureCachedChapterPager({ storage, fetchRows, now, nonce 
 
   async function clearOld() {
     const existing = await storage.get(KEY);
-    if (existing != null) {
-      // An invalid index must never allow an untrusted number of deletions.
-      // Clean only the fixed 16 part keys and the single index key.
-      for (let i = 0; i < FUTURE_SNAPSHOT_LIMITS.maxStoredParts; i++) {
-        await storage.remove(PREFIX + i);
-      }
-      await storage.remove(KEY);
+    // Clean a bounded fixed set even if a previous crash left chunks but no
+    // committed index. No source-derived key is ever passed to remove().
+    for (let i = 0; i < FUTURE_SNAPSHOT_LIMITS.maxStoredParts; i++) {
+      await storage.remove(PREFIX + i);
     }
+    if (existing != null) await storage.remove(KEY);
   }
   async function persist(workId, language, rows) {
     verifyRows(rows, language);
@@ -189,8 +187,13 @@ export function createFutureCachedChapterPager({ storage, fetchRows, now, nonce 
     if(pageCursor == null) {
       // First call fetches only already-bounded source evidence.
       // This does NOT implement the signed Host's large-HTTP acquisition.
-      const rows=await fetchRows({workId,language});
-      index=await persist(workId,language,rows);
+      const source=await fetchRows({workId,language});
+      // A partial/blocked API result is NOT an empty complete chapter feed.
+      if(source?.complete !== true ||
+         source?.sourceEvidence !== 'HTTP_200_NORMALIZED_VERIFIED') {
+        throw Error('INCOMPLETE_OR_UNVERIFIED_SOURCE_INVENTORY');
+      }
+      index=await persist(workId,language,source.items);
       start=0;
     } else {
       const raw=await storage.get(KEY);
