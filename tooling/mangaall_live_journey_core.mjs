@@ -88,7 +88,7 @@ function chapterValid(item, source) {
 // Read-only, bounded previews of HIDs actually returned by upstream.
 // Comparing real rivals requires observing their separate source inventories,
 // but it does NOT authorize Host binding, canonical publication or Reader use.
-async function sourceChapterPreview(reading, candidate, pageLimit) {
+async function sourceChapterPreview(reading, candidate, pageLimit, allowUnverifiedMangadot = false) {
   const source = sourceName(candidate.externalWorkId);
   const result = {
     source, workId: safePublicWorkId(candidate.externalWorkId),
@@ -105,11 +105,21 @@ async function sourceChapterPreview(reading, candidate, pageLimit) {
     candidate.authors.some((author) => typeof author === "string" && normalize(author));
   const coveragePermitsReadOnlyPreview =
     candidate.coverageOutcome === "OBSERVED" || candidate.coverageOutcome === "UNKNOWN";
-  if (!source || !result.workId || !DETAILS.has(candidate.detailOutcome) ||
-      !authorsObserved || !coveragePermitsReadOnlyPreview) {
+  // MangaDot search supplies only a title and its source-scoped numeric HID,
+  // without authors or verified details. A separately opted-in CI diagnosis
+  // may query at most two chapter metadata pages for that observed HID, but
+  // these source rows are NOT identity evidence or edition authorization.
+  const mangadotDiagnostic = allowUnverifiedMangadot && source === "mangadot" &&
+    /^mangadot:[1-9][0-9]{0,15}$/.test(result.workId || "") &&
+    !authorsObserved && !DETAILS.has(candidate.detailOutcome) &&
+    candidate.coverageOutcome == null;
+  const verifiedDiagnostic = DETAILS.has(candidate.detailOutcome) &&
+    authorsObserved && coveragePermitsReadOnlyPreview;
+  if (!result.workId || (!verifiedDiagnostic && !mangadotDiagnostic)) {
     result.outcome = "SOURCE_DETAIL_OR_COVERAGE_UNVERIFIED";
     return result;
   }
+  if (mangadotDiagnostic) result.authority = "SOURCE_UNVERIFIED_HID_DIAGNOSTIC_ONLY";
   let cursor = null;
   const seenCursors = new Set();
   const seenIds = new Set();
@@ -331,6 +341,7 @@ export async function probeJourney(reading, spec, grants, options = {}) {
     for (const candidate of ordered.slice(0, previewLimit)) {
       result.candidateChapterPreviews.push(await sourceChapterPreview(
         reading, candidate, previewPages,
+        options.includeUnverifiedMangadotSourceDiagnostic === true,
       ));
     }
   }
