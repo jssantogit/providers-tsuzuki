@@ -61,6 +61,11 @@ const cases = selectedSuite === 'custom'
   : allCases;
 assert.ok(cases.length > 0 || selectedSuite === 'custom',
   'curated runs must receive at least one work; generic idle shards are allowed');
+// A full 30-work batch has exactly three 10-work CI shards. Deny a 30-title
+// single runner, which would exhaust per-provider budgets before completion.
+if (selectedSuite === 'custom' && allCases.length === 30 && shardCount !== 3) {
+  throw Error('MangaAll 30-work scale requires exactly three bounded shards');
+}
 if (selectedSuite === 'cross-format') assert.equal(cases.length, 7);
 if (selectedSuite === 'identity') assert.equal(cases.length, 4);
 // Inspect precisely which operator-supplied works would be queried without
