@@ -7,6 +7,8 @@ on:
     paths:
       - '.github/workflows/mangaall-code10-mangadot-chapter-http-shape.yml'
       - 'tooling/mangaall_live_matrix.mjs'
+      - 'tooling/mangaall_live_journey_core.mjs'
+      - 'tooling/test_mangaall_live_journey.mjs'
       - 'tooling/mangaall_mangadot_chapter_http_shape.mjs'
       - 'tooling/test_mangaall_mangadot_chapter_http_shape.mjs'
 
@@ -81,6 +83,20 @@ jobs:
           assert d['selectedSuite'] == 'custom'
           assert len(d['cases']) == 3
           for case in d['cases']:
+              for preview in case.get('candidateChapterPreviews', []):
+                  if preview.get('source') == 'mangadot':
+                      metric = {
+                          'title': case['requestedTitle'],
+                          'sourceAuthority': preview['authority'],
+                          'chapterCount': preview['chapterCount'],
+                          'normalizedChars': preview['maxChapterResponseChars'],
+                          'normalizedUtf8Bytes': preview['maxChapterResponseUtf8Bytes'],
+                          'host64KChapterBody': preview['host64KChapterBody'],
+                      }
+                      assert metric['sourceAuthority'] == 'SOURCE_UNVERIFIED_HID_DIAGNOSTIC_ONLY'
+                      assert metric['host64KChapterBody'] in (
+                          'NOT_OBSERVED', 'RAW_BODY_ONLY_BELOW_LIMIT', 'EXCEEDS_HOST_RESULT_CHAR_LIMIT')
+                      print('MANGAALL_MANGADOT_HOST_OUTPUT_BUDGET|' + json.dumps(metric, sort_keys=True))
               for shape in case.get('mangadotChapterHttpShapes', []):
                   assert set(shape) == {
                       'status','bodyKind','collection','count','firstRowKind',

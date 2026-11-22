@@ -95,6 +95,10 @@ async function sourceChapterPreview(reading, candidate, pageLimit, allowUnverifi
     authority: "SOURCE_METADATA_ONLY",
     chapterPages: 0, chapterCount: 0, firstNumber: null, lastNumber: null,
     chapterOnePresent: false, hasMore: true, outcome: "NOT_INSPECTED",
+    // A normalized raw source chapter body under the Host ceiling does not
+    // prove the complete wrapped result fits. Only an exceed is authoritative.
+    maxChapterResponseChars: 0, maxChapterResponseUtf8Bytes: 0,
+    host64KChapterBody: "NOT_OBSERVED",
   };
   // Coverage UNKNOWN means the brief work-level preview could not find a
   // numbered chapter. It is NOT an empty inventory. A read-only, bounded V1
@@ -141,6 +145,16 @@ async function sourceChapterPreview(reading, candidate, pageLimit, allowUnverifi
       break;
     }
     result.chapterPages++;
+    // Export only bounded length metrics, never the actual chapter contents.
+    const serialized = JSON.stringify(page);
+    const charCount = serialized.length;
+    const byteCount = Buffer.byteLength(serialized, "utf8");
+    result.maxChapterResponseChars = Math.max(result.maxChapterResponseChars, charCount);
+    result.maxChapterResponseUtf8Bytes = Math.max(result.maxChapterResponseUtf8Bytes, byteCount);
+    result.host64KChapterBody = charCount > 64 * 1024
+      ? "EXCEEDS_HOST_RESULT_CHAR_LIMIT"
+      : result.host64KChapterBody === "EXCEEDS_HOST_RESULT_CHAR_LIMIT"
+        ? "EXCEEDS_HOST_RESULT_CHAR_LIMIT" : "RAW_BODY_ONLY_BELOW_LIMIT";
     if (!validPage(page, 16000) ||
         page.items.some((item) => !chapterValid(item, source)) ||
         page.items.some((item) => seenIds.has(item.providerChapterId))) {
