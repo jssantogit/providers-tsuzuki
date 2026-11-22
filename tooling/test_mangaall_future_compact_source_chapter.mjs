@@ -39,6 +39,16 @@ assert.throws(()=>expand(['109',1,9,null,null,null,null]),/INVALID_COMPACT_CHAPT
 assert.throws(()=>expand(['109',1,0,null,'pt-br',null,null]),/INVALID_COMPACT_CHAPTER/);
 assert.throws(()=>expand(['0',1,0,null,null,null,null]),/INVALID_COMPACT_CHAPTER/);
 assert.throws(()=>project({},'es'),/INVALID_COMPACT_FACET/);
+// A char-count-only budget would falsely approve 50 full-width CJK titles:
+ // normalized/compact snapshots must be measured in UTF-8 bytes.
+const cjkRow={id:777,chapter_number:1,language:'en',
+  chapter_title:'界'.repeat(3900)};
+const cjkMetric=measure(cjkRow);
+assert.ok(cjkMetric.tupleBytes>2*cjkMetric.tupleChars);
+assert.equal(cjkMetric.tupleBytes,
+  Buffer.byteLength(JSON.stringify(project(cjkRow,'en')),'utf8'));
+assert.ok(50*cjkMetric.tupleChars<440*1024);
+assert.ok(50*cjkMetric.tupleBytes>440*1024);
 const enc=JSON.stringify(projected);
 assert.ok(!enc.includes('https://'));
 assert.equal(project(rows[3],'en'),null);
