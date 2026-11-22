@@ -57,3 +57,27 @@ export function measureMangaDotCompactRow(row,language='en') {
     normalizedChars:JSON.stringify(normalized).length,
   };
 }
+
+export function packNormalizedMangaDotChapter(row,requestedLanguage='en') {
+  if(!row||typeof row!=='object'||Array.isArray(row)) {
+    throw Error('LOSSY_COMPACT_CHAPTER');
+  }
+  const m=typeof row.providerChapterId==='string'?
+    /^mangadot:(uploads|chapters):([1-9][0-9]{0,15})$/.exec(row.providerChapterId):null;
+  if(!m||!['en','pt-br'].includes(requestedLanguage)) {
+    throw Error('LOSSY_COMPACT_CHAPTER');
+  }
+  const tuple=[
+    m[2],row.rawNumber,m[1]==='uploads'?0:1,row.title??null,
+    row.language??null,row.scanlationGroup??null,row.releaseDateMillis??null,
+  ];
+  let restored;
+  try { restored=expandMangaDotSourceRow(tuple,requestedLanguage); }
+  catch { throw Error('LOSSY_COMPACT_CHAPTER'); }
+  const keys=Object.keys(restored);
+  if(Object.keys(row).length!==keys.length ||
+      keys.some(key=>!Object.hasOwn(row,key)||!Object.is(row[key],restored[key]))) {
+    throw Error('LOSSY_COMPACT_CHAPTER');
+  }
+  return tuple;
+}
