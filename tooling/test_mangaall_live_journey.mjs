@@ -352,7 +352,7 @@ assert.equal(test.stats.pages, 0);
 // pages. A signed real HTTP capture must retain all eight request envelopes
 // when its source still supplies a continuation after page three. An eighth
 // pending cursor means INCOMPLETE, not a completed empty source.
-const capped = specFor(catalog.cases.find((x) => x.id === 'punpun'));
+const capped = { ...base, names: [base.names[0]] };
 let capturedPages = 0;
 const eightPage = await probeJourney({
   async lookup({ cursor, requestedLanguage, coverageEvidenceVersion,
