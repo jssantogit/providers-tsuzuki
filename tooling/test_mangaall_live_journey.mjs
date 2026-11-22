@@ -352,6 +352,32 @@ assert.equal(test.stats.pages, 0);
 assert.equal(journeyVerdict(test.result), 'INCONCLUSIVE',
   'unknown coverage may justify a bounded probe, never editorial binding');
 
+// Large source inventory: a successful upstream response can still be too
+// large for the Host's 64 KiB single-script result. Never grant Reader or
+// canonical binding from a test-only preview of these items.
+test = await run({
+  async lookup() {
+    return { items: [unknownCoverage], nextCursor: 'not-complete' };
+  },
+  async chapters() {
+    return {
+      items: Array.from({ length: 1628 }, (_, i) => ({
+        ...chapter(base.work, i + 1),
+        rawLabel: 'Chapter ' + (i + 1) + ' - a sufficiently long, nonidentifying synthetic label',
+      })),
+      nextCursor: null,
+    };
+  },
+}, base, { lookupPageLimit: 1, includeCandidateCoverage: true,
+  candidateChapterPageLimit: 2 });
+assert.equal(test.result.candidateChapterPreviews[0].chapterCount, 1628);
+assert.equal(test.result.candidateChapterPreviews[0].host64KChapterBody,
+  'EXCEEDS_HOST_RESULT_CHAR_LIMIT');
+assert.ok(test.result.candidateChapterPreviews[0].maxChapterResponseChars > 65536);
+assert.ok(test.result.candidateChapterPreviews[0].maxChapterResponseUtf8Bytes > 65536);
+assert.equal(test.stats.pages, 0);
+assert.equal(journeyVerdict(test.result), 'INCONCLUSIVE');
+
 // Missing source authors, unverified source detail or declared EMPTY coverage
 // must remain closed, without network calls to the candidate chapter feed.
 for (const blockedCandidate of [
