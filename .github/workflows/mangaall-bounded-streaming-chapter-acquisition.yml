@@ -69,7 +69,8 @@ jobs:
             'distinctNumericIds','duplicateNumericIds','numericChapterLabels',
             'maxRowChars','userOrUnknownSourceRows','otherSourceRows','decodedBytes',
             'eligibleEnglishRows','skippedFacetOrInvalidRows','compactArrayChars',
-            'normalizedRowChars','maxCompactRowChars','storage440KAssessment'}
+            'normalizedRowChars','normalizedRowBytes','maxCompactRowChars',
+            'maxCompactRowBytes','compactArrayBytes','storage440KAssessment'}
           for row in d['results']:
             assert set(row)<=allowed
             assert row['outcome'] in (
@@ -86,6 +87,7 @@ jobs:
               assert 0<=row['eligibleEnglishRows']<=row['rowCount']
               assert row['eligibleEnglishRows']+row['skippedFacetOrInvalidRows']==row['rowCount']
               assert 0<=row['compactArrayChars']<=16*1024*1024
+              assert row['compactArrayChars']<=row['compactArrayBytes']<=32*1024*1024
               assert row['storage440KAssessment'] in (
                 'COMPACT_BODY_BELOW_440K_NOT_SNAPSHOT_ATTESTED',
                 'COMPACT_BODY_ABOVE_440K')
