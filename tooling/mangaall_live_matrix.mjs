@@ -252,6 +252,8 @@ for (const spec of cases) {
     chapterPageLimit: selectedSuite === 'custom' ? 8 : 4,
     includeCandidates: selectedSuite === 'custom',
     includeCandidateCoverage: selectedSuite === 'custom',
+    // Source-ID diagnostics only, never identity/canonical/Reader authority.
+    includeUnverifiedMangadotSourceDiagnostic: selectedSuite === 'custom' && officialCode10,
     candidatePreviewLimit: 3, candidateChapterPageLimit: 2,
   
   });
