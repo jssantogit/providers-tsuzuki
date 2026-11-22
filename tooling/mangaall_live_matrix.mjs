@@ -10,6 +10,7 @@ import { pathToFileURL } from 'node:url';
 import { createHttpBridge } from './mangaall_live_probe_core.mjs';
 import { parseWorks, shardWorks } from './mangaall_generic_works.mjs';
 import { createRealEnvelopeCapture } from './mangaall_real_envelope_capture.mjs';
+import { describeMangaDotChapterListHttp } from './mangaall_mangadot_chapter_http_shape.mjs';
 import { inspectCurrentSignedCode9Source, CODE9_OPT_IN } from './mangaall_signed_code9_smoke_gate.mjs';
 import { inspectCurrentSignedCode10Source, CODE10_OPT_IN } from './mangaall_signed_code10_smoke_gate.mjs';
 import { probeJourney as probe, journeyVerdict as verdict, granted } from './mangaall_live_journey_core.mjs';
@@ -174,6 +175,9 @@ if (!Object.keys(origins).every((origin) => grants.includes(origin))) {
   throw new Error('Missing reviewed API origin');
 }
 const requests = [];
+// Only fixed-category HTTP shape evidence from observed MangaDot chapter calls.
+// Never export chapter-list response contents, IDs, URLs or exception messages.
+const chapterHttpShapes = [];
 const blockedOrigins = new Set();
 const bridges = new Map(Object.keys(origins).map((origin) => [origin, createHttpBridge({
   origin, maxRequests: selectedSuite === 'custom'
@@ -203,7 +207,13 @@ globalThis.tsuzuki = { http: { async request(method, url, headers, body) {
   // Stop re-requesting an upstream that already challenged this runner.
   // No bypass or retry, and do not invent a completed empty result.
   if (blockedOrigins.has(origin)) throw Error('MangaFire challenge required');
-  return bridge.request(method, url, headers, body);
+  const response = await bridge.request(method, url, headers, body);
+  if (officialCode10 && selectedSuite === 'custom' &&
+      origin === 'https://mangadot.net' && method === 'GET' &&
+      /^\\/api\\/manga\\/[1-9][0-9]{0,15}\\/chapters\\/list$/.test(new URL(url).pathname)) {
+    chapterHttpShapes.push(describeMangaDotChapterListHttp(response));
+  }
+  return response;
 } } };
 const provider = (await import(pathToFileURL(path.join(root, 'main.js')).href)).default;
 if (!provider?.reading || !['lookup', 'chapters', 'pages']
@@ -234,6 +244,7 @@ const realCaptures = [];
 const results = [];
 for (const spec of cases) {
   const before = requests.length;
+  const chapterShapeBefore = chapterHttpShapes.length;
   const recording = captureOutput
     ? createRealEnvelopeCapture(provider.reading, {
       caseId: spec.id, observedAt, providerCode: manifest.version.code,
@@ -259,6 +270,9 @@ for (const spec of cases) {
   });
   const observed = requests.slice(before);
   if (recording) realCaptures.push(recording.finalize());
+  if (officialCode10 && selectedSuite === 'custom') {
+    value.mangadotChapterHttpShapes = chapterHttpShapes.slice(chapterShapeBefore);
+  }
   value.httpBySource = Object.fromEntries(['MANGADEX', 'MANGADOT', 'MANGAFIRE'].map((source) => {
     const sample = observed.filter((item) => item.source === source);
     return [source, {
