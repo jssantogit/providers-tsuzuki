@@ -1,0 +1,74 @@
+name: MangaALL — MangaDot exact public HTTP Range capability (NO BODY)
+# Opt-in isolated source metadata only. NO Reader, CDN, canonical bindings
+# or changes to published code10. No scheduled/default-branch network probe.
+on:
+  push:
+    branches: ['test/mangaall-mangadot-http-range-capability-*']
+    paths:
+      - '.github/workflows/mangaall-mangadot-http-range-capability.yml'
+      - 'tooling/mangaall_mangadot_http_range_capability.mjs'
+      - 'tooling/mangaall_mangadot_http_range_contract.mjs'
+      - 'tooling/test_mangaall_mangadot_http_range_contract.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  four-fixed-ranges:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Check exact unchanged signed code10 and metadata-only range test
+        run: |
+          set -euo pipefail
+          node --check tooling/mangaall_mangadot_http_range_capability.mjs
+          node tooling/test_mangaall_mangadot_http_range_contract.mjs
+          node tooling/verify_index.mjs
+          python3 tooling/build_provider.py providers/mangaall "${RUNNER_TEMP}/original-code10.tsz"
+          python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          idx=json.loads(Path('dist/index.payload.json').read_text())
+          signed,=[x for x in idx['providers'] if x['providerId']=='app.tsuzuki.mangaall']
+          sha=hashlib.sha256((Path(os.environ['RUNNER_TEMP'])/'original-code10.tsz').read_bytes()).hexdigest()
+          assert idx['sequence']==36 and signed['versionCode']==10
+          assert sha==signed['sha256']=='bcdfd03ac18c3cfdd0517e08b58dde7efa1f5baa874e93002af28e518860f95f'
+          assert hashlib.sha256(Path('dist/providers/app.tsuzuki.mangaall-10.tsz').read_bytes()).hexdigest()==sha
+          print('MANGAALL_RANGE_PREFLIGHT|signedCode10=UNCHANGED|network=NOT_CALLED')
+          PY
+      - name: Four strictly bounded public chapter metadata byte-range checks
+        run: |
+          set -euo pipefail
+          node tooling/mangaall_mangadot_http_range_capability.mjs
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          f=Path('mangaall-mangadot-range-capability.json')
+          assert f.stat().st_size<5000
+          value=json.loads(f.read_text())
+          assert value['schema']==1
+          assert value['scope']=='MANGADOT_HTTP_RANGE_PUBLIC_METADATA_DIAGNOSTIC_ONLY'
+          assert value['signedCode10']=='UNCHANGED'
+          assert len(value['results'])==4
+          allow={'tag','range','status','outcome','decodedBytes','contentRangePresent','acceptRangesBytes','etagPresent'}
+          assert all(set(r)==allow and 0<=r['decodedBytes']<=65536 for r in value['results'])
+          assert all(r['tag'] in ('NARUTO_UNVERIFIED','BLEACH_UNVERIFIED') for r in value['results'])
+          assert 'https://' not in f.read_text()
+          print('MANGAALL_RANGE_RESULT|source=MANGADOT|requests=4|cdn=NOT_USED|content=NOT_EXPORTED')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mangaall-mangadot-range-${{ github.run_id }}
+          path: mangaall-mangadot-range-capability.json
+          if-no-files-found: warn
+          retention-days: 7
