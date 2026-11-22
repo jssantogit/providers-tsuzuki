@@ -18,7 +18,7 @@ const storage={
 };
 const nonce=()=>String(generation++).padStart(16,'0');
 const clock=()=>now;
-function chapterRows(work,count=1628,padding=92){
+function chapterRows(work,count=1628,padding=50){
   const local=Number(work.split(':')[1]);
   return Array.from({length:count},(_,i)=>({
     providerChapterId:'mangadot:chapters:'+(local*20000+i+1),
@@ -60,6 +60,7 @@ while(cursor!=null){
 assert.deepEqual(seen,planned.map(x=>x.providerChapterId));
 assert.ok(pages>=13 && pages<=32);
 assert.equal(stats.remoteFetches,1,'never re-fetch whole HTTP feed on each output page');
+assert.ok(stats.gets < 400,'one source snapshot must not be reread for each individual chapter row');
 assert.ok([...state.values()].reduce((n,x)=>n+x.length,0)<=512*1024);
 assert.ok([...state.values()].every(v=>v.length<=64*1024));
 assert.throws(()=>create({storage,fetchRows,now:clock}),/INVALID_FUTURE_PAGER_DEPENDENCY/);
