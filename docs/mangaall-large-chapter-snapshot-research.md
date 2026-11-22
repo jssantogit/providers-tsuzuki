@@ -25,3 +25,18 @@ The actual Host `ProviderScriptPackageRuntime.evaluateModule` creates and closes
 3. **Limited alternative:** enable per-Provider storage only in a separately signed and authorized future package, with the 512 KiB quota honored, and add an approved bounded upstream acquisition method. This may cover Naruto but **not** Bleach or two large simultaneously cached works. Do not expose 2 MiB HTTP text to every Provider by raising global `ProviderHttpProtocol` limits.
 
 Regardless of solution, every row requires source-specific HID and chapter-scoped proof; MangaDot currently has **no verified author/edition metadata** for Naruto/Bleach. Caching a list does not grant a canonical binding or Reader page. End-to-end acceptance needs real Host Kotlin chapter serialization, SQLite per-work evidence correlation, Reader CDN pixels and physical A54 validation; 30-work scale is a later requested test, not a publication gate bypass.
+
+## 2026-11-22 — verified compact source result, still NONSHIPPING
+
+[Real source metrics #45026434781](https://github.com/jssantogit/providers-tsuzuki/actions/runs/45026434781) processed both full public MangaDot chapter JSON arrays with no raw export:
+
+| Exact unverified source HID | Real source rows | Normalized chapter chars | Lossless compact tuple-array chars |
+| --- | ---: | ---: | ---: |
+| Naruto `mangadot:109` | 1,628 | 340,094 | 106,212 |
+| Bleach `mangadot:131` | 4,341 | 939,458 | 312,704 |
+
+The compact tuple preserves the existing adapter's source chapter identifier, number, uploads-vs-chapters kind, title, facet, group and release timestamp. A regression invokes the **real signed code10 MangaDot source adapter** with synthetic HTTP and proves exact normalized record parity, including rejecting unexpected fields and mismatched labels instead of silently dropping data.
+
+The **nonshipping** `mangaall_future_storage_chapter_pager.mjs` supports an *optional lossless* encode/decode codec and a **256-item maximum** while independently enforcing the unchanged **48 KiB JSON output**, **64 KiB/value**, **512 KiB/provider** and **32 Host pages** constraints. It tests a synthetic 4,341-row Bleach inventory across fresh test-runtime instances, one source fetch, committed storage chunks, rehydration of all IDs, no duplicate/skip and foreign-cursor rejection. The original full-JSON normalized storage form still FAILS the 512KiB storage quota as expected.
+
+This **does not provide the Android Host production HTTP streaming API**. Public code10 has HTTP text body limited to 192KiB, script return 64KiB, original source adapter 2MiB, storage manifest permission disabled, and a fresh QuickJs isolate per invocation. A separate future *reviewed* API and manifest permission are required before any product use. The prototype has one active snapshot per Provider: concurrent work refreshes still need strict serialization/locking, not silent eviction. MangaDot source work IDs remain unverified editorial identities.

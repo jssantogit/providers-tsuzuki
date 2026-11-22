@@ -18,7 +18,8 @@ const LANGS = new Set(['en', 'pt-br']);
 
 export const FUTURE_SNAPSHOT_LIMITS = Object.freeze({
   maxWorkRows: 16000,
-  maxOutputRows: 128,
+  // Bleach's 4,341 real releases exceed 32 * 128; output still capped at 48 KiB.
+  maxOutputRows: 256,
   maxOutputBytes: 48 * 1024,
   maxStorageValueChars: 64 * 1024,
   maxStorageTotalChars: 512 * 1024,
@@ -118,10 +119,14 @@ function validateCursor(value, index, workId, language) {
   }
   return offset;
 }
-export function createFutureCachedChapterPager({ storage, fetchRows, now, nonce }) {
+export function createFutureCachedChapterPager({ storage, fetchRows, now, nonce, codec = null }) {
   if (!storage || !['get','set','remove'].every(k => typeof storage[k] === 'function') ||
       typeof fetchRows !== 'function' || typeof now !== 'function' ||
-      typeof nonce !== 'function') throw Error('INVALID_FUTURE_PAGER_DEPENDENCY');
+      typeof nonce !== 'function' ||
+      (codec !== null && (typeof codec.encode !== 'function' ||
+        typeof codec.decode !== 'function'))) {
+    throw Error('INVALID_FUTURE_PAGER_DEPENDENCY');
+  }
 
   async function clearOld() {
     const existing = await storage.get(KEY);
@@ -134,7 +139,10 @@ export function createFutureCachedChapterPager({ storage, fetchRows, now, nonce 
   }
   async function persist(workId, language, rows) {
     verifyRows(rows, language);
-    const parts = chunksFor(rows);
+    // Codec can pack only if it round-trips every normalized field exactly;
+    // each source row stays validated before commit and after decode.
+    const snapshotRows = codec ? rows.map(row=>codec.encode(row,language)) : rows;
+    const parts = chunksFor(snapshotRows);
     const generation = nonce();
     if (typeof generation !== 'string' || !/^[a-f0-9]{16}$/.test(generation)) {
       throw Error('INVALID_SNAPSHOT_GENERATION');
@@ -214,7 +222,8 @@ export function createFutureCachedChapterPager({ storage, fetchRows, now, nonce 
     const loadedParts=new Map();
     let position=start, next=null;
     while(position<index.count && items.length<FUTURE_SNAPSHOT_LIMITS.maxOutputRows) {
-      const row=await readSlice(index,position,loadedParts);
+      const packed=await readSlice(index,position,loadedParts);
+      const row=codec ? codec.decode(packed,language) : packed;
       verifyRows([row],language);
       const trial=[...items,row], remaining=position+1<index.count;
       const trialCursor=remaining?cursor(workId,language,index.generation,position+1):null;

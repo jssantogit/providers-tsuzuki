@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { createFutureCachedChapterPager as create, FUTURE_SNAPSHOT_LIMITS as L }
   from './mangaall_future_storage_chapter_pager.mjs';
+import {packNormalizedMangaDotChapter as pack,expandMangaDotSourceRow as expand}
+  from './mangaall_future_compact_source_chapter.mjs';
 
 let now=1_783_000_000_000, generation=1;
 const state=new Map(), stats={gets:0,sets:0,removes:0,remoteFetches:0};
@@ -40,7 +42,7 @@ const dependencies={storage,fetchRows,now:clock,nonce};
 let pager=create(dependencies);
 let page=await pager.getPage({workId:'mangadot:109',language:'en'});
 assert.equal(stats.remoteFetches,1);
-assert.ok(page.items.length>0&&page.items.length<=128);
+assert.ok(page.items.length>0&&page.items.length<=L.maxOutputRows);
 assert.ok(state.size>1);
 let cursor=page.nextCursor, seen=page.items.map(x=>x.providerChapterId), pages=1;
 const oldCursor=cursor;
@@ -51,14 +53,14 @@ while(cursor!=null){
   const encoded=JSON.stringify(page);
   assert.ok(encoded.length<=48*1024);
   assert.ok(Buffer.byteLength(encoded,'utf8')<=48*1024);
-  assert.ok(page.items.length>0&&page.items.length<=128);
+  assert.ok(page.items.length>0&&page.items.length<=L.maxOutputRows);
   seen.push(...page.items.map(x=>x.providerChapterId));
   cursor=page.nextCursor;
   pages++;
   assert.ok(pages<=32,'complete Naruto fixture must fit existing 32-page Host refresh');
 }
 assert.deepEqual(seen,planned.map(x=>x.providerChapterId));
-assert.ok(pages>=13 && pages<=32);
+assert.ok(pages>=7 && pages<=32);
 assert.equal(stats.remoteFetches,1,'never re-fetch whole HTTP feed on each output page');
 assert.ok(stats.gets < 400,'one source snapshot must not be reread for each individual chapter row');
 assert.ok([...state.values()].reduce((n,x)=>n+x.length,0)<=512*1024);
@@ -121,6 +123,47 @@ const duplicate=create({storage,fetchRows:async()=>({complete:true,
   now:clock,nonce});
 await assert.rejects(()=>duplicate.getPage({workId:'mangadot:109',language:'en'}),
   /INVALID_CHAPTER_EVIDENCE/);
+// Real Bleach scale uses 4,341 release IDs. Prove that a *lossless compact*
+// snapshot can be read by fresh QuickJs-like instances within the existing
+// 64KiB/value and 512KiB/provider quotas, unlike verbose normalized rows.
+const bleachCompactRows=Array.from({length:4341},(_,i)=>
+  expand([String(13100000+i+1),i+1,0,'Ch '+(i+1),'en','Ju-Ni',null],'en'));
+let compactFetches=0;
+const compactCodec={encode:pack,decode:expand};
+const compactDeps={
+  storage,now:clock,nonce,codec:compactCodec,
+  fetchRows:async({workId,language})=>{
+    compactFetches++;
+    assert.equal(workId,'mangadot:131');
+    assert.equal(language,'en');
+    return {complete:true,sourceEvidence:'HTTP_200_NORMALIZED_VERIFIED',
+      items:bleachCompactRows};
+  },
+};
+let cp=await create(compactDeps).getPage({workId:'mangadot:131',language:'en'});
+let cc=cp.nextCursor, compactPages=1;
+const compactSeen=[...cp.items.map(x=>x.providerChapterId)];
+while(cc!==null){
+  cp=await create(compactDeps).getPage({workId:'mangadot:131',language:'en',cursor:cc});
+  const wire=JSON.stringify(cp);
+  assert.ok(wire.length<=48*1024);
+  assert.ok(Buffer.byteLength(wire,'utf8')<=48*1024);
+  compactSeen.push(...cp.items.map(x=>x.providerChapterId));
+  cc=cp.nextCursor;
+  compactPages++;
+  assert.ok(compactPages<=32,'4,341 compact Bleach rows must fit 32 Host pages');
+}
+assert.deepEqual(compactSeen,bleachCompactRows.map(x=>x.providerChapterId));
+assert.ok(compactPages>=17 && compactPages<=32);
+assert.equal(compactFetches,1);
+assert.ok([...state.values()].every(v=>v.length<=64*1024));
+assert.ok([...state.values()].reduce((n,x)=>n+x.length,0)<=512*1024);
+assert.ok(state.size<=17); // up to 16 parts plus one snapshot index.
+const snapshotCursor=(await create(compactDeps).getPage({workId:'mangadot:131',
+  language:'en'})).nextCursor;
+assert.ok(snapshotCursor);
+await assert.rejects(()=>create(compactDeps).getPage({workId:'mangadot:109',
+  language:'en',cursor:snapshotCursor}),/STALE_OR_FOREIGN_CHAPTER_CURSOR/);
 assert.equal(L.scope,'FUTURE_UNSHIPPED_STORAGE_PERMISSION_REQUIRED');
 console.log('MANGAALL_FUTURE_STORAGE_PAGER|1628_ROWS=RECONSTRUCTED|PAGES='+pages+
  '|REMOTE_FETCHES_PER_WORK=1|30_WORK_ROTATION=PASS|HOST_STORAGE_512K=ENFORCED'+

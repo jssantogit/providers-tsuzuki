@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {projectMangaDotSourceRow as project, expandMangaDotSourceRow as expand,
-  measureMangaDotCompactRow as measure} from './mangaall_future_compact_source_chapter.mjs';
+  measureMangaDotCompactRow as measure,
+  packNormalizedMangaDotChapter as pack} from './mangaall_future_compact_source_chapter.mjs';
 import {chapters} from '../providers/mangaall/modules/sources/mangadot/modules/mangadot.js';
 const rows=[
  {id:101,chapter_number:1,language:'en',source:'user',chapter_title:'Intro',
@@ -22,6 +23,11 @@ const real=await chapters({binding:{externalWorkId:'mangadot:109',facetId:'en'},
 const projected=rows.map(r=>project(r,'en')).filter(Boolean);
 const restored=projected.map(p=>expand(p,'en'));
 assert.deepEqual(restored,real.items,'tuple must round-trip the CURRENT source normalization exactly');
+assert.deepEqual(restored.map(row=>pack(row,'en')),projected);
+assert.throws(()=>pack({...restored[0],rawLabel:'wrong chapter identity'},'en'),/LOSSY_COMPACT_CHAPTER/);
+assert.throws(()=>pack({...restored[0],foreignExtra:'not to be lost'},'en'),/LOSSY_COMPACT_CHAPTER/);
+assert.throws(()=>pack({...restored[0],language:'pt-br'},'en'),/LOSSY_COMPACT_CHAPTER/);
+
 assert.equal(restored.length,3);
 assert.equal(restored[0].providerChapterId,'mangadot:uploads:101');
 assert.equal(restored[1].providerChapterId,'mangadot:chapters:102');
