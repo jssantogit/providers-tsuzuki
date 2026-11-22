@@ -130,6 +130,8 @@ jobs:
         run: node tooling/test_mangaall_experimental_chapter_output_paging.mjs
       - name: MangaALL FUTURE streaming chapter arrays >2MiB (offline bounded parser, no network)
         run: node tooling/test_mangaall_future_streaming_chapter_array.mjs
+      - name: MangaALL FUTURE compact MangaDot chapter rows parity (offline; no source grants)
+        run: node tooling/test_mangaall_future_compact_source_chapter.mjs
       - name: MangaDex verified author and facet coverage fixtures
         run: node tooling/test_mangaall_mangadex_evidence.mjs
       - name: MangaAll three-source contract

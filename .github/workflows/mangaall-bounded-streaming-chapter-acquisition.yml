@@ -2,12 +2,14 @@ name: MangaALL — bounded streaming MangaDot large chapter arrays (NO RAW BODY)
 # Approved capacity research, exact branch only. No signature/publication/CDN.
 on:
   push:
-    branches: ['test/mangaall-bounded-streaming-chapter-acquisition-*']
+    branches: ['test/mangaall-bounded-streaming-chapter-acquisition-*', 'test/mangaall-compact-large-chapter-snapshot-*']
     paths:
       - '.github/workflows/mangaall-bounded-streaming-chapter-acquisition.yml'
       - 'tooling/mangaall_future_streaming_chapter_array.mjs'
       - 'tooling/test_mangaall_future_streaming_chapter_array.mjs'
       - 'tooling/mangaall_live_stream_chapter_probe.mjs'
+      - 'tooling/mangaall_future_compact_source_chapter.mjs'
+      - 'tooling/test_mangaall_future_compact_source_chapter.mjs'
 permissions:
   contents: read
 concurrency:
@@ -33,6 +35,7 @@ jobs:
           node --check tooling/mangaall_future_streaming_chapter_array.mjs
           node --check tooling/mangaall_live_stream_chapter_probe.mjs
           node tooling/test_mangaall_future_streaming_chapter_array.mjs
+          node tooling/test_mangaall_future_compact_source_chapter.mjs
           node tooling/verify_index.mjs
           python3 tooling/build_provider.py providers/mangaall "${RUNNER_TEMP}/code10-original.tsz"
           python3 - <<'PY'
@@ -64,7 +67,9 @@ jobs:
             'NARUTO_SOURCE_HID_109_UNVERIFIED','BLEACH_SOURCE_HID_131_UNVERIFIED']
           allowed={'source','status','outcome','authority','rowCount',
             'distinctNumericIds','duplicateNumericIds','numericChapterLabels',
-            'maxRowChars','userOrUnknownSourceRows','otherSourceRows','decodedBytes'}
+            'maxRowChars','userOrUnknownSourceRows','otherSourceRows','decodedBytes',
+            'eligibleEnglishRows','skippedFacetOrInvalidRows','compactArrayChars',
+            'normalizedRowChars','maxCompactRowChars','storage440KAssessment'}
           for row in d['results']:
             assert set(row)<=allowed
             assert row['outcome'] in (
@@ -78,6 +83,12 @@ jobs:
               assert 0<=row['rowCount']<=16000
               assert 0<=row['decodedBytes']<=16*1024*1024
               assert row['authority']=='UNVERIFIED_SOURCE_HID_NO_CANONICAL_OR_READER'
+              assert 0<=row['eligibleEnglishRows']<=row['rowCount']
+              assert row['eligibleEnglishRows']+row['skippedFacetOrInvalidRows']==row['rowCount']
+              assert 0<=row['compactArrayChars']<=16*1024*1024
+              assert row['storage440KAssessment'] in (
+                'COMPACT_BODY_BELOW_440K_NOT_SNAPSHOT_ATTESTED',
+                'COMPACT_BODY_ABOVE_440K')
           assert 'https://' not in f.read_text()
           print('MANGAALL_LARGE_STREAM|upstream=2_FIXED_REQUESTS|metadata=ONLY|binding=DENIED')
           PY
