@@ -9,6 +9,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createHttpBridge } from './mangaall_live_probe_core.mjs';
 import { parseWorks, shardWorks } from './mangaall_generic_works.mjs';
+import { capacity30Plan, sourceRequestBudget } from './mangaall_30_capacity.mjs';
 import { createRealEnvelopeCapture } from './mangaall_real_envelope_capture.mjs';
 import { describeMangaDotChapterListHttp, describeMangaDotChapterTransportFailure } from './mangaall_mangadot_chapter_http_shape.mjs';
 import { inspectCurrentSignedCode9Source, CODE9_OPT_IN } from './mangaall_signed_code9_smoke_gate.mjs';
@@ -72,6 +73,7 @@ if (process.argv.length === 3 && process.argv[2] === '--plan') {
       sourceWorkId: item.work, probe: item.probe,
     })),
     authority: 'NO_SOURCE_OR_CANONICAL_EVIDENCE_COLLECTED',
+    capacity: selectedSuite === 'custom' ? capacity30Plan(allCases, shardCount) : null,
   }));
   process.exit(0);
 }
@@ -180,9 +182,9 @@ const requests = [];
 const chapterHttpShapes = [];
 const blockedOrigins = new Set();
 const bridges = new Map(Object.keys(origins).map((origin) => [origin, createHttpBridge({
-  origin, maxRequests: selectedSuite === 'custom'
-    ? (origins[origin] === 'MANGAFIRE' ? 80 : 120)
-    : (origins[origin] === 'MANGAFIRE' ? 20 : 40),
+  origin, maxRequests: sourceRequestBudget(
+    origins[origin], cases.length, selectedSuite === 'custom',
+  ),
   // MangaDot real chapter lists for Naruto/Bleach exceed 192 KiB.
   // Mirror its *already published* 2 MiB source adapter response ceiling,
   // without changing the signed Provider or relaxing other source budgets.
