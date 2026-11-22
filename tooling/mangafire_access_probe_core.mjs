@@ -60,6 +60,6 @@ export async function diagnoseMangaFireAccess({ fetchImpl = fetch } = {}) {
     homepage, api,
     classification: classifyMangaFireAccess(homepage, api),
     browserSessionTested: false,
-    signerReference: 'PRODUCTION_MANGAALL_CODE7',
+    signerReference: 'MANGAALL_CODE10_SIGNED_SOURCE_VRF_MODULE',
   };
 }
