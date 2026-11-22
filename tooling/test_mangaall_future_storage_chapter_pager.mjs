@@ -100,6 +100,15 @@ const tooBig=create({storage,fetchRows:async()=>({complete:true,
 await assert.rejects(()=>tooBig.getPage({workId:'mangadot:109',language:'en'}),
   /SNAPSHOT_EXCEEDS_PROVIDER_STORAGE_QUOTA/);
 assert.ok([...state.values()].reduce((n,x)=>n+x.length,0)<=512*1024);
+// A real-sized 4,341 Bleach portfolio cannot be silently squeezed into
+// the Host's existing 512 KiB provider storage quota. This remains a known
+// source-snapshot blocker, not a reason to discard rows or raise global caps.
+const bleachOversize=create({storage,fetchRows:async()=>({complete:true,
+  sourceEvidence:'HTTP_200_NORMALIZED_VERIFIED',items:chapterRows('mangadot:131',4341)}),
+  now:clock,nonce});
+await assert.rejects(()=>bleachOversize.getPage({workId:'mangadot:131',language:'en'}),
+  /SNAPSHOT_EXCEEDS_PROVIDER_STORAGE_QUOTA/);
+assert.ok([...state.values()].reduce((n,x)=>n+x.length,0)<=512*1024);
 // Single invalid chapter ID and duplicates cannot enter the cache.
 const invalid=create({storage,fetchRows:async()=>({complete:true,
   sourceEvidence:'HTTP_200_NORMALIZED_VERIFIED',
