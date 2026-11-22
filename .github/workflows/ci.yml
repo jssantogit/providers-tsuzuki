@@ -47,6 +47,8 @@ jobs:
         run: node tooling/test_mangaall_generic_works.mjs
       - name: MangaALL 30-work capacity, 3x10 shard and safe-source-budget contract (NO NETWORK)
         run: node tooling/test_mangaall_30_capacity.mjs
+      - name: MangaALL FUTURE storage-backed large-chapter cursor regression (NONSHIPPING / NO NETWORK)
+        run: node tooling/test_mangaall_future_storage_chapter_pager.mjs
       - name: Verify immutable archived code9 source guard (historical, offline)
         run: node tooling/test_mangaall_signed_code9_smoke_gate.mjs
       - name: Verify authentic signed P-256 sequence36/code10 smoke gate (offline)
