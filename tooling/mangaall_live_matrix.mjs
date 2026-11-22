@@ -183,7 +183,11 @@ const bridges = new Map(Object.keys(origins).map((origin) => [origin, createHttp
   origin, maxRequests: selectedSuite === 'custom'
     ? (origins[origin] === 'MANGAFIRE' ? 80 : 120)
     : (origins[origin] === 'MANGAFIRE' ? 20 : 40),
-  maxResponseBytes: 192 * 1024, timeoutMs: 12000,
+  // MangaDot real chapter lists for Naruto/Bleach exceed 192 KiB.
+  // Mirror its *already published* 2 MiB source adapter response ceiling,
+  // without changing the signed Provider or relaxing other source budgets.
+  maxResponseBytes: origins[origin] === 'MANGADOT' ? 2 * 1024 * 1024 : 192 * 1024,
+  timeoutMs: 12000,
   fetchImpl: async (url, options) => {
     const start = performance.now();
     try {
