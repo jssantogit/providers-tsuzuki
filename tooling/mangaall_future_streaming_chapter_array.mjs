@@ -18,6 +18,12 @@ export function closedSourceFailure(error) {
 }
 export async function inspectBoundedChapterArray(chunks, config = {}) {
   const {maxDecodedBytes,maxRows,maxRowChars} = {...DEFAULTS,...config};
+  // Callback is local, synchronous and test-only: never serialized in a
+  // diagnostic. It can account for normalized sizes without retaining data.
+  const onRow = config.onRow ?? null;
+  if(onRow !== null && typeof onRow !== 'function') {
+    throw Error('INVALID_JSON_ARRAY_STREAM');
+  }
   if (![maxDecodedBytes,maxRows,maxRowChars].every(x=>Number.isSafeInteger(x)&&x>0) ||
       maxDecodedBytes>16*1024*1024 || maxRows>16000 || maxRowChars>20000) {
     throw Error('INVALID_JSON_ARRAY_STREAM');
@@ -52,6 +58,7 @@ export async function inspectBoundedChapterArray(chunks, config = {}) {
     }
     if (row.source === 'user' || row.source == null) userSources++;
     else otherSources++;
+    if(onRow) onRow(row);
     current = '';
   }
   function consume(text) {
