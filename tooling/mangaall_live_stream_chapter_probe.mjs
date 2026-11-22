@@ -4,6 +4,8 @@
 import fs from 'node:fs';
 import { inspectBoundedChapterArray, closedSourceFailure }
   from './mangaall_future_streaming_chapter_array.mjs';
+import {measureMangaDotCompactRow}
+  from './mangaall_future_compact_source_chapter.mjs';
 const origin='https://mangadot.net';
 const checks=[
   {label:'NARUTO_SOURCE_HID_109_UNVERIFIED',id:109},
@@ -35,8 +37,25 @@ for(const item of checks) {
           Number(length)>16*1024*1024) {
         observation.outcome='SOURCE_STREAM_TOO_LARGE';
       } else {
-        const summary=await inspectBoundedChapterArray(response.body);
-        observation={source:item.label,status:response.status,...summary};
+        let eligibleRows=0, ineligibleRows=0, compactTupleChars=0;
+        let normalizedRowChars=0, maxCompactRowChars=0;
+        const summary=await inspectBoundedChapterArray(response.body,{
+          onRow: row=>{
+            const size=measureMangaDotCompactRow(row,'en');
+            if(!size) {ineligibleRows++;return;}
+            eligibleRows++;
+            compactTupleChars+=size.tupleChars;
+            normalizedRowChars+=size.normalizedChars;
+            maxCompactRowChars=Math.max(maxCompactRowChars,size.tupleChars);
+          },
+        });
+        const compactArrayChars=2+compactTupleChars+Math.max(0,eligibleRows-1);
+        observation={source:item.label,status:response.status,...summary,
+          eligibleEnglishRows:eligibleRows,skippedFacetOrInvalidRows:ineligibleRows,
+          compactArrayChars,normalizedRowChars,maxCompactRowChars,
+          storage440KAssessment:compactArrayChars<=440*1024?
+            'COMPACT_BODY_BELOW_440K_NOT_SNAPSHOT_ATTESTED':'COMPACT_BODY_ABOVE_440K',
+        };
       }
     }
   } catch(error) {
@@ -46,7 +65,9 @@ for(const item of checks) {
   }
   const keys=new Set(['source','status','outcome','authority','rowCount',
     'distinctNumericIds','duplicateNumericIds','numericChapterLabels',
-    'maxRowChars','userOrUnknownSourceRows','otherSourceRows','decodedBytes']);
+    'maxRowChars','userOrUnknownSourceRows','otherSourceRows','decodedBytes',
+    'eligibleEnglishRows','skippedFacetOrInvalidRows','compactArrayChars',
+    'normalizedRowChars','maxCompactRowChars','storage440KAssessment']);
   if(Object.keys(observation).some(k=>!keys.has(k))) throw Error('UNEXPECTED_DIAGNOSTIC_KEY');
   results.push(observation);
   console.log('MANGAALL_STREAMING_CHAPTER_SHAPE|'+JSON.stringify(observation));
