@@ -9,10 +9,13 @@ const state=new Map(), stats={gets:0,sets:0,removes:0,remoteFetches:0};
 const storage={
   async get(k){stats.gets++;return state.get(k)??null;},
   async set(k,v){
-    if(!/^[a-zA-Z0-9._-]{1,128}$/.test(k)||typeof v!=='string'||v.length>65536)
+    if(!/^[a-zA-Z0-9._-]{1,128}$/.test(k)||typeof v!=='string'||
+       v.length>65536||Buffer.byteLength(v,'utf8')>65536)
       throw Error('HOST_STORAGE_VALUE_LIMIT');
     const copy=new Map(state);copy.set(k,v);
-    if(copy.size>256||[...copy.values()].reduce((n,x)=>n+x.length,0)>512*1024)
+    if(copy.size>256||
+       [...copy.values()].reduce((n,x)=>n+x.length,0)>512*1024||
+       [...copy.values()].reduce((n,x)=>n+Buffer.byteLength(x,'utf8'),0)>512*1024)
       throw Error('HOST_STORAGE_TOTAL_LIMIT');
     state.set(k,v);stats.sets++;
   },
@@ -64,7 +67,9 @@ assert.ok(pages>=7 && pages<=32);
 assert.equal(stats.remoteFetches,1,'never re-fetch whole HTTP feed on each output page');
 assert.ok(stats.gets < 400,'one source snapshot must not be reread for each individual chapter row');
 assert.ok([...state.values()].reduce((n,x)=>n+x.length,0)<=512*1024);
-assert.ok([...state.values()].every(v=>v.length<=64*1024));
+assert.ok([...state.values()].reduce((n,x)=>n+Buffer.byteLength(x,'utf8'),0)<=512*1024);
+assert.ok([...state.values()].every(v=>v.length<=64*1024 &&
+  Buffer.byteLength(v,'utf8')<=64*1024));
 assert.throws(()=>create({storage,fetchRows,now:clock}),/INVALID_FUTURE_PAGER_DEPENDENCY/);
 await assert.rejects(()=>pager.getPage({workId:'mangadot:131',language:'en',cursor:oldCursor}),/STALE_OR_FOREIGN_CHAPTER_CURSOR/);
 await assert.rejects(()=>pager.getPage({workId:'mangadot:109',language:'pt-br',cursor:oldCursor}),/STALE_OR_FOREIGN_CHAPTER_CURSOR/);
@@ -111,7 +116,25 @@ const bleachOversize=create({storage,fetchRows:async()=>({complete:true,
 await assert.rejects(()=>bleachOversize.getPage({workId:'mangadot:131',language:'en'}),
   /SNAPSHOT_EXCEEDS_PROVIDER_STORAGE_QUOTA/);
 assert.ok([...state.values()].reduce((n,x)=>n+x.length,0)<=512*1024);
-// Single invalid chapter ID and duplicates cannot enter the cache.
+// UTF-8 bytes, not JavaScript string length, govern the snapshot budget.
+ // Fifty CJK chapter titles fit the 440KiB *character* budget, but exceed it
+ // when serialized as UTF-8. The rejected acquisition must not evict the
+ // previously committed snapshot or write any partial index.
+const unicodeRows=Array.from({length:50},(_,i)=>
+  expand([String(20000000+i),i+1,0,'界'.repeat(3900),'en',null,null],'en'));
+const unicodePacked=unicodeRows.map(row=>pack(row,'en'));
+const unicodeJson=JSON.stringify(unicodePacked);
+assert.ok(unicodeJson.length<440*1024);
+assert.ok(Buffer.byteLength(unicodeJson,'utf8')>440*1024);
+const stateBeforeUnicode=[...state.entries()];
+const unicodeOversize=create({storage,now:clock,nonce,codec:{encode:pack,decode:expand},
+  fetchRows:async()=>({complete:true,
+    sourceEvidence:'HTTP_200_NORMALIZED_VERIFIED',items:unicodeRows})});
+await assert.rejects(()=>unicodeOversize.getPage({workId:'mangadot:131',language:'en'}),
+  /SNAPSHOT_EXCEEDS_PROVIDER_STORAGE_QUOTA/);
+assert.deepEqual([...state.entries()],stateBeforeUnicode,
+  'invalid UTF-8 snapshot must not evict the current committed work');
+ // Single invalid chapter ID and duplicates cannot enter the cache.
 const invalid=create({storage,fetchRows:async()=>({complete:true,
   sourceEvidence:'HTTP_200_NORMALIZED_VERIFIED',
   items:[{...planned[0],providerChapterId:'mangadex:outside'}]}),
