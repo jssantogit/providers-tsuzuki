@@ -1,0 +1,101 @@
+name: MangaALL code10 — bounded MangaDot chapter HTTP shape (NO BODY)
+# Explicit one-purpose commit probe. No signing, publication, image downloads,
+# browser challenge bypass, canonical binding or Reader/cdn access.
+on:
+  push:
+    branches: ['test/mangaall-code10-mangadot-chapter-http-shape-*']
+    paths:
+      - '.github/workflows/mangaall-code10-mangadot-chapter-http-shape.yml'
+      - 'tooling/mangaall_live_matrix.mjs'
+      - 'tooling/mangaall_mangadot_chapter_http_shape.mjs'
+      - 'tooling/test_mangaall_mangadot_chapter_http_shape.mjs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mangaall-code10-mangadot-http-shape-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  closed-chapter-http-shape:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Validate bounded shape parser and official immutable signed code10
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tooling/mangaall_live_matrix.mjs
+          node tooling/test_mangaall_mangadot_chapter_http_shape.mjs
+          node tooling/test_mangaall_live_journey.mjs
+          node tooling/verify_index.mjs
+          python3 tooling/build_provider.py providers/mangaall "${RUNNER_TEMP}/code10-shape-check.tsz"
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          package = Path(os.environ['RUNNER_TEMP']) / 'code10-shape-check.tsz'
+          sha = hashlib.sha256(package.read_bytes()).hexdigest()
+          idx = json.loads(Path('dist/index.payload.json').read_text())
+          source = json.loads(Path('providers/mangaall/manifest.json').read_text())
+          entry, = [x for x in idx['providers'] if x['providerId'] == 'app.tsuzuki.mangaall']
+          assert idx['repositoryId'] == 'app.tsuzuki.providers'
+          assert idx['sequence'] == 36
+          assert source['version'] == {'name': '0.5.5', 'code': 10}
+          assert entry['versionCode'] == 10
+          assert sha == entry['sha256'] == 'bcdfd03ac18c3cfdd0517e08b58dde7efa1f5baa874e93002af28e518860f95f'
+          assert hashlib.sha256(Path('dist/providers/app.tsuzuki.mangaall-10.tsz').read_bytes()).hexdigest() == sha
+          print('MANGAALL_CODE10_SHAPE|signedPackage=UNCHANGED|index=P256_SEQ36|upstream=NOT_YET_CALLED')
+          PY
+      - name: Real unified source metadata — exact ordered three-title probe (no image/CDN)
+        env:
+          MANGAALL_SUITE: custom
+          MANGAALL_SIGNED_CODE10_CANONICAL_SMOKE: I_ACCEPT_SIGNED_CODE10_CANONICAL_SMOKE
+          MANGAALL_BATCH: '1'
+          MANGAALL_WORKS: |
+            manga :: Naruto
+            manga :: Death Note
+            manga :: Bleach
+          MANGAALL_SHARD_INDEX: '0'
+          MANGAALL_SHARD_COUNT: '1'
+        run: |
+          set -euo pipefail
+          node tooling/mangaall_live_matrix.mjs --live \
+            --output mangaall-code10-chapter-http-shapes.json \
+            --real-envelopes mangaall-code10-http-shape-envelopes.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          d = json.loads(Path('mangaall-code10-chapter-http-shapes.json').read_text())
+          assert d['provider'] == 'app.tsuzuki.mangaall'
+          assert d['version'] == '0.5.5'
+          assert d['selectedSuite'] == 'custom'
+          assert len(d['cases']) == 3
+          for case in d['cases']:
+              for shape in case.get('mangadotChapterHttpShapes', []):
+                  assert set(shape) == {
+                      'status','bodyKind','collection','count','firstRowKind',
+                      'idKind','numberKind','hasErrorField',
+                  }
+                  print('MANGAALL_MANGADOT_CHAPTER_SHAPE|' +
+                        json.dumps({'title':case['requestedTitle'], **shape},
+                                   sort_keys=True, separators=(',', ':')))
+          print('MANGAALL_CODE10_SHAPE|scope=READ_ONLY_METADATA|canonical=NOT_TESTED|reader=NOT_TESTED')
+          PY
+      - name: Upload sanitized closed shape metadata only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mangaall-code10-mangadot-shape-${{ github.run_id }}
+          path: mangaall-code10-chapter-http-shapes.json
+          if-no-files-found: warn
+          retention-days: 7
