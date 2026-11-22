@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describeMangaDotChapterListHttp as shape } from './mangaall_mangadot_chapter_http_shape.mjs';
+import { describeMangaDotChapterListHttp as shape, describeMangaDotChapterTransportFailure as failure } from './mangaall_mangadot_chapter_http_shape.mjs';
 
 const reply = (body, statusCode = 200) =>
   JSON.stringify({ statusCode, body: typeof body === 'string' ? body : JSON.stringify(body) });
@@ -32,4 +32,9 @@ assert.ok(!JSON.stringify(shape(reply({ chapters: [{id:'secret',chapter_number:'
 assert.ok(Object.keys(shape(reply([]))).every(k => [
   'status','bodyKind','collection','count','firstRowKind','idKind','numberKind','hasErrorField',
 ].includes(k)));
+assert.equal(failure(new Error('MangaAll response too large')).bodyKind, 'BRIDGE_RESPONSE_TOO_LARGE');
+assert.equal(failure(new Error('MangaAll request limit')).bodyKind, 'BRIDGE_REQUEST_LIMIT');
+assert.equal(failure(new Error('https://private.example/?token=SUPER_SECRET')).bodyKind,
+  'TRANSPORT_OR_RUNTIME_FAILURE');
+assert.ok(!JSON.stringify(failure(new Error('https://private.example/?token=SUPER_SECRET'))).includes('SUPER_SECRET'));
 console.log('MangaAll closed MangaDot chapter response shape summaries: PASS');
