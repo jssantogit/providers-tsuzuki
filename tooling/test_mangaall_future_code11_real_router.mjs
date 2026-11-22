@@ -54,7 +54,7 @@ globalThis.tsuzuki = {
       requests.push({ host: u.hostname, path: u.pathname });
       if (u.hostname === "api.mangadex.org" && u.pathname === "/manga") {
         return JSON.stringify({ statusCode: 200, body: JSON.stringify({
-          data: [{ id: dexId, type: "manga",
+          result: "ok", data: [{ id: dexId, type: "manga",
             attributes: { title: { en: "Bleach" }, altTitles: [] } }],
           total: 1, offset: 0,
         }) });
@@ -67,7 +67,7 @@ globalThis.tsuzuki = {
       }
       if (u.hostname === "api.mangadex.org" && u.pathname === "/chapter") {
         return JSON.stringify({ statusCode: 200, body: JSON.stringify({
-          data: [], total: 0, offset: 0,
+          result: "ok", data: [], total: 0, offset: 0,
         }) });
       }
       if (u.hostname === "mangafire.to") {
