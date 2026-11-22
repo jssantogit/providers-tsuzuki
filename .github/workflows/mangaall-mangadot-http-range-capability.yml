@@ -7,6 +7,8 @@ on:
     paths:
       - '.github/workflows/mangaall-mangadot-http-range-capability.yml'
       - 'tooling/mangaall_mangadot_http_range_capability.mjs'
+      - 'tooling/mangaall_mangadot_http_range_contract.mjs'
+      - 'tooling/test_mangaall_mangadot_http_range_contract.mjs'
 
 permissions:
   contents: read
@@ -29,6 +31,7 @@ jobs:
         run: |
           set -euo pipefail
           node --check tooling/mangaall_mangadot_http_range_capability.mjs
+          node tooling/test_mangaall_mangadot_http_range_contract.mjs
           node tooling/verify_index.mjs
           python3 tooling/build_provider.py providers/mangaall "${RUNNER_TEMP}/original-code10.tsz"
           python3 - <<'PY'
