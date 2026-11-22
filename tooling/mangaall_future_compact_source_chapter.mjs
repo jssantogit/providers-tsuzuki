@@ -52,9 +52,12 @@ export function measureMangaDotCompactRow(row,language='en') {
   const packed=projectMangaDotSourceRow(row,language);
   if(packed===null)return null;
   const normalized=expandMangaDotSourceRow(packed,language);
+  const tupleJson=JSON.stringify(packed),normalizedJson=JSON.stringify(normalized);
   return {
-    tupleChars:JSON.stringify(packed).length,
-    normalizedChars:JSON.stringify(normalized).length,
+    tupleChars:tupleJson.length,
+    tupleBytes:Buffer.byteLength(tupleJson,'utf8'),
+    normalizedChars:normalizedJson.length,
+    normalizedBytes:Buffer.byteLength(normalizedJson,'utf8'),
   };
 }
 
