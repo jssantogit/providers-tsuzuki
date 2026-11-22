@@ -348,6 +348,39 @@ assert.equal(journeyVerdict(test.result), 'AMBIGUOUS_EDITION');
 assert.equal(test.stats.chapters, 0);
 assert.equal(test.stats.pages, 0);
 
+// Signed code10 canonical Host collection accepts at most eight lookup
+// pages. A signed real HTTP capture must retain all eight request envelopes
+// when its source still supplies a continuation after page three. An eighth
+// pending cursor means INCOMPLETE, not a completed empty source.
+const capped = specFor(catalog.cases.find((x) => x.id === 'punpun'));
+let capturedPages = 0;
+const eightPage = await probeJourney({
+  async lookup({ cursor, requestedLanguage, coverageEvidenceVersion,
+                 editorialEvidenceVersion, diagnosticsVersion }) {
+    assert.equal(requestedLanguage, 'en');
+    assert.equal(coverageEvidenceVersion, 1);
+    assert.equal(editorialEvidenceVersion, 1);
+    assert.equal(diagnosticsVersion, 1);
+    assert.equal(cursor, capturedPages === 0 ? null : 'cursor-' + capturedPages);
+    capturedPages++;
+    return { items: capturedPages === 1 ? [candidate(capped)] : [],
+      nextCursor: 'cursor-' + capturedPages };
+  },
+  async chapters() { throw Error('No chapters may be claimed from incomplete lookup'); },
+  async pages() { throw Error('Reader must not run after truncated lookup'); },
+}, capped, grants, { lookupPageLimit: 8, lookupContract: 'v1' });
+assert.equal(capturedPages, 8);
+assert.equal(eightPage.lookupPages, 8);
+assert.equal(eightPage.lookupComplete, false);
+assert.equal(eightPage.chapters, 'NOT_TESTED');
+assert.equal(eightPage.pages, 'NOT_TESTED');
+assert.equal(eightPage.authority, 'SOURCE_METADATA_ONLY_NO_CANONICAL_OR_READER_PROOF');
+await assert.rejects(
+  probeJourney({ async lookup() { throw Error('unexpected'); } }, capped, grants,
+    { lookupPageLimit: 9, lookupContract: 'v1' }),
+  /Invalid bounded MangaAll journey limits/,
+);
+
 console.log('MangaAll FULL-JOURNEY OFFLINE PASS | curated=' + catalog.cases.length +
   ' | comics=' + comicCases + ' | prose-boundary=' + proseCases +
   ' | pagination/conflict/partial/missing/403/Reader-url: CHECKED | network=SYNTHETIC');
