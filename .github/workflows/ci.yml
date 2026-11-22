@@ -134,6 +134,8 @@ jobs:
         run: node tooling/test_mangaall_future_compact_source_chapter.mjs
       - name: MangaALL FUTURE code11 native Host chapter bridge 4341-row continuation (NONSHIPPING)
         run: node tooling/test_mangaall_future_native_chapter_bridge.mjs
+      - name: MangaALL FUTURE unsigned code11 real three-source router overlay (IN MEMORY, OFFLINE)
+        run: python3 -m unittest discover -s tooling -p 'test_mangaall_future_code11_candidate.py' -v
       - name: MangaDex verified author and facet coverage fixtures
         run: node tooling/test_mangaall_mangadex_evidence.mjs
       - name: MangaAll three-source contract
