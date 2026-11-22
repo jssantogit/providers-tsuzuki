@@ -1,9 +1,9 @@
 """Exact-byte operator-approved code10 RELEASE, never signing within tests.
 
 This test proves the approved 0.5.5 code10 bytes are reproducible,
-that the real signed code9 seq35 remains immutable, and that a push,
-wrong token or wrong hash cannot authorize the signer. The actual
-workflow_dispatch on main remains an explicit independent operation.
+that the archived code9 bytes and real signed code10 seq36 stay immutable,
+and that a push, old token or replay of the completed publication cannot
+authorize another signing. All checks are offline.
 """
 import hashlib
 import json
@@ -48,6 +48,7 @@ class Code10OperatorApprovedReleaseReview(unittest.TestCase):
 
         protected = (
             "dist/providers/app.tsuzuki.mangaall-9.tsz",
+            "dist/providers/app.tsuzuki.mangaall-10.tsz",
             "dist/index.json",
             "dist/index.payload.json",
             "repository/config.json",
@@ -58,13 +59,15 @@ class Code10OperatorApprovedReleaseReview(unittest.TestCase):
         before = {str(p): digest(ROOT / p) for p in protected}
         self.assertEqual(before["dist/providers/app.tsuzuki.mangaall-9.tsz"], PRIOR_SHA)
         ledger = json.loads((ROOT / "dist/index.payload.json").read_text())
-        self.assertEqual(ledger["sequence"], 35)
+        self.assertEqual(ledger["sequence"], 36)
+        published = next(entry for entry in ledger["providers"]
+                         if entry["providerId"] == "app.tsuzuki.mangaall")
+        self.assertEqual(published["versionCode"], 10)
+        self.assertEqual(published["versionName"], "0.5.5")
+        self.assertEqual(published["sha256"], SHA)
+        self.assertEqual(before["dist/providers/app.tsuzuki.mangaall-10.tsz"], SHA)
         self.assertEqual(
-            next(entry for entry in ledger["providers"]
-                 if entry["providerId"] == "app.tsuzuki.mangaall")["versionCode"], 9,
-        )
-        self.assertEqual(
-            json.loads((ROOT / "repository/config.json").read_text())["sequence"], 35,
+            json.loads((ROOT / "repository/config.json").read_text())["sequence"], 36,
         )
         signed = subprocess.run(
             ["node", "tooling/verify_index.mjs"],
@@ -85,14 +88,13 @@ class Code10OperatorApprovedReleaseReview(unittest.TestCase):
                 check_code10_publication(ROOT, "push", APPROVAL, SHA)
             with self.assertRaisesRegex(ValueError, "manual workflow dispatch"):
                 check_code10_publication(ROOT, "workflow_dispatch", "", SHA)
-            with self.assertRaisesRegex(ValueError, "archive differs"):
+            # After the genuine code10 signature, even the formerly valid
+            # manual token+SHA MUST NOT authorize a second seq36 release.
+            with self.assertRaisesRegex(ValueError, "original signed sequence35"):
                 check_code10_publication(ROOT, "workflow_dispatch", APPROVAL, SHA)
-            # There is no dist/providers/code10 package on the original
-            # source branch. The publisher must build it, run preflight,
-            # and sign only during a separate privileged Actions dispatch.
         self.assertEqual(before, {str(p): digest(ROOT / p) for p in protected})
-        self.assertFalse((ROOT / "dist/providers/app.tsuzuki.mangaall-10.tsz").exists(),
-                         "CI review may not write production distribution files")
+        self.assertEqual(digest(ROOT / "dist/providers/app.tsuzuki.mangaall-10.tsz"), SHA,
+                         "CI must preserve published distribution bytes")
 
 
 if __name__ == "__main__":
