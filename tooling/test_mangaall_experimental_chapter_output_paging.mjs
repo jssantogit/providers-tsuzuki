@@ -25,7 +25,7 @@ do {
   assert.ok(pages <= 32, 'Naruto-sized fixture must fit within Host 32-page refresh');
 } while (cursor !== null);
 assert.deepEqual(seen, rows.map(z=>z.providerChapterId));
-assert.ok(pages >= 13 && pages <= 32);
+assert.ok(pages >= 7 && pages <= 32);
 assert.ok(secondPageCursor);
 assert.throws(()=>page(rows,{workId:'mangadot:131',language:'en',cursor:secondPageCursor}),/UNTRUSTED_CHAPTER_CURSOR/);
 assert.throws(()=>page(rows,{workId:'mangadot:109',language:'pt-br',cursor:secondPageCursor}),/INVALID_SOURCE_CHAPTER_OBSERVATION/);
@@ -37,6 +37,27 @@ assert.throws(()=>page([...rows,{...rows[0],providerChapterId:'mangadot:uploads:
 assert.throws(()=>page(makeRows(16001),{workId:'mangadot:109',language:'en'}),/INVALID_EXPERIMENTAL_CHAPTER_INPUT/);
 const longRow={...rows[0],title:'x'.repeat(60_000)};
 assert.throws(()=>page([longRow],{workId:'mangadot:109',language:'en'}),/CHAPTER_ITEM_EXCEEDS_HOST_SAFE_BUDGET/);
+// Real 2026-11-22 MangaDot Bleach source observed 4,341 unique release IDs.
+// We reproduce only this count using entirely synthetic chapter metadata.
+const bleach = makeRows(4341);
+const actual = [];
+let bleachCursor = null, bleachPages = 0, maxPageLength = 0;
+do {
+  const p = page(bleach,{workId:'mangadot:131',language:'en',cursor:bleachCursor});
+  const wire = JSON.stringify(p);
+  maxPageLength = Math.max(maxPageLength, Buffer.byteLength(wire,'utf8'));
+  assert.ok(wire.length <= 48*1024);
+  assert.ok(Buffer.byteLength(wire,'utf8') <= 48*1024);
+  actual.push(...p.items.map(row=>row.providerChapterId));
+  bleachCursor = p.nextCursor;
+  bleachPages++;
+  assert.ok(bleachPages<=32,'Bleach 4,341 entries must fit 32 bounded output pages');
+} while(bleachCursor!==null);
+assert.deepEqual(actual,bleach.map(z=>z.providerChapterId));
+assert.ok(bleachPages>=17 && bleachPages<=32);
+assert.ok(maxPageLength<=48*1024);
+// This is OUTPUT serialization only. Real source acquisition, snapshots and
+// editorial authority are still NOT integrated into published code10.
 // A huge source portfolio cannot be certified as complete within one 32-page
 // refresh when no upstream cursor exists. Surface continuation, not empty.
 const huge=makeRows(6000);
@@ -47,5 +68,6 @@ for(let i=0;i<32;i++){
   next=p.nextCursor;
 }
 assert.ok(next !== null, 'Do not silently call 6,000 chapters a complete inventory after 32 pages');
-console.log('MangaAll future unshipped chapter output pager: 1628 ordered items in '+pages+
-  ' bounded pages; stale/foreign cursors rejected, huge inventory remains partial');
+console.log('MangaAll future unshipped chapter output pager: 1628 Naruto-shaped rows in '+pages+
+  ' pages and 4341 Bleach-shaped rows in '+bleachPages+
+  ' pages; <=48KiB, stale/foreign rejected, 6000 remains partial');

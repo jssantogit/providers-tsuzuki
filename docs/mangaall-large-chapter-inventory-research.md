@@ -42,3 +42,16 @@ The Host `RefreshProviderReadingChapters` also caps one refresh at **32 pages** 
 ## Acceptance gate before any future signing/publishing
 
 A prospective next version must demonstrate exact original source-work and chapter identity at every step, no missing author/edition corroboration, real source response pagination and Host V1 serialization under limits, true SQLDelight persistence and correlation, and live Android CDN **pixels** in the actual Reader. Repeat the integrated **three-source** Naruto/Death Note/Bleach smoke before expanding the work vector to 10–30; then test on a real Galaxy A54. Preserve prior signed versions and supply-chain index history. Signature/publication requires distinct explicit operator approval.
+
+
+## 2026-11-22 — updated live large-feed scale and output budget
+
+Later bounded **nonshipping** real-source streaming CI [#45025654466](https://github.com/jssantogit/providers-tsuzuki/actions/runs/45025654466) processed entire public MangaDot chapter JSON arrays without lifting Host IPC or exporting source data:
+- Naruto source HID 109: **1,628** unique numeric source chapter IDs, **826,386 decoded response bytes**.
+- Bleach source HID 131: **4,341** unique numeric source chapter IDs, **2,406,271 decoded response bytes**. The old signed code10's 2 MiB source HTTP limit still fails; the new streaming parser is *not shipped*.
+- Both inputs were read in a bounded Node CI diagnostic, with no CDN, Reader pixels, signed-package edits, authorship corroboration or editorial grant.
+
+The prior nonshipping **128 chapter output items/page** ceiling requires a minimum
+of 34 pages for 4,341 rows, beyond Host `RefreshProviderReadingChapters.MAX_PAGES=32`. The test-only output pager now permits **up to 256 items per V1 page**, while enforcing an independent **48 KiB UTF-8 and JS-char** output cap, explicit exact-source cursors and progress. Offline tests reconstruct all **4,341 synthetic** Bleach-shaped rows in no more than 32 pages, but *do not* prove real end-to-end output in QuickJs/Host.
+
+The *storage* constraint remains independent: the future storage pager demonstrates that **4,341 verbose synthetic rows do not fit** the present optional 512 KiB/provider snapshot quota, and fails closed instead of truncating. A future efficient solution needs compact lossless metadata representation, or a narrowly reviewed Host-side streaming snapshot protocol with per-Provider disk quotas, TTL, concurrency and safe cancellation. Do **not** remove global Host IPC/JS limits or confuse source list row counts with distinct canonically validated chapters.
