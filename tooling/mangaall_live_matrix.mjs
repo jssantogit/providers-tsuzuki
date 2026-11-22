@@ -243,7 +243,12 @@ for (const spec of cases) {
     // Code9 diagnosticsVersion=2 yields V2 observations WITHOUT V1 items;
     // the canonical smoke must use the signed V1 interface explicitly.
     lookupContract: (officialCode9 || officialCode10) ? 'v1' : 'legacy',
-    lookupPageLimit: selectedSuite === 'custom' ? 3 : 2,
+    // Real signed code10 canonical Host collector collects up to 8
+    // lookup pages. Recording only 3 created an internal REPLAY_GAP for
+    // Naruto/Bleach, whose third page still had an upstream cursor.
+    // This is a capture budget, never evidence of complete source coverage.
+    lookupPageLimit: selectedSuite === 'custom' && officialCode10 ? 8
+      : selectedSuite === 'custom' ? 3 : 2,
     chapterPageLimit: selectedSuite === 'custom' ? 8 : 4,
     includeCandidates: selectedSuite === 'custom',
     includeCandidateCoverage: selectedSuite === 'custom',
