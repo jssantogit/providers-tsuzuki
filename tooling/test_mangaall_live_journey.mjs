@@ -264,6 +264,42 @@ assert.equal(test.stats.pages, 0, 'candidate previews do not request Reader page
 assert.equal(journeyVerdict(test.result), 'INCONCLUSIVE',
   'a source-level complete chapter sample never turns an incomplete lookup canonical');
 
+// Coverage UNKNOWN is not zero chapters. Inspect actual source chapters
+// read-only for a verified, author-bearing HID, even when discovery remains
+// incomplete. This must NEVER grant pages or canonical/Reader authority.
+const unknownCoverage = { ...candidate(base), coverageOutcome: 'UNKNOWN',
+  coverageObservedCount: null, coverageHasMore: true };
+test = await run({ async lookup() {
+  return { items: [unknownCoverage], nextCursor: 'incomplete-source-search' };
+}}, base, { lookupPageLimit: 1, includeCandidateCoverage: true,
+  candidateChapterPageLimit: 2 });
+assert.equal(test.result.lookupComplete, false);
+assert.equal(test.result.candidateChapterPreviews.length, 1);
+assert.equal(test.result.candidateChapterPreviews[0].chapterCount, 2);
+assert.equal(test.result.candidateChapterPreviews[0].outcome, 'SOURCE_COMPLETE');
+assert.equal(test.stats.chapters, 2);
+assert.equal(test.stats.pages, 0);
+assert.equal(journeyVerdict(test.result), 'INCONCLUSIVE',
+  'unknown coverage may justify a bounded probe, never editorial binding');
+
+// Missing source authors, unverified source detail or declared EMPTY coverage
+// must remain closed, without network calls to the candidate chapter feed.
+for (const blockedCandidate of [
+  { ...unknownCoverage, authors: [] },
+  { ...unknownCoverage, detailOutcome: 'DETAIL_FAILED' },
+  { ...unknownCoverage, coverageOutcome: 'EMPTY' },
+]) {
+  test = await run({ async lookup() {
+    return { items: [blockedCandidate], nextCursor: 'still-incomplete' };
+  }}, base, { lookupPageLimit: 1, includeCandidateCoverage: true,
+    candidateChapterPageLimit: 2 });
+  assert.equal(test.result.candidateChapterPreviews[0].outcome,
+    'SOURCE_DETAIL_OR_COVERAGE_UNVERIFIED');
+  assert.equal(test.stats.chapters, 0);
+  assert.equal(test.stats.pages, 0);
+  assert.equal(journeyVerdict(test.result), 'INCONCLUSIVE');
+}
+
 test = await run({ async chapters() { return { items: [], nextCursor: null }; } });
 assert.equal(test.result.chapters, 'COMPLETE_EMPTY');
 assert.equal(test.result.pages, 'NO_CHAPTER_FOR_READER');
