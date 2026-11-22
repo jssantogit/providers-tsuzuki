@@ -19,6 +19,7 @@ class MangaAllCode9ReleaseRehearsalTest(unittest.TestCase):
             ROOT / "dist/index.json",
             ROOT / "dist/providers/app.tsuzuki.mangaall-8.tsz",
             ROOT / "dist/providers/app.tsuzuki.mangaall-9.tsz",
+            ROOT / "dist/providers/app.tsuzuki.mangaall-10.tsz",
             ROOT / "repository/config.json",
             ROOT / ".github/workflows/publish.yml",
         ]
@@ -37,15 +38,21 @@ class MangaAllCode9ReleaseRehearsalTest(unittest.TestCase):
             before,
             {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in protected},
         )
-        # Code9 now genuinely exists in the official seq35 index. The
-        # sandbox must leave its already-signed release bytes untouched.
+        # Current official index is signed seq36/code10. The test rehearses
+        # historical unsigned code9 only against the genuine seq34 fixture,
+        # preserving current signed and archived release bytes.
         descriptor = next(p for p in json.loads(
             (ROOT / "dist/index.payload.json").read_text()
         )["providers"] if p["providerId"] == "app.tsuzuki.mangaall")
-        self.assertEqual(descriptor["versionCode"], 9)
+        self.assertEqual(descriptor["versionCode"], 10)
+        self.assertEqual(descriptor["versionName"], "0.5.5")
         self.assertEqual(
             descriptor["sha256"],
+            hashlib.sha256((ROOT / "dist/providers/app.tsuzuki.mangaall-10.tsz").read_bytes()).hexdigest(),
+        )
+        self.assertEqual(
             hashlib.sha256((ROOT / "dist/providers/app.tsuzuki.mangaall-9.tsz").read_bytes()).hexdigest(),
+            "d9c223146faa9fea0e5b1593711b74836bc0af3c2939b2c6f246dbb2e4646622",
         )
         candidate = json.loads((ROOT / "providers/mangaall/manifest.json").read_text())
         self.assertEqual(candidate["version"]["code"], 10)
