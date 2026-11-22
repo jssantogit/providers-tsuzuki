@@ -11,6 +11,17 @@ const fail=reason=>{throw Error('FUTURE_MANGAALL_'+reason);};
 const exactFields=(obj,keys)=>Object.keys(obj).length===keys.length &&
   keys.every(key=>Object.hasOwn(obj,key));
 const millis=value=>value===null||(Number.isSafeInteger(value)&&value>=0);
+// Pure JS by design: the future QuickJs runtime does not expose Node Buffer.
+// Count Unicode code points as UTF-8; lone surrogates become replacement bytes
+// when the JSON text is sent across the Host boundary.
+function utf8Bytes(str) {
+  let bytes=0;
+  for(const char of str) {
+    const cp=char.codePointAt(0);
+    bytes+=cp<=0x7f?1:cp<=0x7ff?2:cp<=0xffff?3:4;
+  }
+  return bytes;
+}
 
 export const FUTURE_NATIVE_BRIDGE_LIMITS=Object.freeze({
   maxRows:MAX_ROWS,maxPageRows:MAX_PAGE_ROWS,maxResultBytes:MAX_WIRE,
@@ -29,7 +40,7 @@ function parseCursor(value,sourceId,language) {
 
 function parseNativePage(raw,sourceId,language,inputCursor) {
   if(typeof raw!=='string'||raw.length>MAX_WIRE ||
-      Buffer.byteLength(raw,'utf8')>MAX_WIRE) fail('HOST_OUTPUT_LIMIT');
+      utf8Bytes(raw)>MAX_WIRE) fail('HOST_OUTPUT_LIMIT');
   let page;
   try {page=JSON.parse(raw);} catch {fail('MALFORMED_HOST_PAGE');}
   if(!page||typeof page!=='object'||Array.isArray(page)||
