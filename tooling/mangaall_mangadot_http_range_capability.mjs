@@ -3,6 +3,8 @@
 // chapter ID, raw URL, headers, cookies or unrestricted follow-up is exported.
 // No bypass of HTTP challenges, no signing or Provider module changes.
 import fs from 'node:fs';
+import { exactlyMatchesRequestedContentRange, exactlyMatchesRequestedContentLength }
+  from './mangaall_mangadot_http_range_contract.mjs';
 
 const origin = 'https://mangadot.net';
 const checks = [
@@ -35,7 +37,15 @@ for (const item of checks) {
     responseBase.contentRangePresent = response.headers.has('content-range');
     responseBase.acceptRangesBytes = response.headers.get('accept-ranges')?.toLowerCase() === 'bytes';
     responseBase.etagPresent = response.headers.has('etag');
-    if (response.status === 206) {
+    if (response.status === 206 &&
+        !exactlyMatchesRequestedContentRange(
+          response.headers.get('content-range'), item.start, item.end,
+        )) {
+      // A Content-Range header's presence alone is not evidence that this
+      // response matches the requested inclusive byte interval.
+      responseBase.outcome = 'UNTRUSTED_CONTENT_RANGE_206';
+      await response.body?.cancel();
+    } else if (response.status === 206) {
       let chunks = [], size = 0;
       const reader = response.body?.getReader();
       if (!reader) {
@@ -57,10 +67,14 @@ for (const item of checks) {
           reader.releaseLock();
         }
         if (responseBase.outcome === 'TRANSPORT_UNAVAILABLE') {
-          responseBase.outcome = size ? 'BOUNDED_PARTIAL_206' : 'EMPTY_PARTIAL_206';
-          responseBase.decodedBytes = size;
-          if (size) samples.set(item.tag + ':' + responseBase.range,
-            Buffer.concat(chunks.map(x => Buffer.from(x))));
+          if (!exactlyMatchesRequestedContentLength(size, item.start, item.end)) {
+            responseBase.outcome = 'PARTIAL_CONTENT_LENGTH_MISMATCH_206';
+          } else {
+            responseBase.outcome = 'BOUNDED_PARTIAL_206';
+            responseBase.decodedBytes = size;
+            samples.set(item.tag + ':' + responseBase.range,
+              Buffer.concat(chunks.map(x => Buffer.from(x))));
+          }
         }
       }
     } else {
