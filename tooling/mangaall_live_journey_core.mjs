@@ -175,7 +175,7 @@ export async function probeJourney(reading, spec, grants, options = {}) {
   if (lookupContract !== 'legacy' && lookupContract !== 'v1') {
     throw Error('Invalid MangaAll live lookup contract');
   }
-  if (!Number.isInteger(lookupPageLimit) || lookupPageLimit < 1 || lookupPageLimit > 5 ||
+  if (!Number.isInteger(lookupPageLimit) || lookupPageLimit < 1 || lookupPageLimit > 8 ||
       !Number.isInteger(chapterPageLimit) || chapterPageLimit < 1 || chapterPageLimit > 8) {
     throw Error("Invalid bounded MangaAll journey limits");
   }
