@@ -1,7 +1,8 @@
 """Offline code10 package integrity, never a release or signing authorization.
 
-The real 0.5.4/code9 P-256 seq35 package and publication ledger remain
-immutable. This builds only temporary, unshipped 0.5.5-dev candidates.
+The historical 0.5.4/code9 archive remains immutable, while the official
+signed P-256 publication is now 0.5.5/code10 sequence36. Rebuilding uses
+temporary files only; never signs or publishes anything.
 """
 import hashlib
 import json
@@ -13,7 +14,8 @@ import unittest
 import zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SIGNED_SHA = "d9c223146faa9fea0e5b1593711b74836bc0af3c2939b2c6f246dbb2e4646622"
+CODE9_SHA = "d9c223146faa9fea0e5b1593711b74836bc0af3c2939b2c6f246dbb2e4646622"
+CODE10_SHA = "bcdfd03ac18c3cfdd0517e08b58dde7efa1f5baa874e93002af28e518860f95f"
 
 
 def digest(path):
@@ -37,19 +39,23 @@ class MangaAllCode10UnsignedPackageTest(unittest.TestCase):
             self.assertEqual(review["reviewStatus"], "approved")
             self.assertEqual(review["versionCode"], 10)
 
-        published_path = ROOT / "dist/providers/app.tsuzuki.mangaall-9.tsz"
+        historical_path = ROOT / "dist/providers/app.tsuzuki.mangaall-9.tsz"
+        published_path = ROOT / "dist/providers/app.tsuzuki.mangaall-10.tsz"
         ledger = ROOT / "dist/index.payload.json"
         signed_index = ROOT / "dist/index.json"
         config = ROOT / "repository/config.json"
-        before = {str(p): digest(p) for p in (published_path, ledger, signed_index, config)}
-        self.assertEqual(before[str(published_path)], SIGNED_SHA)
+        before = {str(p): digest(p) for p in (
+            historical_path, published_path, ledger, signed_index, config,
+        )}
+        self.assertEqual(before[str(historical_path)], CODE9_SHA)
+        self.assertEqual(before[str(published_path)], CODE10_SHA)
         index = json.loads(ledger.read_text())
-        self.assertEqual(index["sequence"], 35)
+        self.assertEqual(index["sequence"], 36)
         entries = [x for x in index["providers"] if x["providerId"] == source["id"]]
         self.assertEqual(len(entries), 1)
-        self.assertEqual(entries[0]["versionCode"], 9)
-        self.assertEqual(entries[0]["versionName"], "0.5.4")
-        self.assertEqual(entries[0]["sha256"], SIGNED_SHA)
+        self.assertEqual(entries[0]["versionCode"], 10)
+        self.assertEqual(entries[0]["versionName"], "0.5.5")
+        self.assertEqual(entries[0]["sha256"], CODE10_SHA)
 
         # Verify the actual pinned P-256 index, not only a self-reported hash.
         checked = subprocess.run(
@@ -68,9 +74,13 @@ class MangaAllCode10UnsignedPackageTest(unittest.TestCase):
                 self.assertEqual(built.returncode, 0, built.stdout + "\n" + built.stderr)
             self.assertEqual(archives[0].read_bytes(), archives[1].read_bytes(),
                              "a reviewed future package must build deterministically")
-            self.assertNotEqual(digest(archives[0]), SIGNED_SHA,
-                                "future code10 may never impersonate the signed code9")
-            with zipfile.ZipFile(published_path) as published, zipfile.ZipFile(archives[0]) as candidate:
+            self.assertNotEqual(digest(archives[0]), CODE9_SHA,
+                                "code10 may never impersonate the signed code9")
+            if source["publication"] == "release":
+                self.assertEqual(digest(archives[0]), CODE10_SHA,
+                                 "published code10 must reproduce exact signed archive")
+                self.assertEqual(archives[0].read_bytes(), published_path.read_bytes())
+            with zipfile.ZipFile(historical_path) as published, zipfile.ZipFile(archives[0]) as candidate:
                 old_manifest = json.loads(published.read("manifest.json"))
                 new_manifest = json.loads(candidate.read("manifest.json"))
                 self.assertEqual(old_manifest["version"], {"name": "0.5.4", "code": 9})
@@ -98,21 +108,17 @@ class MangaAllCode10UnsignedPackageTest(unittest.TestCase):
     def test_code10_release_is_not_approved_by_historical_code9_gate(self):
         from mangaall_code9_publication_gate import check_code9_publication
         source = json.loads((ROOT / "providers/mangaall/manifest.json").read_text())
-        if source["publication"] == "release":
-            # Historical token must never authorize the NEW version, even
-            # if the requested event looks like a valid manual dispatch.
-            for event, token in (
-                ("push", ""), ("workflow_dispatch", "PUBLISH_MANGAALL_CODE9"),
-            ):
-                with self.subTest(event=event), self.assertRaisesRegex(
-                    ValueError, "Code10\\+ requires",
-                ):
-                    check_code9_publication(ROOT, event, token)
-        else:
-            self.assertEqual(check_code9_publication(ROOT, "push", ""), "NO_CODE9_PROMOTION")
-            self.assertEqual(check_code9_publication(
-                ROOT, "workflow_dispatch", "PUBLISH_MANGAALL_CODE9",
-            ), "NO_CODE9_PROMOTION")
+        # Code10 is ALREADY the signed release. The historical code9 gate
+        # must be inert for both a push and an old code9 manual token;
+        # it must never return authorization to sign again.
+        for event, token in (
+            ("push", ""), ("workflow_dispatch", "PUBLISH_MANGAALL_CODE9"),
+        ):
+            with self.subTest(event=event):
+                self.assertEqual(
+                    check_code9_publication(ROOT, event, token),
+                    "NO_CODE9_PROMOTION",
+                )
 
 
 if __name__ == "__main__":
