@@ -15,6 +15,7 @@ const WORK = /^mangadot:([1-9][0-9]{0,15})$/;
 const CHAPTER = /^mangadot:(?:uploads|chapters):[1-9][0-9]{0,15}$/;
 const TOKEN = /^p1:([1-9][0-9]{0,15}):(en|pt-br):([a-f0-9]{16}):([0-9]{1,5})$/;
 const LANGS = new Set(['en', 'pt-br']);
+const utf8Size = value => new TextEncoder().encode(value).length;
 
 export const FUTURE_SNAPSHOT_LIMITS = Object.freeze({
   maxWorkRows: 16000,
@@ -22,10 +23,14 @@ export const FUTURE_SNAPSHOT_LIMITS = Object.freeze({
   maxOutputRows: 256,
   maxOutputBytes: 48 * 1024,
   maxStorageValueChars: 64 * 1024,
+  maxStorageValueBytes: 64 * 1024,
   maxStorageTotalChars: 512 * 1024,
+  maxStorageTotalBytes: 512 * 1024,
   maxStoredSnapshotChars: 440 * 1024,
+  maxStoredSnapshotBytes: 440 * 1024,
   maxStoredParts: 16,
   maxPartChars: 48 * 1024,
+  maxPartBytes: 48 * 1024,
   snapshotTtlMs: 5 * 60 * 1000,
   hostRuntimeResponseChars: 64 * 1024,
   scope: 'FUTURE_UNSHIPPED_STORAGE_PERMISSION_REQUIRED',
@@ -54,17 +59,21 @@ function verifyRows(rows, language) {
   }
 }
 function chunksFor(rows) {
-  let part = [], parts = [], first = 0, position = 0, total = 0;
+  let part = [], parts = [], first = 0, position = 0, total = 0, totalBytes = 0;
+  const exceedsPartBudget = json =>
+    json.length > FUTURE_SNAPSHOT_LIMITS.maxPartChars ||
+    utf8Size(json) > FUTURE_SNAPSHOT_LIMITS.maxPartBytes;
   for (const row of rows) {
     const next = JSON.stringify([...part, row]);
-    if (next.length > FUTURE_SNAPSHOT_LIMITS.maxPartChars) {
+    if (exceedsPartBudget(next)) {
       if (!part.length) throw Error('CHAPTER_ROW_EXCEEDS_STORAGE_PAGE');
       const packed = JSON.stringify(part);
       parts.push({ start: first, count: part.length, value: packed });
       total += packed.length;
+      totalBytes += utf8Size(packed);
       first = position;
       part = [row];
-      if (JSON.stringify(part).length > FUTURE_SNAPSHOT_LIMITS.maxPartChars) {
+      if (exceedsPartBudget(JSON.stringify(part))) {
         throw Error('CHAPTER_ROW_EXCEEDS_STORAGE_PAGE');
       }
     } else {
@@ -76,9 +85,11 @@ function chunksFor(rows) {
     const packed = JSON.stringify(part);
     parts.push({ start: first, count: part.length, value: packed });
     total += packed.length;
+    totalBytes += utf8Size(packed);
   }
   if (parts.length > FUTURE_SNAPSHOT_LIMITS.maxStoredParts ||
-      total > FUTURE_SNAPSHOT_LIMITS.maxStoredSnapshotChars) {
+      total > FUTURE_SNAPSHOT_LIMITS.maxStoredSnapshotChars ||
+      totalBytes > FUTURE_SNAPSHOT_LIMITS.maxStoredSnapshotBytes) {
     throw Error('SNAPSHOT_EXCEEDS_PROVIDER_STORAGE_QUOTA');
   }
   return parts;
@@ -156,14 +167,23 @@ export function createFutureCachedChapterPager({ storage, fetchRows, now, nonce,
       ranges: parts.map(p => ({start:p.start,count:p.count})),
     };
     const serializedIndex = JSON.stringify(index);
-    const total = parts.reduce((sum,p)=>sum+p.value.length,serializedIndex.length);
-    if (total > FUTURE_SNAPSHOT_LIMITS.maxStorageTotalChars) {
+    // Measure the EXACT persisted values, including per-part generation wrappers,
+    // before mutating any existing committed snapshot. JS chars are not bytes.
+    const storedParts=parts.map(p=>JSON.stringify({g:generation,rows:JSON.parse(p.value)}));
+    const storedValues=[...storedParts,serializedIndex];
+    const totalChars=storedValues.reduce((sum,v)=>sum+v.length,0);
+    const totalBytes=storedValues.reduce((sum,v)=>sum+utf8Size(v),0);
+    if (storedValues.some(v=>
+          v.length>FUTURE_SNAPSHOT_LIMITS.maxStorageValueChars ||
+          utf8Size(v)>FUTURE_SNAPSHOT_LIMITS.maxStorageValueBytes) ||
+        totalChars>FUTURE_SNAPSHOT_LIMITS.maxStorageTotalChars ||
+        totalBytes>FUTURE_SNAPSHOT_LIMITS.maxStorageTotalBytes) {
       throw Error('SNAPSHOT_EXCEEDS_PROVIDER_STORAGE_QUOTA');
     }
     await clearOld();
     try {
-      for(let i=0;i<parts.length;i++) {
-        await storage.set(PREFIX+i, JSON.stringify({g:generation,rows:JSON.parse(parts[i].value)}));
+      for(let i=0;i<storedParts.length;i++) {
+        await storage.set(PREFIX+i,storedParts[i]);
       }
       await storage.set(KEY, serializedIndex); // Commit last; no premature complete snapshot.
     } catch {
@@ -179,7 +199,8 @@ export function createFutureCachedChapterPager({ storage, fetchRows, now, nonce,
     let item=loadedParts.get(partIndex);
     if (!item) {
       const raw=await storage.get(PREFIX+partIndex);
-      if (raw == null || raw.length > FUTURE_SNAPSHOT_LIMITS.maxStorageValueChars) {
+      if (raw == null || raw.length > FUTURE_SNAPSHOT_LIMITS.maxStorageValueChars ||
+          utf8Size(raw) > FUTURE_SNAPSHOT_LIMITS.maxStorageValueBytes) {
         throw Error('STALE_OR_MISSING_SNAPSHOT_PART');
       }
       try { item=JSON.parse(raw); } catch { throw Error('CORRUPT_SNAPSHOT_PART'); }
