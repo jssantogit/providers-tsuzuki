@@ -164,19 +164,24 @@ export function createFutureCachedChapterPager({ storage, fetchRows, now, nonce 
     }
     return index;
   }
-  async function readSlice(index, position) {
+  async function readSlice(index, position, loadedParts) {
     const partIndex = index.ranges.findIndex(p =>
       position >= p.start && position < p.start+p.count);
     if(partIndex<0) throw Error('CORRUPT_SNAPSHOT_INDEX');
-    const raw=await storage.get(PREFIX+partIndex);
-    if (raw == null || raw.length > FUTURE_SNAPSHOT_LIMITS.maxStorageValueChars) {
-      throw Error('STALE_OR_MISSING_SNAPSHOT_PART');
-    }
-    let item;
-    try { item=JSON.parse(raw); } catch { throw Error('CORRUPT_SNAPSHOT_PART'); }
-    if(!item || item.g !== index.generation || !Array.isArray(item.rows) ||
-       item.rows.length !== index.ranges[partIndex].count) {
-      throw Error('STALE_OR_CORRUPT_SNAPSHOT_PART');
+    let item=loadedParts.get(partIndex);
+    if (!item) {
+      const raw=await storage.get(PREFIX+partIndex);
+      if (raw == null || raw.length > FUTURE_SNAPSHOT_LIMITS.maxStorageValueChars) {
+        throw Error('STALE_OR_MISSING_SNAPSHOT_PART');
+      }
+      try { item=JSON.parse(raw); } catch { throw Error('CORRUPT_SNAPSHOT_PART'); }
+      if(!item || item.g !== index.generation || !Array.isArray(item.rows) ||
+         item.rows.length !== index.ranges[partIndex].count) {
+        throw Error('STALE_OR_CORRUPT_SNAPSHOT_PART');
+      }
+      // A page commonly reads 128 chapters; never re-read and reparse the
+      // entire provider storage state for each individual row.
+      loadedParts.set(partIndex,item);
     }
     return item.rows[position-index.ranges[partIndex].start];
   }
@@ -206,9 +211,10 @@ export function createFutureCachedChapterPager({ storage, fetchRows, now, nonce 
       start=validateCursor(pageCursor,index,workId,language);
     }
     const items=[];
+    const loadedParts=new Map();
     let position=start, next=null;
     while(position<index.count && items.length<FUTURE_SNAPSHOT_LIMITS.maxOutputRows) {
-      const row=await readSlice(index,position);
+      const row=await readSlice(index,position,loadedParts);
       verifyRows([row],language);
       const trial=[...items,row], remaining=position+1<index.count;
       const trialCursor=remaining?cursor(workId,language,index.generation,position+1):null;
