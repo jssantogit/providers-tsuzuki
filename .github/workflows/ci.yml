@@ -122,6 +122,8 @@ jobs:
         run: node tooling/test_mangaall_code10_source_facet_guards.mjs
       - name: MangaALL code10 MangaDot real 32-page search Host-bound pagination regression
         run: node tooling/test_mangaall_code10_mangadot_bounded_lookup.mjs
+      - name: MangaALL FUTURE unshipped 48KiB chapter output cursor prototype (offline only)
+        run: node tooling/test_mangaall_experimental_chapter_output_paging.mjs
       - name: MangaDex verified author and facet coverage fixtures
         run: node tooling/test_mangaall_mangadex_evidence.mjs
       - name: MangaAll three-source contract
