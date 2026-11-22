@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MANGAALL_CODE8_ORIGINAL_ROOT: original-code8
+      MANGAALL_CODE9_ORIGINAL_ROOT: original-code9
     steps:
       - uses: actions/checkout@v4
       - name: Checkout immutable P-256 signed code8 historical snapshot
@@ -20,6 +21,13 @@ jobs:
           repository: jssantogit/providers-tsuzuki
           ref: 99f3565a1e1edc0d8ed249b7597006c897f02636
           path: original-code8
+          persist-credentials: false
+      - name: Checkout immutable P-256 signed code9 sequence35 historical snapshot
+        uses: actions/checkout@v4
+        with:
+          repository: jssantogit/providers-tsuzuki
+          ref: cf93354bbc3290596f9664a222a8d6da5adeeef0
+          path: original-code9
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
