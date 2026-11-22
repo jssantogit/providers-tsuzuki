@@ -1,0 +1,90 @@
+name: MangaALL — bounded streaming MangaDot large chapter arrays (NO RAW BODY)
+# Approved capacity research, exact branch only. No signature/publication/CDN.
+on:
+  push:
+    branches: ['test/mangaall-bounded-streaming-chapter-acquisition-*']
+    paths:
+      - '.github/workflows/mangaall-bounded-streaming-chapter-acquisition.yml'
+      - 'tooling/mangaall_future_streaming_chapter_array.mjs'
+      - 'tooling/test_mangaall_future_streaming_chapter_array.mjs'
+      - 'tooling/mangaall_live_stream_chapter_probe.mjs'
+permissions:
+  contents: read
+concurrency:
+  group: mangaall-bounded-stream-chapter-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  two-fixed-source-hids:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Validate original signed code10 and offline stream parser first
+        run: |
+          set -euo pipefail
+          node --check tooling/mangaall_future_streaming_chapter_array.mjs
+          node --check tooling/mangaall_live_stream_chapter_probe.mjs
+          node tooling/test_mangaall_future_streaming_chapter_array.mjs
+          node tooling/verify_index.mjs
+          python3 tooling/build_provider.py providers/mangaall "${RUNNER_TEMP}/code10-original.tsz"
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          idx=json.loads(Path('dist/index.payload.json').read_text())
+          manifest=json.loads(Path('providers/mangaall/manifest.json').read_text())
+          ps=[p for p in idx['providers'] if p['providerId']=='app.tsuzuki.mangaall']
+          assert idx['sequence']==36 and len(ps)==1 and ps[0]['versionCode']==10
+          assert manifest['version']=={'code':10,'name':'0.5.5'}
+          sha=hashlib.sha256((Path(os.environ['RUNNER_TEMP'])/'code10-original.tsz').read_bytes()).hexdigest()
+          assert sha==ps[0]['sha256']=='bcdfd03ac18c3cfdd0517e08b58dde7efa1f5baa874e93002af28e518860f95f'
+          print('MANGAALL_STREAM_PREFLIGHT|code10=P256_UNCHANGED|network=NOT_CALLED')
+          PY
+      - name: Two bounded read-only source list streams (Naruto/Bleach source HIDs)
+        run: |
+          set -euo pipefail
+          node tooling/mangaall_live_stream_chapter_probe.mjs
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          f=Path('mangaall-streaming-chapter-probe.json')
+          assert 0<f.stat().st_size<4000
+          d=json.loads(f.read_text())
+          assert d['schema']==1 and d['signedCode10']=='UNCHANGED'
+          assert d['scope']=='ONLY_TWO_FIXED_SOURCE_HIDS_NO_CANONICAL_READER_OR_CDN'
+          assert d['limitDecodedBytesPerSource']==16*1024*1024
+          assert [x['source'] for x in d['results']]==[
+            'NARUTO_SOURCE_HID_109_UNVERIFIED','BLEACH_SOURCE_HID_131_UNVERIFIED']
+          allowed={'source','status','outcome','authority','rowCount',
+            'distinctNumericIds','duplicateNumericIds','numericChapterLabels',
+            'maxRowChars','userOrUnknownSourceRows','otherSourceRows','decodedBytes'}
+          for row in d['results']:
+            assert set(row)<=allowed
+            assert row['outcome'] in (
+              'COMPLETE_SOURCE_ARRAY_OBSERVED_METADATA_ONLY',
+              'SOURCE_STREAM_TOO_LARGE','SOURCE_ROW_TOO_LARGE',
+              'SOURCE_TOO_MANY_ROWS','INVALID_JSON_ARRAY_STREAM',
+              'INCOMPLETE_JSON_ARRAY_STREAM','INVALID_SOURCE_ROW',
+              'SOURCE_HTTP_403','SOURCE_HTTP_429','SOURCE_HTTP_NOT_200',
+              'SOURCE_STREAM_MISSING','SOURCE_TRANSPORT_OR_RUNTIME_FAILED')
+            if row['outcome']=='COMPLETE_SOURCE_ARRAY_OBSERVED_METADATA_ONLY':
+              assert 0<=row['rowCount']<=16000
+              assert 0<=row['decodedBytes']<=16*1024*1024
+              assert row['authority']=='UNVERIFIED_SOURCE_HID_NO_CANONICAL_OR_READER'
+          assert 'https://' not in f.read_text()
+          print('MANGAALL_LARGE_STREAM|upstream=2_FIXED_REQUESTS|metadata=ONLY|binding=DENIED')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mangaall-streamed-large-chapter-shapes-${{ github.run_id }}
+          path: mangaall-streaming-chapter-probe.json
+          if-no-files-found: warn
+          retention-days: 7
