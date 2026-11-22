@@ -3,7 +3,9 @@
 // It DOES NOT solve MangaDot's oversized upstream HTTP feed or establish
 // editorial/edition identity; an independently reviewed feed is still needed.
 const MAX_SOURCE_ROWS = 16000;
-const MAX_PAGE_ITEMS = 128;
+// 4,341 real Bleach release rows exceed 32 * 128 = 4,096 rows.
+// Keep output <48 KiB and dynamically stop earlier for verbose labels.
+const MAX_PAGE_ITEMS = 256;
 const MAX_PAGE_BYTES = 48 * 1024;
 const CHAPTER_ID = /^mangadot:(?:uploads|chapters):[1-9][0-9]{0,15}$/;
 const WORK_ID = /^mangadot:([1-9][0-9]{0,15})$/;
