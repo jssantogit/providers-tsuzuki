@@ -5,6 +5,7 @@ signs, uploads, dispatches a workflow, edits main, or authorizes code10.
 """
 import hashlib
 import json
+import os
 import pathlib
 import shutil
 import tempfile
@@ -17,6 +18,7 @@ from mangaall_code10_publication_gate import (
 from mangaall_publication_gate import check_mangaall_publication
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+HISTORICAL = pathlib.Path(os.environ.get("MANGAALL_CODE9_ORIGINAL_ROOT", ROOT)).resolve()
 
 
 class Code10ReleaseGateTest(unittest.TestCase):
@@ -31,9 +33,9 @@ class Code10ReleaseGateTest(unittest.TestCase):
         ):
             dest = self.root / name
             dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(ROOT / name, dest)
+            shutil.copyfile(HISTORICAL / name, dest)
         shutil.copytree(ROOT / "providers/mangaall", self.root / "providers/mangaall")
-        shutil.copytree(ROOT / "dist/providers", self.root / "dist/providers")
+        shutil.copytree(HISTORICAL / "dist/providers", self.root / "dist/providers")
         self.source = self.root / "providers/mangaall/manifest.json"
         # Preserve the historical dev branch negative test even when the
         # source repository is an UNMERGED release-review PR: reset ONLY this
@@ -164,7 +166,7 @@ class Code10ReleaseGateTest(unittest.TestCase):
         index.write_text(json.dumps(signed))
         with self.assertRaisesRegex(ValueError, "P-256"):
             self.check()
-        shutil.copyfile(ROOT / "dist/index.json", index)
+        shutil.copyfile(HISTORICAL / "dist/index.json", index)
         old = self.root / "dist/providers/app.tsuzuki.mangaall-9.tsz"
         old.write_bytes(old.read_bytes() + b"tampered")
         with self.assertRaisesRegex(ValueError, "code9 archive"):
