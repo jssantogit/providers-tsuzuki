@@ -6,6 +6,7 @@ A synthetic review lock used here is a test fixture, NEVER operator approval.
 """
 import hashlib
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -17,6 +18,7 @@ from mangaall_code10_publication_gate import APPROVAL, PRIOR_SHA, REVIEW_FILE, c
 from prepare_publication import prepare_publication
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+HISTORICAL = pathlib.Path(os.environ.get("MANGAALL_CODE9_ORIGINAL_ROOT", ROOT)).resolve()
 
 
 def sha(path):
@@ -30,6 +32,7 @@ class MangaAllCode10DisposablePublicationTest(unittest.TestCase):
             "dist/index.payload.json",
             "dist/index.json",
             "dist/providers/app.tsuzuki.mangaall-9.tsz",
+            "dist/providers/app.tsuzuki.mangaall-10.tsz",
             "providers/mangaall/manifest.json",
             ".github/workflows/publish.yml",
         )
@@ -45,8 +48,11 @@ class MangaAllCode10DisposablePublicationTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory(prefix="mangaall-code10-UNSIGNED-dry-run-") as tmp:
             sandbox = pathlib.Path(tmp)
-            for directory in ("providers", "repository", "dist"):
-                shutil.copytree(ROOT / directory, sandbox / directory)
+            # Current code10 sources must be tested over genuine pre-release
+            # signed seq35 index, never a fabricated downgrade of seq36.
+            shutil.copytree(ROOT / "providers", sandbox / "providers")
+            for directory in ("repository", "dist"):
+                shutil.copytree(HISTORICAL / directory, sandbox / directory)
             (sandbox / "tooling").mkdir()
             shutil.copyfile(ROOT / "tooling/verify_index.mjs",
                             sandbox / "tooling/verify_index.mjs")
