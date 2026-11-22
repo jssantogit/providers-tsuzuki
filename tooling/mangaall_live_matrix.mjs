@@ -210,7 +210,7 @@ globalThis.tsuzuki = { http: { async request(method, url, headers, body) {
   const response = await bridge.request(method, url, headers, body);
   if (officialCode10 && selectedSuite === 'custom' &&
       origin === 'https://mangadot.net' && method === 'GET' &&
-      /^\\/api\\/manga\\/[1-9][0-9]{0,15}\\/chapters\\/list$/.test(new URL(url).pathname)) {
+      /^\/api\/manga\/[1-9][0-9]{0,15}\/chapters\/list$/.test(new URL(url).pathname)) {
     chapterHttpShapes.push(describeMangaDotChapterListHttp(response));
   }
   return response;
