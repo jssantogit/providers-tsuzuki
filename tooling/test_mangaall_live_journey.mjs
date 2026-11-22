@@ -264,6 +264,76 @@ assert.equal(test.stats.pages, 0, 'candidate previews do not request Reader page
 assert.equal(journeyVerdict(test.result), 'INCONCLUSIVE',
   'a source-level complete chapter sample never turns an incomplete lookup canonical');
 
+// MangaDot's exact source HID is not verified edition identity. Only an
+// explicit signed-code10 custom source diagnostic may inspect its chapters.
+// Even a returned real-shaped chapter is not a canonical chapter grant.
+{
+  let chaptersRead = 0;
+  let readerRequests = 0;
+  const unverifiedDot = {
+    ...candidate(base),
+    externalWorkId: 'mangadot:109',
+    authors: [],
+    detailOutcome: undefined,
+    coverageOutcome: undefined,
+    coverageObservedCount: undefined,
+  };
+  const dotInput = {
+    async lookup() {
+      return { items: [unverifiedDot], nextCursor: 'incomplete-search' };
+    },
+    async chapters({ binding, cursor }) {
+      chaptersRead++;
+      assert.equal(binding.externalWorkId, 'mangadot:109');
+      assert.equal(cursor, null);
+      return {
+        items: [{ providerChapterId: 'mangadot:uploads:1007',
+          rawLabel: 'Ch. 1', rawNumber: 1, language: 'en' }],
+        nextCursor: null,
+      };
+    },
+    async pages() { readerRequests++; throw Error('Not permitted'); },
+  };
+  const noOptIn = await run(dotInput, base, {
+    lookupPageLimit: 1, includeCandidateCoverage: true,
+  });
+  assert.equal(chaptersRead, 0);
+  assert.equal(noOptIn.result.candidateChapterPreviews[0].outcome,
+    'SOURCE_DETAIL_OR_COVERAGE_UNVERIFIED');
+  const withOptIn = await run(dotInput, base, {
+    lookupPageLimit: 1, includeCandidateCoverage: true,
+    includeUnverifiedMangadotSourceDiagnostic: true,
+    candidateChapterPageLimit: 2,
+  });
+  assert.equal(chaptersRead, 1);
+  assert.equal(withOptIn.result.candidateChapterPreviews[0].authority,
+    'SOURCE_UNVERIFIED_HID_DIAGNOSTIC_ONLY');
+  assert.equal(withOptIn.result.candidateChapterPreviews[0].chapterCount, 1);
+  assert.equal(withOptIn.result.candidateChapterPreviews[0].outcome, 'SOURCE_COMPLETE');
+  assert.equal(withOptIn.result.lookupComplete, false);
+  assert.equal(journeyVerdict(withOptIn.result), 'INCONCLUSIVE');
+  assert.equal(readerRequests, 0);
+  // The exception is only for the MangaDot numeric HID. A different source,
+  // fake ID, unverified alias or positive source author evidence cannot use it.
+  for (const invalid of [
+    { ...unverifiedDot, externalWorkId: 'mangadex:abc' },
+    { ...unverifiedDot, externalWorkId: 'mangafire:zk12' },
+    { ...unverifiedDot, externalWorkId: 'mangadot:not-numeric' },
+    { ...unverifiedDot, authors: ['Unverified Name'] },
+    { ...unverifiedDot, coverageOutcome: 'EMPTY' },
+  ]) {
+    const value = await run({ ...dotInput, async lookup() {
+      return { items: [invalid], nextCursor: 'still-incomplete' };
+    }}, base, { lookupPageLimit: 1, includeCandidateCoverage: true,
+      includeUnverifiedMangadotSourceDiagnostic: true });
+    assert.equal(value.result.candidateChapterPreviews[0].outcome,
+      'SOURCE_DETAIL_OR_COVERAGE_UNVERIFIED');
+    assert.equal(journeyVerdict(value.result), 'INCONCLUSIVE');
+  }
+  assert.equal(chaptersRead, 1);
+  assert.equal(readerRequests, 0);
+}
+
 // Coverage UNKNOWN is not zero chapters. Inspect actual source chapters
 // read-only for a verified, author-bearing HID, even when discovery remains
 // incomplete. This must NEVER grant pages or canonical/Reader authority.
