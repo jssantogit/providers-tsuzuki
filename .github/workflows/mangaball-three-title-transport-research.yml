@@ -1,0 +1,67 @@
+name: MangaBall three-title transport diagnostic (one-shot)
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  transport:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'research/mangaball-three-title-transport-20261124'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Existing offline adapter and Reader metadata contract
+        run: |
+          node tooling/test_mangaall_live_probe.mjs
+          node tooling/test_mangaall_reading.mjs
+      - name: Bounded HTTP reachability only (no scraping or page bytes)
+        run: |
+          node --input-type=module <<'NODE'
+          const titles = ["Oyasumi Punpun", "Akame ga Kill!", "Koe no Katachi"];
+          const origin = "https://mangaball.com";
+          let accepted = 0;
+          for (let i = 0; i < titles.length; i++) {
+            const url = new URL("/api/v1/title/search-advanced", origin);
+            url.search = new URLSearchParams({
+              keyword: titles[i], page: "1", limit: "24", tag_mode: "AND", adult_mode: "no_18"
+            }).toString();
+            try {
+              const response = await fetch(url, {
+                method: "GET",
+                redirect: "manual",
+                signal: AbortSignal.timeout(12000),
+                headers: {
+                  "Accept": "application/json",
+                  "User-Agent": "Tsuzuki-MangaAll/0.1 (+https://github.com/jssantogit/providers-tsuzuki)",
+                  "Origin": origin,
+                  "Referer": origin + "/"
+                }
+              });
+              const json = /^application\/(?:[a-z0-9.+-]+\+)?json(?:\s*;|$)/i.test(response.headers.get("content-type") || "");
+              const challenge = response.headers.get("cf-mitigated") === "challenge";
+              await response.body?.cancel();
+              const ok = response.status === 200 && json && !challenge;
+              console.log("MANGABALL_TRANSPORT|index=" + (i + 1) +
+                "|http=" + response.status + "|jsonContentType=" + json +
+                "|cloudflareChallenge=" + challenge + "|outcome=" +
+                (ok ? "HTTP_JSON_HEADERS" : "NOT_ACCEPTED"));
+              if (!ok) break;
+              accepted++;
+            } catch (_) {
+              console.log("MANGABALL_TRANSPORT|index=" + (i + 1) + "|outcome=TRANSPORT_ERROR");
+              break;
+            }
+          }
+          console.log("MANGABALL_TRANSPORT_SUMMARY|accepted=" + accepted +
+            "|expected=3|bodyCollected=false|chapters=NOT_TESTED|reader=NOT_TESTED");
+          if (accepted !== 3) process.exitCode = 1;
+          NODE
